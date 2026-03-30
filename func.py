@@ -215,6 +215,7 @@ def get_pred_stats(model, v, gt_class=None, orig_pred_logit=None):
     pred_cls = torch.argmax(pred,dim=1).item()
     pred_logit = pred[:,pred_cls].item()
     ret['pred_logit'] = pred_logit
+    ret['pred_cls'] = pred_cls
 
     if gt_class is not None:
         logit = pred[:,gt_class].item()
