@@ -211,7 +211,7 @@ def get_pred_stats(model, v, gt_class=None, orig_pred_logit=None):
     ret = {}
     with torch.no_grad():
         pred = model(v.unsqueeze(0))
-    pred = F.softmax(pred,dim=1)
+    # pred = F.softmax(pred,dim=1)
     pred_cls = torch.argmax(pred,dim=1).item()
     pred_logit = pred[:,pred_cls].item()
     ret['pred_logit'] = pred_logit
