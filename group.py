@@ -1,21 +1,7 @@
-import torch
 import os
 from glob import glob
-from PIL import Image
 import func
-
-GRP_THRESHOLD = 0.01
-
-ucf101dm = func.UCF101_data_model()
-model = ucf101dm.model
-inference_loader = ucf101dm.inference_loader
-inference_class_names = ucf101dm.inference_class_names
-class_names = ucf101dm.inference_class_names
-class_labels = {}
-for k in class_names.keys():
-    cls_name = class_names[k]
-    class_labels[cls_name.lower()] = k
-
+import json
 
 def replace_frame(video, src_idx, dst_idx):
     new_video = video.clone()
@@ -27,7 +13,7 @@ def replace_frames(video, src_idx, dst_idx_list):
         video = replace_frame(video, src_idx, dst)
     return video
 
-def group_frames(model, video, gt_idx):
+def group_frames(model, video, gt_idx, GRP_THRESHOLD):
     _,T,_,_ = video.size()
 
     #get original pred
@@ -65,8 +51,12 @@ def group_frames(model, video, gt_idx):
     i=0
     vid = video.clone()
     final_src_idx = i
-    while i+1<T:
+    while i<T:
 
+        if i==T-1:
+            final_src_idx = i
+            group_dict[final_src_idx] = []
+            break
         j=i+1
         v_, min_change, src_idx, dst_idx = get_best_frame(vid, i, j)
         final_src_idx = src_idx
@@ -74,11 +64,13 @@ def group_frames(model, video, gt_idx):
 
         dst_idxs = []
         grp = False
-        while min_change < GRP_THRESHOLD and j+1<T:
+        while min_change < GRP_THRESHOLD:
             grp = True
             j+=1
             final_src_idx = src_idx
             final_dst_idx = [idx for idx in list(range(i,j))]
+            if j==T:
+                break
 
             dst_idxs = [idx for idx in list(range(i,j)) if idx!=src_idx]
             v_ = replace_frames(vid, src_idx, dst_idxs)
@@ -89,7 +81,7 @@ def group_frames(model, video, gt_idx):
 
         grp_values = [idx for idx in final_dst_idx if idx!=final_src_idx]
         group_dict[final_src_idx] = grp_values
-        vid = replace_frames(vid, final_src_idx, grp_values)
+        # vid = replace_frames(vid, final_src_idx, grp_values)
         if grp:
             i=max(final_dst_idx)+1
         else:
@@ -109,30 +101,48 @@ def group_frames(model, video, gt_idx):
     return group_dict
 
 
-def group_frames_loader():
+def group_frames_loader_UCF101(GRP_THRESHOLD = 0.01):
+    out_path = os.path.join(r'C:\Users\lahir\Downloads\UCF101\analysis', f'groups_{GRP_THRESHOLD}.jsonl')
+    #****************************************************************************
+    # data loader
+    #****************************************************************************
+    ucf101dm = func.UCF101_data_model()
+    model = ucf101dm.model
+    inference_loader = ucf101dm.inference_loader
+    inference_class_names = ucf101dm.inference_class_names
+    class_names = ucf101dm.inference_class_names
+    class_labels = {}
+    for k in class_names.keys():
+        cls_name = class_names[k]
+        class_labels[cls_name.lower()] = k
+    #****************************************************************************
+
     for idx, batch in enumerate(inference_loader):
         print(f'{idx/len(inference_loader)*100:.0f} % is done.', end='\r')
         inputs, targets = batch
         cls = [class_labels[t[0].split('_')[1].lower()] for t in targets]
         video = inputs[0,:]
         gt_idx = class_labels[targets[0][0].split('_')[1].lower()]
-        group_dict = group_frames(model, video, gt_idx)
+        group_dict = group_frames(model, video, gt_idx, GRP_THRESHOLD)
 
         print('*****************************************')
-        stat = func.get_pred_stats(model, video)
-        v = video.clone()
-        for src_idx, dst_idx_list in group_dict.items():
-            # v = video.clone()
-            v = replace_frames(v, src_idx, dst_idx_list)
-            s = func.get_pred_stats(model, v, gt_idx, stat['pred_logit'])
-            print(f'{src_idx} -> {dst_idx_list} , {s}')
+        #testing code
+        # stat = func.get_pred_stats(model, video)
+        # v = video.clone()
+        # for src_idx, dst_idx_list in group_dict.items():
+        #     # v = video.clone()
+        #     v = replace_frames(v, src_idx, dst_idx_list)
+        #     s = func.get_pred_stats(model, v, gt_idx, stat['pred_logit'])
+        #     print(f'{src_idx} -> {dst_idx_list} , {s}')
         
-        v = video.clone()
-        v = replace_frames(v, 4, [0,1,2,3,5,6,7,8,9])
-        print(func.get_pred_stats(model, v))
-        
-        
-        pass
+        # v = video.clone()
+        # v = replace_frames(v, 4, [0,1,2,3,5,6,7,8,9])
+        # print(func.get_pred_stats(model, v))
 
+        filename = targets[0][0]
+        group_dict['filename'] = filename
+        with open(out_path, 'a') as f:
+            f.write(json.dumps(group_dict) + '\n')
+        
 if __name__ == '__main__':
-    group_frames_loader()
+    group_frames_loader_UCF101()
