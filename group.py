@@ -4,7 +4,7 @@ from glob import glob
 from PIL import Image
 import func
 
-GRP_THRESHOLD = 0.05
+GRP_THRESHOLD = 0.01
 
 ucf101dm = func.UCF101_data_model()
 model = ucf101dm.model
@@ -63,29 +63,38 @@ def group_frames(model, video, gt_idx):
 
     group_dict = {}
     i=0
+    vid = video.clone()
+    final_src_idx = i
     while i+1<T:
 
         j=i+1
-        v_, min_change, src_idx, dst_idx = get_best_frame(video, i, j)
+        v_, min_change, src_idx, dst_idx = get_best_frame(vid, i, j)
+        final_src_idx = src_idx
+        final_dst_idx = [idx for idx in list(range(i,j))]
 
         dst_idxs = []
-        while min_change < GRP_THRESHOLD:
+        grp = False
+        while min_change < GRP_THRESHOLD and j+1<T:
+            grp = True
             j+=1
-            if j>=T:
-                break
             final_src_idx = src_idx
             final_dst_idx = [idx for idx in list(range(i,j))]
 
             dst_idxs = [idx for idx in list(range(i,j)) if idx!=src_idx]
-            v_ = replace_frames(video, src_idx, dst_idxs)
+            v_ = replace_frames(vid, src_idx, dst_idxs)
             s_ = func.get_pred_stats(model, v_, gt_idx, stat['pred_logit'])
             print(f'{src_idx} -> {dst_idxs} , {s_}')
             _, min_change, src_idx, dst_idx = get_best_frame_list(v_, src_idx, dst_idxs, j)
             print(min_change)
-            pass
 
-        i=max(final_dst_idx)+1
-        group_dict[final_src_idx] = [idx for idx in final_dst_idx if idx!=final_src_idx]
+        grp_values = [idx for idx in final_dst_idx if idx!=final_src_idx]
+        group_dict[final_src_idx] = grp_values
+        vid = replace_frames(vid, final_src_idx, grp_values)
+        if grp:
+            i=max(final_dst_idx)+1
+        else:
+            i+=1
+
 
     #test if the frames are replaced correctly
     # v = video.clone()
@@ -113,13 +122,14 @@ def group_frames_loader():
         stat = func.get_pred_stats(model, video)
         v = video.clone()
         for src_idx, dst_idx_list in group_dict.items():
+            # v = video.clone()
             v = replace_frames(v, src_idx, dst_idx_list)
             s = func.get_pred_stats(model, v, gt_idx, stat['pred_logit'])
             print(f'{src_idx} -> {dst_idx_list} , {s}')
         
-        # v = video.clone()
-        # v = replace_frames(v, 4, [0,1,2,3,5,6,7,8,9])
-        # print(func.get_pred_stats(model, v))
+        v = video.clone()
+        v = replace_frames(v, 4, [0,1,2,3,5,6,7,8,9])
+        print(func.get_pred_stats(model, v))
         
         
         pass
