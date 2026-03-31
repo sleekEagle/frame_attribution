@@ -34,7 +34,7 @@ def group_frames(model, video, gt_idx):
     stat = func.get_pred_stats(model, video)
     assert stat['pred_cls'] == gt_idx, 'original pred is not correct'
 
-    def get_best_frame_src(video, idx1, idx2):
+    def get_best_frame(video, idx1, idx2):
         v_1_2 = replace_frame(video, idx1, idx2)
         stat_1_2 = func.get_pred_stats(model, v_1_2, gt_idx, stat['pred_logit'])
         v_2_1 = replace_frame(video, idx2, idx1)
@@ -46,32 +46,48 @@ def group_frames(model, video, gt_idx):
         best_idx = [idx1, idx2][min_idx]
         worst_idx = [idx1, idx2][1-min_idx]
         return v_, min_change, best_idx, worst_idx
+    
+    def get_best_frame_list(video, idx1, idx1_list, idx2):
+        idx1_list = idx1_list + [idx1]
+        v_1_2 = replace_frame(video, idx1, idx2)
+        stat_1_2 = func.get_pred_stats(model, v_1_2, gt_idx, stat['pred_logit'])
+        v_2_1 = replace_frames(video, idx2, idx1_list)
+        stat_2_1 = func.get_pred_stats(model, v_2_1, gt_idx, stat['pred_logit'])
+        change_list = [stat['per_change'] for stat in [stat_1_2,stat_2_1]]
+        min_change = min(change_list)
+        min_idx = change_list.index(min_change)
+        v_ = [v_1_2, v_2_1][min_idx]
+        best_idx = [idx1, idx2][min_idx]
+        worst_idx = [idx1, idx2][1-min_idx]
+        return v_, min_change, best_idx, worst_idx
 
     group_dict = {}
     i=0
-    while i<T:
+    while i+1<T:
 
         j=i+1
-        v_, min_change, src_idx, dst_idx = get_best_frame_src(video, i, j)
+        v_, min_change, src_idx, dst_idx = get_best_frame(video, i, j)
 
         dst_idxs = []
         while min_change < GRP_THRESHOLD:
-            final_src_idx = src_idx
-            final_dst_idx = dst_idxs + [j]
             j+=1
             if j>=T:
                 break
+            final_src_idx = src_idx
+            final_dst_idx = [idx for idx in list(range(i,j))]
+
             dst_idxs = [idx for idx in list(range(i,j)) if idx!=src_idx]
             v_ = replace_frames(video, src_idx, dst_idxs)
-            print(func.get_pred_stats(model, v_, gt_idx, stat['pred_logit']))
+            s_ = func.get_pred_stats(model, v_, gt_idx, stat['pred_logit'])
+            print(f'{src_idx} -> {dst_idxs} , {s_}')
+            _, min_change, src_idx, dst_idx = get_best_frame_list(v_, src_idx, dst_idxs, j)
+            print(min_change)
+            pass
 
-            _, min_change, src_idx, dst_idx = get_best_frame_src(v_, src_idx, j)
+        i=max(final_dst_idx)+1
+        group_dict[final_src_idx] = [idx for idx in final_dst_idx if idx!=final_src_idx]
 
-        dst_idxs = [idx for idx in list(range(i,j)) if idx!=src_idx]
-        i=j
-        group_dict[src_idx] = dst_idxs
-
-    #test 
+    #test if the frames are replaced correctly
     # v = video.clone()
     # for src_idx, dst_idx_list in group_dict.items():
     #     v = replace_frames(v, src_idx, dst_idx_list)
@@ -93,12 +109,19 @@ def group_frames_loader():
         gt_idx = class_labels[targets[0][0].split('_')[1].lower()]
         group_dict = group_frames(model, video, gt_idx)
 
+        print('*****************************************')
+        stat = func.get_pred_stats(model, video)
         v = video.clone()
         for src_idx, dst_idx_list in group_dict.items():
             v = replace_frames(v, src_idx, dst_idx_list)
-            break
-        stat = func.get_pred_stats(model, v)
-        func.get_pred_stats(model, v, gt_idx, stat['pred_logit'])
+            s = func.get_pred_stats(model, v, gt_idx, stat['pred_logit'])
+            print(f'{src_idx} -> {dst_idx_list} , {s}')
+        
+        # v = video.clone()
+        # v = replace_frames(v, 4, [0,1,2,3,5,6,7,8,9])
+        # print(func.get_pred_stats(model, v))
+        
+        
         pass
 
 if __name__ == '__main__':
