@@ -27,7 +27,7 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
         stat_1_2 = func.get_pred_stats(model, v_1_2, gt_idx, stat['pred_logit'])
         v_2_1 = replace_frame(video, idx2, idx1)
         stat_2_1 = func.get_pred_stats(model, v_2_1, gt_idx, stat['pred_logit'])
-        change_list = [stat['per_change'] for stat in [stat_1_2,stat_2_1]]
+        change_list = [abs(stat['per_change']) for stat in [stat_1_2,stat_2_1]]
         min_change = min(change_list)
         min_idx = change_list.index(min_change)
         v_ = [v_1_2, v_2_1][min_idx]
@@ -42,7 +42,7 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
         stat_1_2 = func.get_pred_stats(model, v_1_2, gt_idx, stat['pred_logit'])
         v_2_1 = replace_frames(video, idx2, idx1_list)
         stat_2_1 = func.get_pred_stats(model, v_2_1, gt_idx, stat['pred_logit'])
-        change_list = [stat['per_change'] for stat in [stat_1_2,stat_2_1]]
+        change_list = [abs(stat['per_change']) for stat in [stat_1_2,stat_2_1]]
         min_change = min(change_list)
         min_idx = change_list.index(min_change)
         v_ = [v_1_2, v_2_1][min_idx]
@@ -66,8 +66,8 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
             break
         j=i+1
         v_, min_change, best_logit, src_idx, dst_idx = get_best_frame(vid, i, j)
-        final_src_idx = src_idx
-        final_dst_idx = [idx for idx in list(range(i,j+1))]
+        final_src_idx = i
+        final_dst_idx = []
 
         dst_idxs = []
         grp = False
@@ -97,8 +97,8 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
         }
 
         #logging
-        if len(grp_values)==0:
-            print(f'{i}, one frames cluster. not change to logits')
+        # if len(grp_values)==0:
+        #     print(f'{i}, one frames cluster. not change to logits')
 
         # comment to reset video after each group is formed. 
         # vid = replace_frames(vid, final_src_idx, grp_values)
@@ -123,7 +123,7 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
     return group_dict
 
 
-def group_frames_loader_UCF101(GRP_THRESHOLD = 0.01):
+def group_frames_loader_UCF101(GRP_THRESHOLD = 0.005):
     out_path = os.path.join(r'C:\Users\lahir\Downloads\UCF101\analysis', f'groups_{GRP_THRESHOLD}.jsonl')
     #****************************************************************************
     # data loader
@@ -145,6 +145,9 @@ def group_frames_loader_UCF101(GRP_THRESHOLD = 0.01):
         cls = [class_labels[t[0].split('_')[1].lower()] for t in targets]
         video = inputs[0,:]
         gt_idx = class_labels[targets[0][0].split('_')[1].lower()]
+        filename = targets[0][0]
+        # if filename != 'v_ApplyEyeMakeup_g03_c05':
+        #     continue
         group_dict = group_frames(model, video, gt_idx, GRP_THRESHOLD)
         if group_dict==-1:
             continue
@@ -164,7 +167,7 @@ def group_frames_loader_UCF101(GRP_THRESHOLD = 0.01):
         #     print(f'{src_idx} -> {dst_idx_list} , {s}')
         # print('*****************************************')
 
-        filename = targets[0][0]
+
         group_dict['filename'] = filename
         with open(out_path, 'a') as f:
             f.write(json.dumps(group_dict) + '\n')
