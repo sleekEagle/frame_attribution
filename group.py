@@ -18,7 +18,9 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
 
     #get original pred
     stat = func.get_pred_stats(model, video)
-    assert stat['pred_cls'] == gt_idx, 'original pred is not correct'
+    # we do not consider when the prediction is not correct
+    if stat['pred_cls'] != gt_idx:
+        return -1
 
     def get_best_frame(video, idx1, idx2):
         v_1_2 = replace_frame(video, idx1, idx2)
@@ -137,6 +139,8 @@ def group_frames_loader_UCF101(GRP_THRESHOLD = 0.01):
         video = inputs[0,:]
         gt_idx = class_labels[targets[0][0].split('_')[1].lower()]
         group_dict = group_frames(model, video, gt_idx, GRP_THRESHOLD)
+        if group_dict==-1:
+            continue
 
         # print('*****************************************')
         # print('***************testing*******************')
