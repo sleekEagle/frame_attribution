@@ -33,7 +33,8 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
         v_ = [v_1_2, v_2_1][min_idx]
         best_idx = [idx1, idx2][min_idx]
         worst_idx = [idx1, idx2][1-min_idx]
-        return v_, min_change, best_idx, worst_idx
+        best_logit = [stat['logit'] for stat in [stat_1_2,stat_2_1]][min_idx]
+        return v_, min_change, best_logit, best_idx, worst_idx
     
     def get_best_frame_list(video, idx1, idx1_list, idx2):
         idx1_list = idx1_list + [idx1]
@@ -47,21 +48,24 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
         v_ = [v_1_2, v_2_1][min_idx]
         best_idx = [idx1, idx2][min_idx]
         worst_idx = [idx1, idx2][1-min_idx]
-        return v_, min_change, best_idx, worst_idx
+        best_logit = [stat['logit'] for stat in [stat_1_2,stat_2_1]][min_idx]
+        return v_, min_change, best_logit, best_idx, worst_idx
 
     group_dict = {}
+    group_dict['original_logit'] = stat['pred_logit']
     i=0
     vid = video.clone()
     final_src_idx = i
+    d= {}
     while i<T:
 
         if i==T-1:
             final_src_idx = i
-            group_dict[final_src_idx] = []
-            # print(f'{i}, one frames cluster. not change to logits')
+            d[final_src_idx] = []
+            print(f'{i}, one frames cluster. not change to logits')
             break
         j=i+1
-        v_, min_change, src_idx, dst_idx = get_best_frame(vid, i, j)
+        v_, min_change, best_logit, src_idx, dst_idx = get_best_frame(vid, i, j)
         final_src_idx = src_idx
         final_dst_idx = [idx for idx in list(range(i,j+1))]
 
@@ -72,27 +76,29 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
             j+=1
             final_src_idx = src_idx
             final_dst_idx = [idx for idx in list(range(i,j))]
-            
-            dst_idxs = [idx for idx in list(range(i,j)) if idx!=src_idx]
 
             #logging
-            # v_ = replace_frames(vid, src_idx, dst_idxs)
-            # s_ = func.get_pred_stats(model, v_, gt_idx, stat['pred_logit'])
-            # print(f'{src_idx} -> {dst_idxs} , {s_}')
+            dst_idxs = [idx for idx in list(range(i,j)) if idx!=src_idx]
+            v_ = replace_frames(vid, src_idx, dst_idxs)
+            s_ = func.get_pred_stats(model, v_, gt_idx, stat['pred_logit'])
+            print(f'{src_idx} -> {dst_idxs} , {s_}')
 
             if j==T:
                 break
 
             v_ = replace_frames(vid, src_idx, dst_idxs)
-            _, min_change, src_idx, dst_idx = get_best_frame_list(v_, src_idx, dst_idxs, j)
+            _, min_change, best_logit, src_idx, dst_idx = get_best_frame_list(v_, src_idx, dst_idxs, j)
             # print(min_change)
 
         grp_values = [idx for idx in final_dst_idx if idx!=final_src_idx]
-        group_dict[final_src_idx] = grp_values
+        d[final_src_idx] = {
+            'frames': grp_values,
+            'grp_logit': best_logit,
+        }
 
         #logging
-        # if len(grp_values)==0:
-        #     print(f'{i}, one frames cluster. not change to logits')
+        if len(grp_values)==0:
+            print(f'{i}, one frames cluster. not change to logits')
 
         # comment to reset video after each group is formed. 
         # vid = replace_frames(vid, final_src_idx, grp_values)
@@ -113,6 +119,7 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
     #         print((v[:,src_idx,:,:] == v[:,d,:,:]).all())
 
 
+    group_dict['groups'] = d
     return group_dict
 
 
@@ -142,16 +149,20 @@ def group_frames_loader_UCF101(GRP_THRESHOLD = 0.01):
         if group_dict==-1:
             continue
 
-        # print('*****************************************')
-        # print('***************testing*******************')
-        # stat = func.get_pred_stats(model, video)
-        # v = video.clone()
-        # for src_idx, dst_idx_list in group_dict.items():
-        #     v = video.clone()
-        #     v = replace_frames(v, src_idx, dst_idx_list)
-        #     s = func.get_pred_stats(model, v, gt_idx, stat['pred_logit'])
-        #     print(f'{src_idx} -> {dst_idx_list} , {s}')
-        # print('*****************************************')
+        print('*****************************************')
+        print('***************testing*******************')
+        stat = func.get_pred_stats(model, video)
+        v = video.clone()
+        for src_idx, dst_idx_list_ in group_dict['groups'].items():
+            v = video.clone()
+            if type(dst_idx_list_)==list:
+                print(f'{src_idx} -> {dst_idx_list_}')
+                continue
+            dst_idx_list = dst_idx_list_['frames']
+            v = replace_frames(v, src_idx, dst_idx_list)
+            s = func.get_pred_stats(model, v, gt_idx, stat['pred_logit'])
+            print(f'{src_idx} -> {dst_idx_list} , {s}')
+        print('*****************************************')
 
         filename = targets[0][0]
         group_dict['filename'] = filename
