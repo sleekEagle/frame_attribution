@@ -80,9 +80,9 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
 
             #logging
             dst_idxs = [idx for idx in list(range(i,j)) if idx!=src_idx]
-            v_ = replace_frames(vid, src_idx, dst_idxs)
-            s_ = func.get_pred_stats(model, v_, gt_idx, stat['pred_logit'])
-            print(f'{src_idx} -> {dst_idxs} , {s_}')
+            # v_ = replace_frames(vid, src_idx, dst_idxs)
+            # s_ = func.get_pred_stats(model, v_, gt_idx, stat['pred_logit'])
+            # print(f'{src_idx} -> {dst_idxs} , {s_}')
 
             if j==T:
                 break
@@ -90,7 +90,7 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
             v_ = replace_frames(vid, src_idx, dst_idxs)
             _, min_change, best_logit, src_idx, dst_idx = get_best_frame_list(v_, src_idx, dst_idxs, j)
             min_change_list.append(min_change)
-            print(min_change)
+            # print(min_change)
 
         grp_values = [idx for idx in final_dst_idx if idx!=final_src_idx]
         d[final_src_idx] = {
