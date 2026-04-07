@@ -45,5 +45,25 @@ def UCF101_minchange():
     print(f'mean in_diff: {np.mean(in_d_l)}, mean out_diff: {np.mean(out_d_l)}')
     print(f'std in_diff: {np.std(in_d_l)}, std out_diff: {np.std(out_d_l)}')
 
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    # Overlaid histograms
+    plt.hist(in_d_l, bins=30, alpha=0.5, label='in_diff')
+    plt.hist(out_d_l, bins=30, alpha=0.5, label='out_diff')
+    plt.legend()
+    plt.show(block=False)
+
+    sns.boxplot(data=[in_d_l, out_d_l])
+
+    diff_l = [out_d_l[i]-in_d_l[i] for i in range(len(in_d_l))]
+    plt.hist(diff_l, bins=30, alpha=0.5, label='diff_l')
+
+    # see if there is a trend in the in_diff_values and how does to compare to the out_diff_values.
+    
+    
+
+    pass
+
 if __name__ == '__main__':
     UCF101_minchange()

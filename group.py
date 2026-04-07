@@ -93,11 +93,6 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
             # print(min_change)
 
         grp_values = [idx for idx in final_dst_idx if idx!=final_src_idx]
-        d[final_src_idx] = {
-            'frames': grp_values,
-            'grp_logit': best_logit,
-            'min_change_list': min_change_list
-        }
 
         #logging
         # if len(grp_values)==0:
@@ -110,6 +105,13 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
             i=max(final_dst_idx)+1
         else:
             i+=1
+            best_logit = stat['pred_logit']
+        
+        d[final_src_idx] = {
+            'frames': grp_values,
+            'grp_logit': best_logit,
+            'min_change_list': min_change_list
+        }
 
 
     #test if the frames are replaced correctly
@@ -149,7 +151,7 @@ def group_frames_loader_UCF101(GRP_THRESHOLD = 0.01):
         video = inputs[0,:]
         gt_idx = class_labels[targets[0][0].split('_')[1].lower()]
         filename = targets[0][0]
-        # if filename != 'v_ApplyEyeMakeup_g03_c05':
+        # if filename != 'v_BabyCrawling_g01_c04':
         #     continue
         group_dict = group_frames(model, video, gt_idx, GRP_THRESHOLD)
         if group_dict==-1:
