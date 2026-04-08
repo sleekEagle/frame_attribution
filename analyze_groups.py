@@ -58,12 +58,37 @@ def UCF101_minchange():
 
     diff_l = [out_d_l[i]-in_d_l[i] for i in range(len(in_d_l))]
     plt.hist(diff_l, bins=30, alpha=0.5, label='diff_l')
+    plt.title('Histogram of out_diff - mean_in_diff')
 
     # see if there is a trend in the in_diff_values and how does to compare to the out_diff_values.
-    
-    
+    max_len = max([len(v) for v in in_grp])+1
+    value_l = [[] for _ in range(max_len)]
+    for i in range(len(in_grp)):
+        if len(in_grp[i])<=1: continue
+        in_v = in_grp[i]
+        out_v = out_grp[i]
+        v = np.array(in_v + [out_v])
+        # v = v - v[0] #min shift
+        #min max scale
+        # v = ((v - np.min(v)) / (np.max(v) - np.min(v)))
+        v = v.tolist()
 
-    pass
+        for j in range(len(v)-1):
+            value_l[j].append(v[j])
+        value_l[-1].append(v[-1])
+    
+    # std_l = [float(np.std(v)) for v in value_l]
+    # mean_l = [float(np.mean(v)) for v in value_l]
+
+    #violin plot
+    labels = list(range(1, max_len+1))
+    plt.figure(figsize=(10, 6))
+    plt.violinplot(value_l, positions=range(1, len(labels)+1))
+    plt.xticks(range(1, len(labels)+1), labels)
+    plt.ylabel('Values')
+    plt.title('Violin Plot ith per change values')
+    plt.grid(True, alpha=0.3)
+    plt.show()
 
 if __name__ == '__main__':
     UCF101_minchange()
