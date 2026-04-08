@@ -216,6 +216,7 @@ def get_pred_stats(model, v, gt_class=None, orig_pred_logit=None):
     pred_logit = pred[:,pred_cls].item()
     ret['pred_logit'] = pred_logit
     ret['pred_cls'] = pred_cls
+    ret['pred_logits'] = pred.squeeze(0).cpu().numpy().tolist()
 
     if gt_class is not None:
         logit = pred[:,gt_class].item()

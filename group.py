@@ -18,6 +18,7 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
 
     #get original pred
     stat = func.get_pred_stats(model, video)
+
     # we do not consider when the prediction is not correct
     if stat['pred_cls'] != gt_idx:
         return -1
@@ -137,6 +138,8 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
     group_dict['all_group_per_change'] = s['per_change']
     group_dict['grp_pred_cls'] = s['pred_cls']
     group_dict['gt_cls'] = gt_idx
+    group_dict['orig_logits'] = stat['pred_logits']
+    group_dict['grp_logits'] = s['pred_logits']
     
     return group_dict
 
