@@ -4,9 +4,10 @@ import func
 import json
 import numpy as np
 
+UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.01.jsonl'
 
 def UCF101_minchange():
-    path = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.01.jsonl'
+    path = UCF_PATH
     in_grp = []
     out_grp = []
 
@@ -90,5 +91,18 @@ def UCF101_minchange():
     plt.grid(True, alpha=0.3)
     plt.show()
 
+
+def UCF101_metrics():
+    path = UCF_PATH
+
+    with open(path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            d = record['groups']
+    pass
+
 if __name__ == '__main__':
-    UCF101_minchange()
+    UCF101_metrics()
