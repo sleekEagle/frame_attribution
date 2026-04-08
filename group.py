@@ -125,6 +125,19 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
 
 
     group_dict['groups'] = d
+
+    #what if we make all groups at the same time
+    v = video.clone()
+    for src_idx, d_ in d.items():
+        if 'frames' not in d_: continue
+        dst_idx_list = d_['frames']
+        v = replace_frames(v, src_idx, dst_idx_list)
+    s = func.get_pred_stats(model, v, gt_idx, stat['pred_logit'])
+    group_dict['all_group_logit'] = s['logit']
+    group_dict['all_group_per_change'] = s['per_change']
+    group_dict['grp_pred_cls'] = s['pred_cls']
+    group_dict['gt_cls'] = gt_idx
+    
     return group_dict
 
 
