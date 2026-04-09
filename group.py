@@ -111,7 +111,7 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
         d[final_src_idx] = {
             'frames': grp_values,
             'grp_logit': best_logit,
-            'min_change_list': min_js_list
+            'min_js_list': min_js_list
         }
 
 
@@ -134,18 +134,19 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
         dst_idx_list = d_['frames']
         v = replace_frames(v, src_idx, dst_idx_list)
     s = func.get_pred_stats(model, v, stat['pred_prob'])
+
     group_dict['all_group_logit'] = s['pred_logit']
     group_dict['all_group_per_change'] = (stat['pred_logit'] - s['pred_logit'])/stat['pred_logit']
     group_dict['grp_pred_cls'] = s['pred_cls']
     group_dict['gt_cls'] = gt_idx
-    group_dict['orig_logits'] = stat['pred_logits']
-    group_dict['grp_logits'] = s['pred_logits']
+    group_dict['orig_logits'] = stat['pred_logits'].cpu().numpy().tolist()
+    group_dict['grp_logits'] = s['pred_logits'].cpu().numpy().tolist()
     group_dict['js_div'] = s['js_div']
     
     return group_dict
 
 
-def group_frames_loader_UCF101(GRP_THRESHOLD = 0.01):
+def group_frames_loader_UCF101(GRP_THRESHOLD = 0.001):
     out_path = os.path.join(r'C:\Users\lahir\Downloads\UCF101\analysis', f'groups_{GRP_THRESHOLD}.jsonl')
     #****************************************************************************
     # data loader
