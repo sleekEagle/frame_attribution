@@ -101,7 +101,7 @@ def UCF101_metrics():
             if not line:
                 continue
             record = json.loads(line)
-            d = record['groups']
+            
     pass
 
 if __name__ == '__main__':

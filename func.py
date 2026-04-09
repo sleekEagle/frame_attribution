@@ -207,23 +207,37 @@ def play_tensor_video_opencv(tensor, fps=30, window_name="Video", titles=None):
 '''
 prediction related
 '''
-def get_pred_stats(model, v, gt_class=None, orig_pred_logit=None):
+from scipy.spatial.distance import jensenshannon
+'''
+metric : 'js' for jensen shannon divergence
+        or 'change' for percentage change in logit value for the predicted class
+        js : orig_pred must be the original predicted probabilities (after softmax)
+        change: orig_pred must be the original predicted logit values
+
+'''
+def get_pred_stats(model, v, orig_pred=None, metric='js'):
     ret = {}
     with torch.no_grad():
-        pred = model(v.unsqueeze(0))
-    # pred = F.softmax(pred,dim=1)
-    pred_cls = torch.argmax(pred,dim=1).item()
-    pred_logit = pred[:,pred_cls].item()
-    ret['pred_logit'] = pred_logit
-    ret['pred_cls'] = pred_cls
-    ret['pred_logits'] = pred.squeeze(0).cpu().numpy().tolist()
-
-    if gt_class is not None:
-        logit = pred[:,gt_class].item()
-        per_change = (orig_pred_logit - logit)/orig_pred_logit
-        ret['per_change'] = per_change
-        ret['logit'] = logit
-
+        pred_l = model(v.unsqueeze(0))
+        pred_p = F.softmax(pred_l,dim=1)
+        pred_cls = torch.argmax(pred_l,dim=1).item()
+        pred_logit = pred_l[:,pred_cls].item()
+        ret['pred_cls'] = pred_cls
+        ret['pred_logits'] = pred_l
+        ret['pred_prob'] = pred_p
+        ret['pred_logit'] = pred_logit
+    if orig_pred is None:
+        return ret
+    else:
+        ret['orig_pred_val'] = orig_pred.max().item()
+        assert metric in ['js', 'change'], 'metric must be either js or change'
+        if metric=='js':
+            js_distance = jensenshannon(orig_pred.squeeze().cpu().numpy(), pred_p.squeeze().cpu().numpy())
+            js_div = float(js_distance**2)
+            ret['js_div'] = js_div
+        elif metric=='change':
+            per_change = (ret['orig_pred_val'] - pred_logit)/ret['orig_pred_val']
+            ret['per_change'] = per_change
     return ret
 
 '''
