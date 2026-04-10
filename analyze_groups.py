@@ -4,7 +4,7 @@ import func
 import json
 import numpy as np
 
-UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.01.jsonl'
+UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
 
 def UCF101_minchange():
     path = UCF_PATH
@@ -21,7 +21,11 @@ def UCF101_minchange():
             for k in d:
                 if len(d[k])==0: 
                     continue
-                l = d[k]['min_change_list']
+                if int(k) == 15:
+                    continue
+                if 15 in d[k]['frames']:
+                    continue
+                l = d[k]['min_js_list']
                 if len(d[k]['frames']) == 0: 
                     continue
                 if len(l)==1 and int(k) in [14,15]:
@@ -30,6 +34,10 @@ def UCF101_minchange():
 
                 in_grp_changes = l[:-1]
                 out_grp_changes = l[-1]
+
+                #sanity check
+                assert in_grp_changes[-1] < out_grp_changes, 'sanity check failed'
+
                 in_grp.append(in_grp_changes)
                 out_grp.append(out_grp_changes)
 
@@ -51,7 +59,7 @@ def UCF101_minchange():
 
     # Overlaid histograms
     plt.hist(in_d_l, bins=30, alpha=0.5, label='in_diff')
-    plt.hist(out_d_l, bins=30, alpha=0.5, label='out_diff')
+    plt.hist(out_d_l, bins=100, alpha=0.5, label='out_diff')
     plt.legend()
     plt.show(block=False)
 
@@ -101,8 +109,8 @@ def UCF101_metrics():
             if not line:
                 continue
             record = json.loads(line)
-            
+
     pass
 
 if __name__ == '__main__':
-    UCF101_metrics()
+    UCF101_minchange()

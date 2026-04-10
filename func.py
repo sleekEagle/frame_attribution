@@ -215,7 +215,31 @@ metric : 'js' for jensen shannon divergence
         change: orig_pred must be the original predicted logit values
 
 '''
-def get_pred_stats(model, v, orig_pred=None, metric='js'):
+def stable_JS(logits_p, logits_q):
+    log_p = torch.log_softmax(logits_p, dim=-1)
+    log_q = torch.log_softmax(logits_q, dim=-1)
+
+    p = log_p.exp()
+    q = log_q.exp()
+
+    m = 0.5 * (p + q)
+    log_m = torch.log(m)
+
+    kl_pm = torch.sum(p * (log_p - log_m), dim=-1)
+    kl_qm = torch.sum(q * (log_q - log_m), dim=-1)
+
+    js = 0.5 * (kl_pm + kl_qm)
+
+    return js
+
+def get_margin(t, k=1):
+    top_all = torch.topk(t, k=k+1).values
+    top = top_all[0]
+    others = top_all[1:]
+    margin = top - others.mean()
+    return margin
+
+def get_pred_stats(model, v, orig_pred=None, metric='margin'):
     ret = {}
     with torch.no_grad():
         pred_l = model(v.unsqueeze(0))
@@ -230,14 +254,18 @@ def get_pred_stats(model, v, orig_pred=None, metric='js'):
         return ret
     else:
         ret['orig_pred_val'] = orig_pred.max().item()
-        assert metric in ['js', 'change'], 'metric must be either js or change'
+        assert metric in ['js', 'change', 'margin'], 'metric must be either js, change, margin'
         if metric=='js':
-            js_distance = jensenshannon(orig_pred.squeeze().cpu().numpy(), pred_p.squeeze().cpu().numpy())
+            js_distance = stable_JS(orig_pred.squeeze(), pred_p.squeeze())
             js_div = float(js_distance**2)
             ret['js_div'] = js_div
         elif metric=='change':
             per_change = (ret['orig_pred_val'] - pred_logit)/ret['orig_pred_val']
             ret['per_change'] = per_change
+        elif metric=='margin':
+            orig_margin = get_margin(orig_pred.squeeze())
+            new_margin = get_margin(pred_l.squeeze())
+            ret['margin_change'] = ((orig_margin - new_margin)/orig_margin).item()
     return ret
 
 '''

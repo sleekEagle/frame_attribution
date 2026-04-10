@@ -25,32 +25,32 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
 
     def get_best_frame(video, idx1, idx2):
         v_1_2 = replace_frame(video, idx1, idx2)
-        stat_1_2 = func.get_pred_stats(model, v_1_2, stat['pred_prob'])
+        stat_1_2 = func.get_pred_stats(model, v_1_2, stat['pred_logits'])
         v_2_1 = replace_frame(video, idx2, idx1)
-        stat_2_1 = func.get_pred_stats(model, v_2_1, stat['pred_prob'])
-        js_list = [stat['js_div'] for stat in [stat_1_2,stat_2_1]]
-        min_js = min(js_list)
-        min_idx = js_list.index(min_js)
+        stat_2_1 = func.get_pred_stats(model, v_2_1, stat['pred_logits'])
+        change_list = [stat['margin_change'] for stat in [stat_1_2,stat_2_1]]
+        min_change = min(change_list)
+        min_idx = change_list.index(min_change)
         v_ = [v_1_2, v_2_1][min_idx]
         best_idx = [idx1, idx2][min_idx]
         worst_idx = [idx1, idx2][1-min_idx]
         best_logit = [stat['pred_logit'] for stat in [stat_1_2,stat_2_1]][min_idx]
-        return v_, min_js, best_logit, best_idx, worst_idx
+        return v_, min_change, best_logit, best_idx, worst_idx
     
     def get_best_frame_list(video, idx1, idx1_list, idx2):
         idx1_list = idx1_list + [idx1]
         v_1_2 = replace_frame(video, idx1, idx2)
-        stat_1_2 = func.get_pred_stats(model, v_1_2, stat['pred_prob'])
+        stat_1_2 = func.get_pred_stats(model, v_1_2, stat['pred_logits'])
         v_2_1 = replace_frames(video, idx2, idx1_list)
-        stat_2_1 = func.get_pred_stats(model, v_2_1, stat['pred_prob'])
-        js_list = [stat['js_div'] for stat in [stat_1_2,stat_2_1]]
-        min_js = min(js_list)
-        min_idx = js_list.index(min_js)
+        stat_2_1 = func.get_pred_stats(model, v_2_1, stat['pred_logits'])
+        change_list = [stat['margin_change'] for stat in [stat_1_2,stat_2_1]]
+        min_change = min(change_list)
+        min_idx = change_list.index(min_change)
         v_ = [v_1_2, v_2_1][min_idx]
         best_idx = [idx1, idx2][min_idx]
         worst_idx = [idx1, idx2][1-min_idx]
         best_logit = [stat['pred_logit'] for stat in [stat_1_2,stat_2_1]][min_idx]
-        return v_, min_js, best_logit, best_idx, worst_idx
+        return v_, min_change, best_logit, best_idx, worst_idx
 
     group_dict = {}
     group_dict['original_logit'] = stat['pred_logits'][0,[stat['pred_cls']]].item()
@@ -66,14 +66,14 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
             # print(f'{i}, one frames cluster. not change to logits')
             break
         j=i+1
-        v_, min_js, best_logit, src_idx, dst_idx = get_best_frame(vid, i, j)
+        v_, min_change, best_logit, src_idx, dst_idx = get_best_frame(vid, i, j)
         final_src_idx = i
         final_dst_idx = []
-        min_js_list = [min_js]
+        min_change_list = [min_change]
 
         dst_idxs = []
         grp = False
-        while min_js < GRP_THRESHOLD:
+        while min_change < GRP_THRESHOLD:
             grp = True
             j+=1
             final_src_idx = src_idx
@@ -89,9 +89,9 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
                 break
 
             v_ = replace_frames(vid, src_idx, dst_idxs)
-            _, min_js, best_logit, src_idx, dst_idx = get_best_frame_list(v_, src_idx, dst_idxs, j)
-            min_js_list.append(min_js)
-            # print(min_js)
+            _, min_change, best_logit, src_idx, dst_idx = get_best_frame_list(v_, src_idx, dst_idxs, j)
+            min_change_list.append(min_change)
+            # print(min_change)
 
         grp_values = [idx for idx in final_dst_idx if idx!=final_src_idx]
 
@@ -111,7 +111,7 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
         d[final_src_idx] = {
             'frames': grp_values,
             'grp_logit': best_logit,
-            'min_js_list': min_js_list
+            'min_change_list': min_change_list
         }
 
 
@@ -141,12 +141,12 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
     group_dict['gt_cls'] = gt_idx
     group_dict['orig_logits'] = stat['pred_logits'].cpu().numpy().tolist()
     group_dict['grp_logits'] = s['pred_logits'].cpu().numpy().tolist()
-    group_dict['js_div'] = s['js_div']
+    group_dict['margin_change'] = s['margin_change']
     
     return group_dict
 
 
-def group_frames_loader_UCF101(GRP_THRESHOLD = 0.001):
+def group_frames_loader_UCF101(GRP_THRESHOLD = 1e-3):
     out_path = os.path.join(r'C:\Users\lahir\Downloads\UCF101\analysis', f'groups_{GRP_THRESHOLD}.jsonl')
     #****************************************************************************
     # data loader
@@ -169,7 +169,7 @@ def group_frames_loader_UCF101(GRP_THRESHOLD = 0.001):
         video = inputs[0,:]
         gt_idx = class_labels[targets[0][0].split('_')[1].lower()]
         filename = targets[0][0]
-        # if filename != 'v_BabyCrawling_g01_c04':
+        # if filename != 'v_Surfing_g04_c01':
         #     continue
         group_dict = group_frames(model, video, gt_idx, GRP_THRESHOLD)
         if group_dict==-1:
