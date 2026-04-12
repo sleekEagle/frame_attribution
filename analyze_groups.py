@@ -25,7 +25,7 @@ def UCF101_minchange():
                     continue
                 if 15 in d[k]['frames']:
                     continue
-                l = d[k]['min_js_list']
+                l = [(record['original_logit']-r[1])/record['original_logit'] for r in d[k]['min_change_list']]
                 if len(d[k]['frames']) == 0: 
                     continue
                 if len(l)==1 and int(k) in [14,15]:

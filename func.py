@@ -232,7 +232,7 @@ def stable_JS(logits_p, logits_q):
 
     return js
 
-def get_margin(t, k=1):
+def get_margin(t, k=5):
     top_all = torch.topk(t, k=k+1).values
     top = top_all[0]
     others = top_all[1:]
@@ -246,10 +246,12 @@ def get_pred_stats(model, v, orig_pred=None, metric='margin'):
         pred_p = F.softmax(pred_l,dim=1)
         pred_cls = torch.argmax(pred_l,dim=1).item()
         pred_logit = pred_l[:,pred_cls].item()
+        pred_prob = pred_p[:,pred_cls].item()
         ret['pred_cls'] = pred_cls
         ret['pred_logits'] = pred_l
         ret['pred_prob'] = pred_p
         ret['pred_logit'] = pred_logit
+        ret['pred_prob'] = pred_prob
     if orig_pred is None:
         return ret
     else:
