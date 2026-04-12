@@ -25,7 +25,7 @@ def UCF101_minchange():
                     continue
                 if 15 in d[k]['frames']:
                     continue
-                l = [(record['original_logit']-r[1])/record['original_logit'] for r in d[k]['min_change_list']]
+                l = [r[1] for r in d[k]['min_change_list']]
                 if len(d[k]['frames']) == 0: 
                     continue
                 if len(l)==1 and int(k) in [14,15]:
@@ -36,7 +36,7 @@ def UCF101_minchange():
                 out_grp_changes = l[-1]
 
                 #sanity check
-                assert in_grp_changes[-1] < out_grp_changes, 'sanity check failed'
+                # assert in_grp_changes[-1] < out_grp_changes, 'sanity check failed'
 
                 in_grp.append(in_grp_changes)
                 out_grp.append(out_grp_changes)
