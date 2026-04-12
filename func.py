@@ -248,14 +248,14 @@ def get_pred_stats(model, v, orig_pred=None, metric='margin'):
         pred_logit = pred_l[:,pred_cls].item()
         pred_prob = pred_p[:,pred_cls].item()
         ret['pred_cls'] = pred_cls
-        ret['pred_logits'] = pred_l
-        ret['pred_prob'] = pred_p
+        ret['pred_logits'] = pred_l.squeeze().cpu().numpy().tolist()
+        ret['pred_prob'] = pred_p.squeeze().cpu().numpy().tolist()
         ret['pred_logit'] = pred_logit
         ret['pred_prob'] = pred_prob
     if orig_pred is None:
         return ret
     else:
-        ret['orig_pred_val'] = orig_pred.max().item()
+        ret['orig_pred_val'] = max(orig_pred)
         assert metric in ['js', 'change', 'margin'], 'metric must be either js, change, margin'
         if metric=='js':
             js_distance = stable_JS(orig_pred.squeeze(), pred_p.squeeze())
@@ -265,7 +265,7 @@ def get_pred_stats(model, v, orig_pred=None, metric='margin'):
             per_change = (ret['orig_pred_val'] - pred_logit)/ret['orig_pred_val']
             ret['per_change'] = per_change
         elif metric=='margin':
-            orig_margin = get_margin(orig_pred.squeeze())
+            orig_margin = get_margin(torch.tensor(orig_pred))
             new_margin = get_margin(pred_l.squeeze())
             ret['orig_margin'] = orig_margin.item()
             ret['new_margin'] = new_margin.item()
