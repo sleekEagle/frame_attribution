@@ -265,6 +265,8 @@ def get_pred_stats(model, v, orig_pred=None, metric='margin'):
         elif metric=='margin':
             orig_margin = get_margin(orig_pred.squeeze())
             new_margin = get_margin(pred_l.squeeze())
+            ret['orig_margin'] = orig_margin.item()
+            ret['new_margin'] = new_margin.item()
             ret['margin_change'] = ((orig_margin - new_margin)/orig_margin).item()
     return ret
 

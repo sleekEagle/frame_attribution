@@ -53,7 +53,7 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
         return v_, min_change, best_logit, best_idx, worst_idx
 
     group_dict = {}
-    group_dict['original_logit'] = stat['pred_logits'][0,[stat['pred_cls']]].item()
+    group_dict['original_logit'] = stat['pred_logit']
     i=0
     vid = video.clone()
     final_src_idx = i
@@ -133,7 +133,7 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
         if 'frames' not in d_: continue
         dst_idx_list = d_['frames']
         v = replace_frames(v, src_idx, dst_idx_list)
-    s = func.get_pred_stats(model, v, stat['pred_prob'])
+    s = func.get_pred_stats(model, v, stat['pred_logits'])
 
     group_dict['all_group_logit'] = s['pred_logit']
     group_dict['all_group_per_change'] = (stat['pred_logit'] - s['pred_logit'])/stat['pred_logit']
@@ -142,7 +142,9 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
     group_dict['orig_logits'] = stat['pred_logits'].cpu().numpy().tolist()
     group_dict['grp_logits'] = s['pred_logits'].cpu().numpy().tolist()
     group_dict['margin_change'] = s['margin_change']
-    
+    group_dict['origin_margin'] = s['orig_margin']
+    group_dict['new_margin'] = s['new_margin']
+
     return group_dict
 
 
