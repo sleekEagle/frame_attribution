@@ -3,6 +3,8 @@ from glob import glob
 import func
 import json
 import numpy as np
+import torch
+import torch.nn.functional as F
 
 UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
 
@@ -25,21 +27,32 @@ def UCF101_minchange():
                     continue
                 if 15 in d[k]['frames']:
                     continue
-                l = [r[1] for r in d[k]['min_change_list']]
-                if len(d[k]['frames']) == 0: 
-                    continue
-                if len(l)==1 and int(k) in [14,15]:
-                    continue
-                assert not (len(l)==1 and int(k) not in [14,15]), 'error'
+                # print(f'orig_logit: {record["original_logit"]}, orig_prob: {record["orig_prob"]}') 
 
-                in_grp_changes = l[:-1]
-                out_grp_changes = l[-1]
+                margin_change_l = [r['margin_change'] for r in d[k]['grp_stat_list']]
+                margin_l = [r['new_margin'] for r in d[k]['grp_stat_list']]
+                logit_ratio = [((record['origin_margin'] - func.get_margin(torch.tensor(r['pred_logits'])))/record['origin_margin']).item() for r in d[k]['grp_stat_list']]
+                logit_l = [r['pred_logit'] for r in d[k]['grp_stat_list']]
+                softmax_l = [max(F.softmax(torch.tensor(r['pred_logits']),dim=0)).item() for r in d[k]['grp_stat_list']]
 
-                #sanity check
-                # assert in_grp_changes[-1] < out_grp_changes, 'sanity check failed'
+                print(f'origin_margin: {record['origin_margin']} \nmargin : {margin_l} \nmargin_change_l   : {margin_change_l}')
+                print('************************************************************************************************************************************************************************')
+                pass
 
-                in_grp.append(in_grp_changes)
-                out_grp.append(out_grp_changes)
+                # if len(d[k]['frames']) == 0: 
+                #     continue
+                # if len(l)==1 and int(k) in [14,15]:
+                #     continue
+                # assert not (len(l)==1 and int(k) not in [14,15]), 'error'
+
+                # in_grp_changes = l[:-1]
+                # out_grp_changes = l[-1]
+
+                # #sanity check
+                # # assert in_grp_changes[-1] < out_grp_changes, 'sanity check failed'
+
+                # in_grp.append(in_grp_changes)
+                # out_grp.append(out_grp_changes)
 
     in_d_l = []
     out_d_l = []
