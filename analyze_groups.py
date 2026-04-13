@@ -119,7 +119,7 @@ def UCF101_metrics():
     path = UCF_PATH
     n_g = 0
     entr_increase = 0
-    KMAX = 5
+    KMAX = 10
     margin_dict = {k: 0 for k in range(1, KMAX+1)}
     n = 0
 
