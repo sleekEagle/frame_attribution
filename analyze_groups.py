@@ -35,24 +35,24 @@ def UCF101_minchange():
                 logit_l = [r['pred_logit'] for r in d[k]['grp_stat_list']]
                 softmax_l = [max(F.softmax(torch.tensor(r['pred_logits']),dim=0)).item() for r in d[k]['grp_stat_list']]
 
-                print(f'origin_margin: {record['origin_margin']} \nmargin : {margin_l} \nmargin_change_l   : {margin_change_l}')
+                print(f'origin_margin: {record['origin_margin']} \norigin_sm: {record["orig_prob"]} \nmargin : {margin_l} \nmargin_change_l   : {margin_change_l} \nsoftmax_l: {softmax_l}')
                 print('************************************************************************************************************************************************************************')
                 pass
 
-                # if len(d[k]['frames']) == 0: 
-                #     continue
-                # if len(l)==1 and int(k) in [14,15]:
-                #     continue
-                # assert not (len(l)==1 and int(k) not in [14,15]), 'error'
+                if len(d[k]['frames']) == 0: 
+                    continue
+                if len(margin_change_l)==1 and int(k) in [14,15]:
+                    continue
+                assert not (len(margin_change_l)==1 and int(k) not in [14,15]), 'error'
 
-                # in_grp_changes = l[:-1]
-                # out_grp_changes = l[-1]
+                in_grp_changes = margin_change_l[:-1]
+                out_grp_changes = margin_change_l[-1]
 
-                # #sanity check
-                # # assert in_grp_changes[-1] < out_grp_changes, 'sanity check failed'
+                #sanity check
+                assert in_grp_changes[-1] < out_grp_changes, 'sanity check failed'
 
-                # in_grp.append(in_grp_changes)
-                # out_grp.append(out_grp_changes)
+                in_grp.append(in_grp_changes)
+                out_grp.append(out_grp_changes)
 
     in_d_l = []
     out_d_l = []
@@ -113,8 +113,15 @@ def UCF101_minchange():
     plt.show()
 
 
+from scipy.stats import entropy
+
 def UCF101_metrics():
     path = UCF_PATH
+    n_g = 0
+    entr_increase = 0
+    KMAX = 5
+    margin_dict = {k: 0 for k in range(1, KMAX+1)}
+    n = 0
 
     with open(path, 'r', encoding='utf-8') as f:
         for line in f:
@@ -122,8 +129,26 @@ def UCF101_metrics():
             if not line:
                 continue
             record = json.loads(line)
+            n_g += len(record['groups'].keys())
 
-    pass
+            for k in range(1,KMAX+1):
+                margin_o = func.get_margin(torch.tensor(record['orig_logits']),k=k)
+                margin_g = func.get_margin(torch.tensor(record['grp_logits']),k=k)
+                margin_dict[k] += margin_g - margin_o
+
+            #calc entropy difference
+            o_prob = F.softmax(torch.tensor(record['orig_logits']),dim=0)
+            o_entr = entropy(o_prob, base=2)
+            g_prob = F.softmax(torch.tensor(record['grp_logits']),dim=0)
+            g_entr = entropy(g_prob, base=2)
+            entr_increase_ = g_entr - o_entr
+            entr_increase += entr_increase_
+            n += 1
+        
+        margin_dict = {k: float(margin_dict[k]/n) for k in range(1, KMAX+1)}
+        entr_increase /= n
+        n_g /= n
+        print(f'average number of groups: {n_g} \naverage margin change: {margin_dict} \naverage entropy increase: {entr_increase}')
 
 if __name__ == '__main__':
-    UCF101_minchange()
+    UCF101_metrics()
