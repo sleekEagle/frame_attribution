@@ -168,7 +168,7 @@ def group_frames_loader_UCF101(GRP_THRESHOLD = 1e-3):
 
     for idx, batch in enumerate(inference_loader):
         print(f'{idx/len(inference_loader)*100:.0f} % is done.', end='\r')
-        if idx==38: break
+        if idx==40: break
         inputs, targets = batch
         cls = [class_labels[t[0].split('_')[1].lower()] for t in targets]
         video = inputs[0,:]
@@ -204,4 +204,6 @@ if __name__ == '__main__':
     group_frames_loader_UCF101(GRP_THRESHOLD=1e-3)
     group_frames_loader_UCF101(GRP_THRESHOLD=5e-3)
     group_frames_loader_UCF101(GRP_THRESHOLD=1e-2)
+    group_frames_loader_UCF101(GRP_THRESHOLD=5e-2)
     group_frames_loader_UCF101(GRP_THRESHOLD=1e-1)
+    group_frames_loader_UCF101(GRP_THRESHOLD=5e-1)

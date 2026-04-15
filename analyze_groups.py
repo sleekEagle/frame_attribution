@@ -119,7 +119,7 @@ def UCF101_metrics():
     path = UCF_PATH
     n_g = 0
     entr_increase = 0
-    KMAX = 10
+    KMAX = 3
     margin_dict = {k: 0 for k in range(1, KMAX+1)}
     n = 0
 
@@ -141,7 +141,7 @@ def UCF101_metrics():
             o_entr = entropy(o_prob, base=2)
             g_prob = F.softmax(torch.tensor(record['grp_logits']),dim=0)
             g_entr = entropy(g_prob, base=2)
-            entr_increase_ = g_entr - o_entr
+            entr_increase_ = o_entr - g_entr
             entr_increase += entr_increase_
             n += 1
         
