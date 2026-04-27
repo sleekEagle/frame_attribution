@@ -153,7 +153,7 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
 def group_frames_loader_UCF101(GRP_THRESHOLD = 1e-3):
     out_path = os.path.join(r'C:\Users\lahir\Downloads\UCF101\analysis', f'groups_{GRP_THRESHOLD}.jsonl')
     #****************************************************************************
-    # data loader
+    # the model and the data loader
     #****************************************************************************
     ucf101dm = func.UCF101_data_model()
     model = ucf101dm.model
