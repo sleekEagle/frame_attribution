@@ -1,22 +1,41 @@
 import shap
 import numpy as np
 import func
+import json
 
-masks = 0
+UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
 
-def predict(x):
-    print('in predict')
-    return np.random.rand(x.shape[0], 3)  # Dummy prediction function for binary classification
 
-def custom_masker(mask, x):
-    global masks
-    masks += 1
-    # in this simple example we just zero out the features we are masking
-    return (x * mask).reshape(1, len(x))
+class CalcSHAP:
+    def __init__(self):
+        self.explainer = shap.explainers.Exact(self.predict, self.custom_masker)
+        self.n_masks = 0
+
+    def predict(self, x):
+        print('in predict')
+        return np.random.rand(x.shape[0], 3)  # Dummy prediction function for binary classification
+
+    def custom_masker(self, mask, x):
+        self.n_masks += 1
+        #create the new video with the given mask
+        self.groups
+        mask
+        return (x * mask).reshape(1, len(x))
+    
+    def explain(self, video, groups):
+        self.video = video
+        self.groups = groups
+        grp_features = np.array([list(groups.keys())])
+        self.explainer(grp_features)
+
+        pass
+
+
+
 
 
 # # Train a model (example with binary classification)
-# X = np.random.rand(1, 5)
+# X = np.random.rand(1, 16)
 
 # explainer = shap.explainers.Exact(predict, custom_masker)
 # shap_values = explainer(X)  # Explain the first sample
@@ -48,18 +67,77 @@ def calc_shap():
     #*************************************************************************
     # initialize shap model 
     #*************************************************************************
-    explainer = shap.explainers.Exact(predict, custom_masker)
+    ex = CalcSHAP()
 
-    for idx, batch in enumerate(inference_loader):
-        print(f'{idx/len(inference_loader)*100:.0f} % is done.', end='\r')
-        if idx==40: break
-        inputs, targets = batch
-        cls = [class_labels[t[0].split('_')[1].lower()] for t in targets]
-        video = inputs[0,:]
-        gt_idx = class_labels[targets[0][0].split('_')[1].lower()]
-        filename = targets[0][0]
-        pass
+    #read groups
+    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+
+            record = json.loads(line)
+            filename = record['filename']
+            p = ucf101dm.construct_vid_path_from_full(filename)
+            video = ucf101dm.load_jpg_ucf101(p, n=0)
+            g = record['groups']
+            groups = {}
+            for k in g:
+                f = g[k]['frames']
+                groups[int(k)] = f
+
+            shap_values = ex.explain(video, groups)
+            pass
+
+'''
+    modifies the group dict inplace
+    use:     key_to_fill = 1
+    future_fill(key_to_fill, mask, groups)
+'''
+def future_fill(fill_key, mask, groups):
+    # #create a deep copy of the dict
+    # new_groups = {}
+    # for k in groups:
+    #     new_groups[k] = groups[k].copy()
+    ord_keys = sorted(mask.keys())
+    first_true_key = [k for k in ord_keys if (k>fill_key and mask[k])][0]
+    groups[first_true_key].extend(groups[fill_key])
+    groups.pop(fill_key)
+
+def past_fill(fill_key, mask, groups):
+    # #create a deep copy of the dict
+    # new_groups = {}
+    # for k in groups:
+    #     new_groups[k] = groups[k].copy()
+    ord_keys = sorted(mask.keys(),reverse=True)
+    first_true_key = [k for k in ord_keys if (k<fill_key and mask[k])][0]
+    groups[first_true_key].extend(groups[fill_key])
+    groups.pop(fill_key)
+
+def test():
+    groups = {1: [0, 2], 3: [3], 4: [5,6,7], 10: [8,9], 11:[12,13,14], 16:[15,17]}
+    m = [False, False, True, False, True, False]
+    ord_keys = sorted(groups.keys())
+    mask = {}
+    for i,k in enumerate(ord_keys):
+        mask[k] = m[i]
+
+    key_to_fill = 1
+    future_fill(key_to_fill, mask, groups)
+
+
+
+        
+
+
+
+
+    pass
+
+
+
+
 
 
 if __name__ == "__main__":
-    calc_shap()
+    test()
