@@ -100,7 +100,10 @@ def future_fill(fill_key, mask, groups):
     # for k in groups:
     #     new_groups[k] = groups[k].copy()
     ord_keys = sorted(mask.keys())
-    first_true_key = [k for k in ord_keys if (k>fill_key and mask[k])][0]
+    l = [k for k in ord_keys if (k>fill_key and mask[k])]
+    if len(l)==0:
+        return -1
+    first_true_key = l[0]
     groups[first_true_key].extend(groups[fill_key])
     groups.pop(fill_key)
 
@@ -110,9 +113,33 @@ def past_fill(fill_key, mask, groups):
     # for k in groups:
     #     new_groups[k] = groups[k].copy()
     ord_keys = sorted(mask.keys(),reverse=True)
-    first_true_key = [k for k in ord_keys if (k<fill_key and mask[k])][0]
+    l = [k for k in ord_keys if (k<fill_key and mask[k])]
+    if len(l)==0:
+        return -1
+    first_true_key = l[0]
     groups[first_true_key].extend(groups[fill_key])
     groups.pop(fill_key)
+
+def future_fill_all(mask, groups):
+    ord_keys = sorted(mask.keys())
+    for k in ord_keys[:-1]:
+        if not mask[k]:
+            ret = future_fill(k, mask, groups)
+            if ret ==-1:
+                past_fill(k, mask, groups)
+    if not mask[ord_keys[-1]]:
+        past_fill(ord_keys[-1], mask, groups)
+
+def past_fill_all(mask, groups):
+    ord_keys = sorted(mask.keys())
+    if not mask[ord_keys[0]]:
+        future_fill(ord_keys[0], mask, groups)
+    for k in ord_keys[1:]:
+        if not mask[k]:
+            ret = past_fill(k, mask, groups)
+            if ret ==-1:
+                future_fill(k, mask, groups)
+
 
 def test():
     groups = {1: [0, 2], 3: [3], 4: [5,6,7], 10: [8,9], 11:[12,13,14], 16:[15,17]}
@@ -122,15 +149,14 @@ def test():
     for i,k in enumerate(ord_keys):
         mask[k] = m[i]
 
-    key_to_fill = 1
-    future_fill(key_to_fill, mask, groups)
+    # key_to_fill = 1
+    # future_fill(key_to_fill, mask, groups)
+
+    past_fill_all(mask, groups)
 
 
 
         
-
-
-
 
     pass
 
