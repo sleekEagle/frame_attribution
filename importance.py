@@ -2,25 +2,93 @@ import shap
 import numpy as np
 import func
 import json
+import torch
 
 UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
 
+'''
+    modifies the group dict inplace
+    use:     key_to_fill = 1
+    future_fill(key_to_fill, mask, groups)
+'''
+def future_fill(fill_key, mask, groups):
+    # #create a deep copy of the dict
+    # new_groups = {}
+    # for k in groups:
+    #     new_groups[k] = groups[k].copy()
+    ord_keys = sorted(mask.keys())
+    l = [k for k in ord_keys if (k>fill_key and mask[k])]
+    if len(l)==0:
+        return -1
+    first_true_key = l[0]
+    groups[first_true_key].extend(list(set(groups[fill_key]+[fill_key])))
+    groups.pop(fill_key)
+
+def past_fill(fill_key, mask, groups):
+    # #create a deep copy of the dict
+    # new_groups = {}
+    # for k in groups:
+    #     new_groups[k] = groups[k].copy()
+    ord_keys = sorted(mask.keys(),reverse=True)
+    l = [k for k in ord_keys if (k<fill_key and mask[k])]
+    if len(l)==0:
+        return -1
+    first_true_key = l[0]
+    groups[first_true_key].extend(list(set(groups[fill_key]+[fill_key])))
+    groups.pop(fill_key)
+
+def future_fill_all(mask, groups):
+    ord_keys = sorted(mask.keys())
+    for k in ord_keys[:-1]:
+        if not mask[k]:
+            ret = future_fill(k, mask, groups)
+            if ret ==-1:
+                past_fill(k, mask, groups)
+    if not mask[ord_keys[-1]]:
+        past_fill(ord_keys[-1], mask, groups)
+
+def past_fill_all(mask, groups):
+    #handle all false mask seperately
+    # mask_sum = 0
+    # for m in mask.values():
+    #     mask_sum += m
+    # if mask_sum == 0:
+    #     pass
+    ord_keys = sorted(mask.keys())
+    if not mask[ord_keys[0]]:
+        future_fill(ord_keys[0], mask, groups)
+    for k in ord_keys[1:]:
+        if not mask[k]:
+            ret = past_fill(k, mask, groups)
+            if ret ==-1:
+                future_fill(k, mask, groups)
 
 class CalcSHAP:
     def __init__(self):
         self.explainer = shap.explainers.Exact(self.predict, self.custom_masker)
         self.n_masks = 0
+        self.BACKGROUND = "PAST"
 
     def predict(self, x):
         print('in predict')
         return np.random.rand(x.shape[0], 3)  # Dummy prediction function for binary classification
 
-    def custom_masker(self, mask, x):
+    def custom_masker(self, m, grp_feat):
         self.n_masks += 1
-        #create the new video with the given mask
-        self.groups
-        mask
-        return (x * mask).reshape(1, len(x))
+        ord_keys = sorted(grp_feat.tolist())
+        mask = {}
+        for i,k in enumerate(ord_keys):
+            mask[int(k)] = bool(m[i])
+
+        # handle all-false mask seperately
+        if m.sum() == 0:
+            vid_g = torch.zeros_like(self.video)
+        else:
+            past_fill_all(mask, self.groups)
+            vid_g = func.create_grouped_video(self.video.permute(1,0,2,3), self.groups)
+            vid_g = vid_g.permute(1,0,2,3)
+        
+        return vid_g
     
     def explain(self, video, groups):
         self.video = video
@@ -89,61 +157,9 @@ def calc_shap():
             shap_values = ex.explain(video, groups)
             pass
 
-'''
-    modifies the group dict inplace
-    use:     key_to_fill = 1
-    future_fill(key_to_fill, mask, groups)
-'''
-def future_fill(fill_key, mask, groups):
-    # #create a deep copy of the dict
-    # new_groups = {}
-    # for k in groups:
-    #     new_groups[k] = groups[k].copy()
-    ord_keys = sorted(mask.keys())
-    l = [k for k in ord_keys if (k>fill_key and mask[k])]
-    if len(l)==0:
-        return -1
-    first_true_key = l[0]
-    groups[first_true_key].extend(groups[fill_key])
-    groups.pop(fill_key)
-
-def past_fill(fill_key, mask, groups):
-    # #create a deep copy of the dict
-    # new_groups = {}
-    # for k in groups:
-    #     new_groups[k] = groups[k].copy()
-    ord_keys = sorted(mask.keys(),reverse=True)
-    l = [k for k in ord_keys if (k<fill_key and mask[k])]
-    if len(l)==0:
-        return -1
-    first_true_key = l[0]
-    groups[first_true_key].extend(groups[fill_key])
-    groups.pop(fill_key)
-
-def future_fill_all(mask, groups):
-    ord_keys = sorted(mask.keys())
-    for k in ord_keys[:-1]:
-        if not mask[k]:
-            ret = future_fill(k, mask, groups)
-            if ret ==-1:
-                past_fill(k, mask, groups)
-    if not mask[ord_keys[-1]]:
-        past_fill(ord_keys[-1], mask, groups)
-
-def past_fill_all(mask, groups):
-    ord_keys = sorted(mask.keys())
-    if not mask[ord_keys[0]]:
-        future_fill(ord_keys[0], mask, groups)
-    for k in ord_keys[1:]:
-        if not mask[k]:
-            ret = past_fill(k, mask, groups)
-            if ret ==-1:
-                future_fill(k, mask, groups)
-
-
 def test():
-    groups = {1: [0, 2], 3: [3], 4: [5,6,7], 10: [8,9], 11:[12,13,14], 16:[15,17]}
-    m = [False, False, True, False, True, False]
+    groups = {1: [0, 2, 3], 4: [], 8: [6,7], 10: [], 13:[14], 16:[15,17,18]}
+    m = [False, False, False, False, False, False]
     ord_keys = sorted(groups.keys())
     mask = {}
     for i,k in enumerate(ord_keys):
@@ -153,6 +169,8 @@ def test():
     # future_fill(key_to_fill, mask, groups)
 
     past_fill_all(mask, groups)
+    print(groups)
+    print(sum([len(groups[k]) for k in groups]))
 
 
 
@@ -166,4 +184,4 @@ def test():
 
 
 if __name__ == "__main__":
-    test()
+    calc_shap()
