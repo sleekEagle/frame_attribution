@@ -6,6 +6,12 @@ import torch
 
 UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
 
+def deep_copy_dict(dict):
+    new_dict = {}
+    for k in dict:
+        new_dict[k] = dict[k].copy()
+    return new_dict
+
 '''
     modifies the group dict inplace
     use:     key_to_fill = 1
@@ -25,10 +31,6 @@ def future_fill(fill_key, mask, groups):
     groups.pop(fill_key)
 
 def past_fill(fill_key, mask, groups):
-    # #create a deep copy of the dict
-    # new_groups = {}
-    # for k in groups:
-    #     new_groups[k] = groups[k].copy()
     ord_keys = sorted(mask.keys(),reverse=True)
     l = [k for k in ord_keys if (k<fill_key and mask[k])]
     if len(l)==0:
@@ -38,6 +40,7 @@ def past_fill(fill_key, mask, groups):
     groups.pop(fill_key)
 
 def future_fill_all(mask, groups):
+    groups = deep_copy_dict(groups)
     ord_keys = sorted(mask.keys())
     for k in ord_keys[:-1]:
         if not mask[k]:
@@ -46,14 +49,10 @@ def future_fill_all(mask, groups):
                 past_fill(k, mask, groups)
     if not mask[ord_keys[-1]]:
         past_fill(ord_keys[-1], mask, groups)
+    return groups
 
 def past_fill_all(mask, groups):
-    #handle all false mask seperately
-    # mask_sum = 0
-    # for m in mask.values():
-    #     mask_sum += m
-    # if mask_sum == 0:
-    #     pass
+    groups = deep_copy_dict(groups)
     ord_keys = sorted(mask.keys())
     if not mask[ord_keys[0]]:
         future_fill(ord_keys[0], mask, groups)
@@ -62,6 +61,7 @@ def past_fill_all(mask, groups):
             ret = past_fill(k, mask, groups)
             if ret ==-1:
                 future_fill(k, mask, groups)
+    return groups
 
 class CalcSHAP:
     def __init__(self):
@@ -84,11 +84,11 @@ class CalcSHAP:
         if m.sum() == 0:
             vid_g = torch.zeros_like(self.video)
         else:
-            past_fill_all(mask, self.groups)
-            vid_g = func.create_grouped_video(self.video.permute(1,0,2,3), self.groups)
+            g = past_fill_all(mask, self.groups)
+            vid_g = func.create_grouped_video(self.video.permute(1,0,2,3), g)
             vid_g = vid_g.permute(1,0,2,3)
         
-        return vid_g
+        return vid_g[None,:]
     
     def explain(self, video, groups):
         self.video = video
