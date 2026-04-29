@@ -64,14 +64,28 @@ def past_fill_all(mask, groups):
     return groups
 
 class CalcSHAP:
-    def __init__(self):
+    def __init__(self, model):
+        self.model = model
+        self.model.cuda()
+        self.model.eval()
         self.explainer = shap.explainers.Exact(self.predict, self.custom_masker)
         self.n_masks = 0
         self.BACKGROUND = "PAST"
+        self.avg_pred = None
 
     def predict(self, x):
-        print('in predict')
-        return np.random.rand(x.shape[0], 3)  # Dummy prediction function for binary classification
+
+        zero_idx = [i for i in range(x.shape[0]) if x[i,:].sum()==0.0]
+        assert len(zero_idx)==1, "There should be exactly one all-zero mask in the batch"
+        nonzero_idx = [i for i in range(x.shape[0]) if i not in zero_idx]
+
+        x_nz = torch.tensor(x[nonzero_idx], dtype=torch.float32).cuda()
+        x_z = x[zero_idx]
+
+        with torch.no_grad(), torch.cuda.amp.autocast(device_type="cuda", dtype=torch.float16):
+            pred_nz =  self.model(x_nz.permute(0,2,1,3,4)).cpu().numpy()
+            pred_z = self.avg_pred
+        # return np.random.rand(x.shape[0], 3)  # Dummy prediction function for binary classification
 
     def custom_masker(self, m, grp_feat):
         self.n_masks += 1
@@ -135,7 +149,7 @@ def calc_shap():
     #*************************************************************************
     # initialize shap model 
     #*************************************************************************
-    ex = CalcSHAP()
+    ex = CalcSHAP(model)
 
     #read groups
     with open(UCF_PATH, 'r', encoding='utf-8') as f:
