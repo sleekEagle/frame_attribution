@@ -444,16 +444,31 @@ def input_flow_grad_mag(video):
 function to modify video 
 '''
 
+def sort_groups(groups):
+    d = {}
+    for k in groups.keys():
+        d[k] = sorted(groups[k])
+    return d
+
 #video: 3, t , h , w
-def create_new_video(video, frame_cluster_idxs, ordered_keys=None):
+def create_new_video(video, groups, ordered_keys=None):
+    groups = sort_groups(groups)
     new_video = torch.zeros_like(video)
     cur_idx=0
     if ordered_keys == None:
-        ordered_keys = frame_cluster_idxs.keys()
+        ordered_keys = groups.keys()
     for k in ordered_keys:
-        for f in frame_cluster_idxs[k]:
+        for f in groups[k]:
             new_video[:,cur_idx,:] = video[:,f,:]
             cur_idx += 1
+    return new_video
+
+#video: 3, t , h , w
+def create_grouped_video(video, groups):
+    new_video = video.clone()
+    for k in groups.keys():
+        for f in groups[k]:
+            new_video[:,f,:] = video[:,k,:]
     return new_video
 
 def replace_frame(video, ordered_keys, frame_cluster_idxs, key, img):
