@@ -48,16 +48,20 @@ Acuracy : 0.8575338233022137
 def test():
     n_samples = 0
     n_correct = 0
+    start_idx = 0
+    mean_pred = torch.zeros(101)
     for idx, batch in enumerate(inference_loader):
         print(f'{idx/len(inference_loader)*100:.0f} % is done.', end='\r')
         inputs, targets = batch
         cls = [class_labels[t[0].split('_')[1].lower()] for t in targets]
         with torch.inference_mode():
-            pred = model(inputs)
+            pred = model(inputs[start_idx][None,:])
+            mean_pred += pred[0]
             pred_cls = torch.argmax(pred,dim=1)
             n_samples += len(pred_cls)
-            n_correct += ((pred_cls == torch.tensor(cls)).sum()).item()
+            n_correct += ((pred_cls == torch.tensor(cls[start_idx])).sum()).item()
     print(f'Acuracy : {n_correct/n_samples}')
+    print(f'Mean pred: {mean_pred/n_samples}')
 
 '''
 same test without using the dataloader directly
