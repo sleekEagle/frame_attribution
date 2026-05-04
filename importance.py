@@ -2,8 +2,10 @@ import shap
 import numpy as np
 import func
 import json
-import torch
+import torch    
 
+ucf101dm = func.UCF101_data_model()
+model = ucf101dm.model
 UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
 UCF_AVG_PRED = torch.tensor([-4.4024e-01, -4.0674e-02,  7.1152e-01, -3.1609e-01,  3.2655e-01,
          1.7831e-01, -5.8854e-02,  1.8917e-01, -2.1221e-01, -3.4419e-02,
@@ -61,178 +63,127 @@ def past_fill(fill_key, mask, groups):
     groups.pop(fill_key)
 
 def future_fill_all(mask, groups):
+    ord_keys = sorted(list(groups.keys()))
+    m = {}
+    for i,k in enumerate(ord_keys):
+        m[int(k)] = bool(mask[i])
+
     groups = deep_copy_dict(groups)
-    ord_keys = sorted(mask.keys())
+    ord_keys = sorted(m.keys())
     for k in ord_keys[:-1]:
-        if not mask[k]:
-            ret = future_fill(k, mask, groups)
+        if not m[k]:
+            ret = future_fill(k, m, groups)
             if ret ==-1:
-                past_fill(k, mask, groups)
-    if not mask[ord_keys[-1]]:
-        past_fill(ord_keys[-1], mask, groups)
+                past_fill(k, m, groups)
+    if not m[ord_keys[-1]]:
+        past_fill(ord_keys[-1], m, groups)
     return groups
 
 def past_fill_all(mask, groups):
+    ord_keys = sorted(list(groups.keys()))
+    m = {}
+    for i,k in enumerate(ord_keys):
+        m[int(k)] = bool(mask[i])
+
     groups = deep_copy_dict(groups)
-    ord_keys = sorted(mask.keys())
-    if not mask[ord_keys[0]]:
-        future_fill(ord_keys[0], mask, groups)
+    if not m[ord_keys[0]]:
+        future_fill(ord_keys[0], m, groups)
     for k in ord_keys[1:]:
-        if not mask[k]:
-            ret = past_fill(k, mask, groups)
+        if not m[k]:
+            ret = past_fill(k, m, groups)
             if ret ==-1:
-                future_fill(k, mask, groups)
+                future_fill(k, m, groups)
     return groups
 
+def get_video():
+    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+
+            record = json.loads(line)
+            filename = record['filename']
+            p = ucf101dm.construct_vid_path_from_full(filename)
+            video = ucf101dm.load_jpg_ucf101(p, n=0)
+            g = record['groups']
+            groups = {}
+            for k in g:
+                if 'frames' in g[k]:
+                    f = g[k]['frames']
+                else: 
+                    f = []
+                groups[int(k)] = f
+            return video, groups
+        
 class CalcSHAP:
     def __init__(self, model):
         self.model = model
         self.model.cuda()
         self.model.eval()
-        NUM_GROUPS   = 3
-        # background = np.ones((1, NUM_GROUPS))
-
-        # masker = shap.maskers.Independent(
-        #     data=background,
-        #     max_samples=2 ** NUM_GROUPS   # allow full exact enumeration
-        # )
-        self.explainer = shap.explainers.Exact(self.predict, self.custom_masker)
-        self.n_masks = 0
         self.BACKGROUND = "PAST"
         self.avg_pred = UCF_AVG_PRED
+        self.n_masks = 0
 
-    # def predict(self, x):
+    def predict_with_mask(self, mask):
+        self.n_masks += 1
+        preds = torch.empty(0)
+        zero_idx = [i for i,m in enumerate(mask) if sum(m)==0]
+        non_zero_idx = [i for i,m in enumerate(mask) if i not in zero_idx]
 
-    #     zero_idx = [i for i in range(x.shape[0]) if x[i,:].sum()==0.0]
-    #     nonzero_idx = [i for i in range(x.shape[0]) if i not in zero_idx]
-    #     assert len(zero_idx) <=1, "there cannot be more than 1 all-zero masks"
+        vid_t = torch.zeros_like(self.video)[None,:].repeat(len(mask),1,1,1,1)
 
-    #     x_nz = torch.tensor(x[nonzero_idx], dtype=torch.float32).cuda()
-
-    #     pred_t = torch.zeros(x.shape[0], self.avg_pred.shape[0])
-    #     with torch.no_grad():
-    #         pred_nz =  self.model(x_nz.permute(0,2,1,3,4)).cpu()
-    #         pred_t[nonzero_idx,:] = pred_nz
-    #         if len(zero_idx)==1:
-    #             pred_z = self.avg_pred[None,:]
-    #             pred_t[zero_idx,:] = pred_z
-       
-    #     return pred_t.numpy()
-    #     # return np.random.rand(x.shape[0], 3)  # Dummy prediction function for binary classification
-
-    # def custom_masker(self, m, grp_feat):
-    #     self.n_masks += 1
-    #     ord_keys = sorted(grp_feat.tolist())
-    #     mask = {}
-    #     for i,k in enumerate(ord_keys):
-    #         mask[int(k)] = bool(m[i])
-
-    #     # handle all-false mask seperately
-    #     if m.sum() == 0:
-    #         vid_g = torch.zeros_like(self.video)
-    #     else:
-    #         g = past_fill_all(mask, self.groups)
-    #         vid_g = func.create_grouped_video(self.video.permute(1,0,2,3), g)
-    #         vid_g = vid_g.permute(1,0,2,3)
-        
-    #     return vid_g[None,:]
-
-    def predict(self, x):
+        #predict for non zero masks
+        vid_t = torch.empty(0)
+        for i in non_zero_idx:
+            masked = self.video.clone()
+            g = past_fill_all(mask[i], self.groups)
+            vid_g = func.create_grouped_video(masked.permute(1,0,2,3), g)
+            vid_g = vid_g.permute(1,0,2,3)[None,:]
+            vid_t = torch.concat([vid_t,vid_g])
         with torch.no_grad():
-            pred = self.model(torch.tensor(x).permute(0,2,1,3,4).cuda())
-        return pred.cpu().numpy()
-
-        # zero_idx = [i for i in range(x.shape[0]) if x[i,:].sum()==0.0]
-        # nonzero_idx = [i for i in range(x.shape[0]) if i not in zero_idx]
-        # assert len(zero_idx) <=1, "there cannot be more than 1 all-zero masks"
-
-        # x_nz = torch.tensor(x[nonzero_idx], dtype=torch.float32).cuda()
-
-        # pred_t = torch.zeros(x.shape[0], self.avg_pred.shape[0])
-        # with torch.no_grad():
-        #     pred_nz =  self.model(x_nz.permute(0,2,1,3,4)).cpu()
-        #     pred_t[nonzero_idx,:] = pred_nz
-        #     if len(zero_idx)==1:
-        #         pred_z = self.avg_pred[None,:]
-        #         pred_t[zero_idx,:] = pred_z
-       
-        # return pred_t.numpy()
-        # return np.random.rand(x.shape[0], 3)  # Dummy prediction function for binary classification
-
-    def custom_masker(self, m, grp_feat):
-        v = self.video.clone()
-        for i,k in enumerate(grp_feat):
-            if not m[i]:
-                idx = self.groups[int(k)]
-                v[idx, :, :, :] = 0.0   
-        return v[None,:]
-        # self.n_masks += 1
-        # ord_keys = sorted(grp_feat.tolist())
-        # mask = {}
-        # for i,k in enumerate(ord_keys):
-        #     mask[int(k)] = bool(m[i])
-
-        # # handle all-false mask seperately
-        # if m.sum() == 0:
-        #     vid_g = torch.zeros_like(self.video)
-        # else:
-        #     g = past_fill_all(mask, self.groups)
-        #     vid_g = func.create_grouped_video(self.video.permute(1,0,2,3), g)
-        #     vid_g = vid_g.permute(1,0,2,3)
+            nz_pred = model(vid_t.permute(0,2,1,3,4))
         
-        # return vid_g[None,:]
-    
+        preds = torch.zeros(len(mask), nz_pred.size(1))
+        for idx,i in enumerate(non_zero_idx):
+            preds[i,:] = nz_pred[idx]
+        for idx in zero_idx:
+            preds[idx] = self.avg_pred
+
+        return preds.detach().numpy()
+
     def explain(self, video, groups, check=False):
         self.n_masks = 0
-        self.video = video
         self.groups = groups
-        grp_features = np.array([list(groups.keys())])
-        e = self.explainer(grp_features)
+        self.video = func.create_grouped_video(video.permute(1,0,2,3), groups).permute(1,0,2,3)
+        NUM_GROUPS = len(groups)
+        background = np.zeros((1, NUM_GROUPS))
 
-        #sanity check
+        masker = shap.maskers.Independent(
+            data=background,
+            max_samples=2 ** NUM_GROUPS   # allow full exact enumeration
+        )
+        explainer = shap.Explainer(
+            model=self.predict_with_mask,
+            masker=masker,
+            algorithm="exact"             # force exact Shapley computation
+        )
+        test_instance = np.ones((1, NUM_GROUPS)) 
+        shap_values = explainer(test_instance)
+
         if check:
-            vid_g = func.create_grouped_video(self.video.permute(1,0,2,3), groups)
-            with torch.no_grad():
-                pred =  self.model(vid_g[None,:].cuda()).cpu()
+            sv = shap_values.values[0,:]
+            bv = shap_values.base_values[0,:]
+            p  = model(self.video.permute(1,0,2,3)[None,:])[0,:].detach().numpy()
+            sv = np.sum(sv,axis=0)
             
-            print('***************')
-            print(f"Base value difference: {(e.base_values[0,:] - self.avg_pred.numpy()).sum()}")
-            bv = e.base_values[0,:]
-            p = pred[0,:]
-            s = e.values[0,:,:]
+            print('**************************************************')
+            print(f'Groups: {list(groups.keys())}')
+            print(f'Difference : {abs(p - bv - sv).mean()}')
+            print('**************************************************')
 
-
-            np.abs((p - bv - s.sum(axis=0))).mean()
-
-            e.data
-
-
-
-            right = e.base_values[0,:] + e.values.sum(axis=1)[0,:]
-            print(f"Mean absolute difference: {(np.abs((pred[0,:].detach().numpy()-right)/pred[0,:].detach().numpy())).mean()*100:.2f} %")
-            # print(f"Predicted probability: {pred.mean()}")
-            print('***************')
-        
-        return e
-
-
-
-
-
-# # Train a model (example with binary classification)
-# X = np.random.rand(1, 16)
-
-# explainer = shap.explainers.Exact(predict, custom_masker)
-# shap_values = explainer(X)  # Explain the first sample
-
-# # Get just the explanations for the positive class
-# shap_values = shap_values[..., 1]
-
-# print(f"Total masks used: {masks}")
-# print(f"Expected maximum: {2**5} = 32 masks per sample")
-# print(f"Per sample average: {masks / 1:.1f}")
-# pass
-
+        return shap_values
+    
 
 def calc_shap():
     #****************************************************************************
@@ -275,32 +226,8 @@ def calc_shap():
                 groups[int(k)] = f
 
             shap_values = ex.explain(video, groups, check=True)
+
             pass
-
-def test():
-    groups = {1: [0, 2, 3], 4: [], 8: [6,7], 10: [], 13:[14], 16:[15,17,18]}
-    m = [False, False, False, False, False, False]
-    ord_keys = sorted(groups.keys())
-    mask = {}
-    for i,k in enumerate(ord_keys):
-        mask[k] = m[i]
-
-    # key_to_fill = 1
-    # future_fill(key_to_fill, mask, groups)
-
-    past_fill_all(mask, groups)
-    print(groups)
-    print(sum([len(groups[k]) for k in groups]))
-
-
-
-        
-
-    pass
-
-
-
-
 
 
 if __name__ == "__main__":
