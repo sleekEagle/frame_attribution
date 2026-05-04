@@ -3,6 +3,8 @@ import numpy as np
 import func
 import json
 import torch    
+import os
+from pathlib import Path
 
 ucf101dm = func.UCF101_data_model()
 model = ucf101dm.model
@@ -124,6 +126,7 @@ class CalcSHAP:
         self.BACKGROUND = "PAST"
         self.avg_pred = UCF_AVG_PRED
         self.n_masks = 0
+        self.difference = 0
 
     def predict_with_mask(self, mask):
         self.n_masks += 1
@@ -176,11 +179,13 @@ class CalcSHAP:
             bv = shap_values.base_values[0,:]
             p  = model(self.video.permute(1,0,2,3)[None,:])[0,:].detach().numpy()
             sv = np.sum(sv,axis=0)
+            difference = abs(p - bv - sv).mean()
             
-            print('**************************************************')
-            print(f'Groups: {list(groups.keys())}')
-            print(f'Difference : {abs(p - bv - sv).mean()}')
-            print('**************************************************')
+            # print('**************************************************')
+            # print(f'Groups: {list(groups.keys())}')
+            # print(f'Difference : {difference}')
+            # print('**************************************************')
+            self.difference = difference
 
         return shap_values
     
@@ -205,9 +210,19 @@ def calc_shap():
     #*************************************************************************
     ex = CalcSHAP(model)
 
+    #construct the out path for logging
+    f = 'exactSHAP_' + Path(UCF_PATH).stem.split('_')[-1]+'.jsonl'
+    d = os.path.dirname(UCF_PATH)
+    out_path = os.path.join(d,f)
+
     #read groups
+    n=0
+    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f))
     with open(UCF_PATH, 'r', encoding='utf-8') as f:
         for line in f:
+            print(f'{n/line_count*100:.1f}% is done.')
+            n+=1
             line = line.strip()
             if not line:
                 continue
@@ -226,6 +241,17 @@ def calc_shap():
                 groups[int(k)] = f
 
             shap_values = ex.explain(video, groups, check=True)
+
+            d = {}
+            d['filename'] = filename
+            d['shapley_values'] = shap_values.values.tolist()
+            d['base_values'] = shap_values.base_values.tolist()
+            d['difference'] = ex.difference
+            d['n_masks'] = ex.n_masks
+            d['groups'] = groups
+
+            with open(out_path, 'a') as f:
+                f.write(json.dumps(d) + '\n')
 
             pass
 
