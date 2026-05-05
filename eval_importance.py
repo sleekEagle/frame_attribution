@@ -61,6 +61,12 @@ def eval_UCF101():
             sort_idx = [int(i) for i in np.argsort(sv_c)]
 
             groups = record['groups']
+
+            #create temporaly frozen videos
+            g = past_fill_all(mask[i], self.groups)
+            vid_g = func.create_grouped_video(masked.permute(1,0,2,3), g)
+            vid_g = vid_g.permute(1,0,2,3)[None,:]
+            vid_t = torch.concat([vid_t,vid_g])
             pass
             
 
