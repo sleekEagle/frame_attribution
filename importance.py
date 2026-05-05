@@ -129,7 +129,7 @@ class CalcSHAP:
         self.difference = 0
 
     def predict_with_mask(self, mask):
-        self.n_masks += 1
+        self.n_masks += len(mask)
         preds = torch.empty(0)
         zero_idx = [i for i,m in enumerate(mask) if sum(m)==0]
         non_zero_idx = [i for i,m in enumerate(mask) if i not in zero_idx]
