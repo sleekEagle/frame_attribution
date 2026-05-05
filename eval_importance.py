@@ -5,9 +5,10 @@ import json
 import torch    
 import os
 from pathlib import Path
+import CONST
 
 #get all pred original logits from the group log file
-def get_logits(PATH):
+def get_orig_logits(PATH):
     d = {}
     with open(PATH, 'r', encoding='utf-8') as f:
         for line in f:
@@ -19,11 +20,37 @@ def get_logits(PATH):
             d[record['filename']] = record['original_logit']
     return d
 
+class EvalLogits:
+    def __init__(self, full_video, model, groups, ol, cls_idx):
+        self.full_video = full_video
+        self.model = model
+        self.groups = groups
+        self.ol = ol
+        self.cls_idx = cls_idx
+
+    def eval(self, idx_order):
+        logits = [self.ol]
+        mask = [1]*len(self.groups)
+        for idx in idx_order:
+            mask[idx]=0
+            print(mask)
+            if sum(mask) == 0:
+                logits.append(CONST.UCF_AVG_PRED[self.cls_idx].item())
+                continue
+
+            g = func.past_fill_all(mask, self.groups)
+            vid_g = func.create_grouped_video(self.full_video.permute(1,0,2,3), g)
+            with torch.no_grad():
+                p = self.model(vid_g[None,:])
+                l = p[0,self.cls_idx].item()
+                logits.append(l)
+        return logits
+
 def eval_UCF101():
     IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\exactSHAP_0.001.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
 
-    orig_logits = get_logits(GRP_PATH)
+    orig_logits = get_orig_logits(GRP_PATH)
 
     ucf101dm = func.UCF101_data_model()
     model = ucf101dm.model
@@ -60,13 +87,15 @@ def eval_UCF101():
             sv_c = [s[cls_idx] for s in sv]
             sort_idx = [int(i) for i in np.argsort(sv_c)]
 
-            groups = record['groups']
+            # let groups have integer keys
+            groups = {}
+            for k in record['groups']:
+                groups[int(k)] = record['groups'][k]
 
-            #create temporaly frozen videos
-            g = past_fill_all(mask[i], self.groups)
-            vid_g = func.create_grouped_video(masked.permute(1,0,2,3), g)
-            vid_g = vid_g.permute(1,0,2,3)[None,:]
-            vid_t = torch.concat([vid_t,vid_g])
+            el = EvalLogits(video, model, groups, ol, cls_idx)
+
+            
+            el.eval(sort_idx)
             pass
             
 

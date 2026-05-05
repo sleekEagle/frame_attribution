@@ -516,6 +516,13 @@ def read_json_line(path):
             data.append(json.loads(line))
     return data
 
+#create a deep copy of a dictionary 
+def deep_copy_dict(dict):
+    new_dict = {}
+    for k in dict:
+        new_dict[k] = dict[k].copy()
+    return new_dict
+
 '''
 generate new cluster id given idx list
 this uses temporal freezing. 
@@ -543,6 +550,82 @@ def temporal_freeze(idx_list, len_array=16):
     clusters['ordered_keys'] = ordered_keys
     
     return clusters
+
+
+'''
+    modifies the group dict inplace
+    use:     key_to_fill = 1
+    future_fill(key_to_fill, mask, groups)
+'''
+def _future_fill(fill_key, mask, groups):
+    # #create a deep copy of the dict
+    # new_groups = {}
+    # for k in groups:
+    #     new_groups[k] = groups[k].copy()
+    ord_keys = sorted(mask.keys())
+    l = [k for k in ord_keys if (k>fill_key and mask[k])]
+    if len(l)==0:
+        return -1
+    first_true_key = l[0]
+    groups[first_true_key].extend(list(set(groups[fill_key]+[fill_key])))
+    groups.pop(fill_key)
+
+def _past_fill(fill_key, mask, groups):
+    ord_keys = sorted(mask.keys(),reverse=True)
+    l = [k for k in ord_keys if (k<fill_key and mask[k])]
+    if len(l)==0:
+        return -1
+    first_true_key = l[0]
+    groups[first_true_key].extend(list(set(groups[fill_key]+[fill_key])))
+    groups.pop(fill_key)
+
+
+'''
+temporally freeze a given groups. 
+the groups where mask==false will be filled from another group from the future which is True.
+If there are no such frames, it is filled from the past. If there are no such groups either, groups is not modified.
+mask: e.g: [0,0,1] : keep the last group. remove the rest
+'''
+def future_fill_all(mask, groups):
+    ord_keys = sorted(list(groups.keys()))
+    m = {}
+    for i,k in enumerate(ord_keys):
+        m[int(k)] = bool(mask[i])
+
+    groups = deep_copy_dict(groups)
+    ord_keys = sorted(m.keys())
+    for k in ord_keys[:-1]:
+        if not m[k]:
+            ret = _future_fill(k, m, groups)
+            if ret ==-1:
+                _past_fill(k, m, groups)
+    if not m[ord_keys[-1]]:
+        _past_fill(ord_keys[-1], m, groups)
+    return groups
+
+'''
+temporally freeze a given groups. 
+the groups where mask==false will be filled from another group from the past which is True.
+If there are no such frames, it is filled from the future. If there are no such groups either, groups is not modified. 
+
+mask: e.g: [0,0,1] : keep the last group. remove the rest
+'''
+def past_fill_all(mask, groups):
+    ord_keys = sorted(list(groups.keys()))
+    m = {}
+    for i,k in enumerate(ord_keys):
+        m[int(k)] = bool(mask[i])
+
+    groups = deep_copy_dict(groups)
+    if not m[ord_keys[0]]:
+        _future_fill(ord_keys[0], m, groups)
+    for k in ord_keys[1:]:
+        if not m[k]:
+            ret = _past_fill(k, m, groups)
+            if ret ==-1:
+                _future_fill(k, m, groups)
+    return groups
+
 
 '''
 Monte-Carlo method to fill the array and avoid the forbidden pairs
