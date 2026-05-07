@@ -5,8 +5,80 @@ import json
 import numpy as np
 import torch
 import torch.nn.functional as F
+from itertools import combinations
+import random
+from scipy.stats import entropy
 
-UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
+UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.005.jsonl'
+
+'''
+*************************************************************************************
+histogram-based similarity calculation for frames from the video
+calculates the inter-group similarity and intra-group similarities
+*************************************************************************************
+'''
+def frame_similarity_hist(frame1, frame2):
+
+    frame1 = (frame1 - frame1.min())/(frame1.max()-frame1.min()+1e-5)
+    frame2 = (frame2 - frame2.min())/(frame2.max()-frame2.min()+1e-5)
+
+    bins = 32
+    def compute_histogram(frame, bins):
+        frame_quantized = (frame * (bins - 1)).long()  # [C, H, W]
+        # Create 3D histogram index: R * bins^2 + G * bins + B
+        r, g, b = frame_quantized[0], frame_quantized[1], frame_quantized[2]
+        indices = r * (bins * bins) + g * bins + b
+        hist = torch.bincount(indices.flatten(), minlength=bins**3)
+        hist.float()
+        return hist
+    hist1 = compute_histogram(frame1, bins)
+    hist2 = compute_histogram(frame2, bins)
+    # Normalize histograms
+    hist1 = hist1 / hist1.sum()
+    hist2 = hist2 / hist2.sum()
+
+    # Compute correlation (equivalent to cv2.HISTCMP_CORREL)
+    mean1, mean2 = hist1.mean(), hist2.mean()
+    numerator = ((hist1 - mean1) * (hist2 - mean2)).sum()
+    denominator = torch.sqrt(((hist1 - mean1)**2).sum() * ((hist2 - mean2)**2).sum())
+    similarity = numerator / denominator
+
+    return similarity.item()
+
+def video_similarity_hist(video, groups, MAX_COMBS=5):
+    rep_frames = [int(k) for k in groups.keys()]
+    out_combs = list(combinations(rep_frames, 2))
+    in_combs = []
+    for k in groups:
+        if 'frames' not in groups[k]:
+            continue
+        frames = groups[k]['frames']
+        grp_combs = [(int(k), f) for f in frames]
+        in_combs.extend(grp_combs)
+    n_samples = min(MAX_COMBS, min(len(in_combs),len(out_combs)))
+    if n_samples==0:
+        return 0, 0
+    in_samples = random.sample(in_combs, n_samples)
+    out_samples = random.sample(out_combs, n_samples)
+
+    def mean_sim(samples):
+        sim = 0
+        for s in samples:
+            frame1 = video[s[0]]
+            frame2 = video[s[1]]
+            s = frame_similarity_hist(frame1, frame2)
+            sim+=s
+        mean_sim = sim/len(samples)
+        return mean_sim
+    in_sim = mean_sim(in_samples)
+    out_sim = mean_sim(out_samples)
+
+    return in_sim, out_sim
+
+'''
+**************************************************************************************
+**************************************************************************************
+'''
 
 def UCF101_minchange():
     path = UCF_PATH
@@ -113,7 +185,6 @@ def UCF101_minchange():
     plt.show()
 
 
-from scipy.stats import entropy
 
 def UCF101_metrics():
     path = UCF_PATH
@@ -122,9 +193,17 @@ def UCF101_metrics():
     KMAX = 3
     margin_dict = {k: 0 for k in range(1, KMAX+1)}
     n = 0
+    in_sim, out_sim = 0, 0
+
+    #data loader
+    ucf101dm = func.UCF101_data_model()
+
+    with open(path, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f))    
 
     with open(path, 'r', encoding='utf-8') as f:
         for line in f:
+            print(f'{n/line_count*100:.0f}% is done', end='\r')
             line = line.strip()
             if not line:
                 continue
@@ -143,12 +222,60 @@ def UCF101_metrics():
             g_entr = entropy(g_prob, base=2)
             entr_increase_ = o_entr - g_entr
             entr_increase += entr_increase_
+
+            #inter and intra group similarities
+            filename = ucf101dm.construct_vid_path_from_full(record['filename'])
+            # if not filename=='C:\\Users\\lahir\\Downloads\\UCF101\\jpgs\\Archery\\v_Archery_g06_c02':
+            #     continue
+            video = ucf101dm.load_jpg_ucf101(filename, n=0)
+            groups = record['groups']
+            if len(groups.keys())<=1: continue
+            is_, os_ = video_similarity_hist(video, groups)
+            in_sim += is_
+            out_sim += os_
+
             n += 1
         
         margin_dict = {k: float(margin_dict[k]/n) for k in range(1, KMAX+1)}
         entr_increase /= n
         n_g /= n
+        out_sim /= n
+        in_sim /= n
         print(f'average number of groups: {n_g} \naverage margin change: {margin_dict} \naverage entropy increase: {entr_increase}')
+        print(f'inter-group similarity: {out_sim}')
+        print(f'intra-group similarity: {in_sim}')
+
+
+
+
+
+
+
+def test():
+    ucf101dm = func.UCF101_data_model()
+    model = ucf101dm.model
+
+    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            filename = ucf101dm.construct_vid_path_from_full(record['filename'])
+            video = ucf101dm.load_jpg_ucf101(filename, n=0)
+            groups = record['groups']
+            in_sim, out_sim = video_similarity_hist(video, groups)
+
+
+
+
+
+
+
+
+
+            pass
+
 
 if __name__ == '__main__':
     UCF101_metrics()
