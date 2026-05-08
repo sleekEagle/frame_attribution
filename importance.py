@@ -9,7 +9,7 @@ import CONST
 
 ucf101dm = func.UCF101_data_model()
 model = ucf101dm.model
-UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
+UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.005.jsonl'
 
 def get_video():
     with open(UCF_PATH, 'r', encoding='utf-8') as f:
@@ -31,11 +31,22 @@ def get_video():
                     f = []
                 groups[int(k)] = f
             return video, groups
+
+
+def batch_pred(model, t):
+    pred = torch.empty(0).to(t.device)
+    split_tensors = torch.split(t, split_size_or_sections=32, dim=0)
+    for val in split_tensors:
+        with torch.no_grad():
+            p = model(val)
+            pred = torch.concat([pred,p],axis=0)
+    return pred
         
 class CalcSHAP:
     def __init__(self, model):
-        self.model = model
-        self.model.cuda()
+        self.model = model.to('cuda')
+        # self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # self.model = self.model.to(self.device) 
         self.model.eval()
         self.BACKGROUND = "PAST"
         self.avg_pred = CONST.UCF_AVG_PRED
@@ -48,18 +59,24 @@ class CalcSHAP:
         zero_idx = [i for i,m in enumerate(mask) if sum(m)==0]
         non_zero_idx = [i for i,m in enumerate(mask) if i not in zero_idx]
 
-        vid_t = torch.zeros_like(self.video)[None,:].repeat(len(mask),1,1,1,1)
-
-        #predict for non zero masks
-        vid_t = torch.empty(0)
-        for i in non_zero_idx:
-            masked = self.video.clone()
-            g = func.past_fill_all(mask[i], self.groups)
-            vid_g = func.create_grouped_video(masked.permute(1,0,2,3), g)
-            vid_g = vid_g.permute(1,0,2,3)[None,:]
-            vid_t = torch.concat([vid_t,vid_g])
-        with torch.no_grad():
-            nz_pred = model(vid_t.permute(0,2,1,3,4))
+        def chunk_list(lst, chunk_size):
+            return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]
+        
+        batches = chunk_list(non_zero_idx,32)
+        nz_pred = torch.empty(0).to('cuda')
+        for nzidx in batches:
+            #predict for non zero masks
+            vid_t = torch.empty(0)
+            for i in nzidx:
+                masked = self.video.clone()
+                g = func.past_fill_all(mask[i], self.groups)
+                vid_g = func.create_grouped_video(masked.permute(1,0,2,3), g)
+                vid_g = vid_g.permute(1,0,2,3)[None,:]
+                vid_t = torch.concat([vid_t,vid_g])
+            with torch.no_grad():
+                vid_t = vid_t.to('cuda')
+                p = self.model(vid_t.permute(0,2,1,3,4))
+                nz_pred = torch.concat([nz_pred,p],dim=0)
         
         preds = torch.zeros(len(mask), nz_pred.size(1))
         for idx,i in enumerate(non_zero_idx):
@@ -110,6 +127,13 @@ def calc_shap():
     #****************************************************************************
     ucf101dm = func.UCF101_data_model()
     model = ucf101dm.model
+    model = model.to('cuda')
+    # t=torch.zeros(8,3,16,112,12)
+    # t = t.to('cuda')
+    # model(t)
+
+
+    pass
     inference_loader = ucf101dm.inference_loader
     inference_class_names = ucf101dm.inference_class_names
     class_names = ucf101dm.inference_class_names
@@ -135,7 +159,7 @@ def calc_shap():
         line_count = sum(1 for _ in enumerate(f))
     with open(UCF_PATH, 'r', encoding='utf-8') as f:
         for line in f:
-            print(f'{n/line_count*100:.1f}% is done.')
+            print(f'{n/line_count*100:.1f}% is done.', end='\r')
             n+=1
             line = line.strip()
             if not line:

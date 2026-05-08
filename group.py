@@ -20,7 +20,7 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
     stat = func.get_pred_stats(model, video)
 
     # we do not consider when the prediction is not correct
-    if stat['pred_cls'] == gt_idx:
+    if stat['pred_cls'] != gt_idx:
         return -1
 
     def get_best_frame(video, idx1, idx2):
@@ -151,7 +151,7 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
 
 
 def group_frames_loader_UCF101(GRP_THRESHOLD = 1e-3):
-    out_path = os.path.join(r'C:\Users\lahir\Downloads\UCF101\analysis', f'groups_{GRP_THRESHOLD}_wrong.jsonl')
+    out_path = os.path.join(r'C:\Users\lahir\Downloads\UCF101\analysis', f'groups_{GRP_THRESHOLD}.jsonl')
     #****************************************************************************
     # the model and the data loader
     #****************************************************************************
@@ -201,4 +201,4 @@ def group_frames_loader_UCF101(GRP_THRESHOLD = 1e-3):
             f.write(json.dumps(group_dict) + '\n')
         
 if __name__ == '__main__':
-    group_frames_loader_UCF101(GRP_THRESHOLD=5e-3)
+    group_frames_loader_UCF101(GRP_THRESHOLD=1e-2)
