@@ -9,7 +9,7 @@ import CONST
 
 ucf101dm = func.UCF101_data_model()
 model = ucf101dm.model
-UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.005.jsonl'
+UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
 
 def get_video():
     with open(UCF_PATH, 'r', encoding='utf-8') as f:
@@ -55,12 +55,23 @@ class CalcSHAP:
 
     def predict_with_mask(self, mask):
         self.n_masks += len(mask)
-        preds = torch.empty(0)
+        preds = torch.empty(0).to('cuda')
         zero_idx = [i for i,m in enumerate(mask) if sum(m)==0]
         non_zero_idx = [i for i,m in enumerate(mask) if i not in zero_idx]
 
         def chunk_list(lst, chunk_size):
             return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]
+
+        masked = self.video.clone()
+        # for m in mask:
+        #     g = func.past_fill_all(m, self.groups)
+        #     vid_g = func.create_grouped_video(masked.permute(1,0,2,3), g)
+        #     vid_g = vid_g.permute(1,0,2,3)[None,:]
+        #     p = self.model(vid_g.permute(0,2,1,3,4).to('cuda'))
+        #     # print(p[0,0].item())
+        #     preds = torch.concat([preds,p],dim=0)
+        # preds[0,:] = self.avg_pred
+        # return preds.detach().cpu().numpy()
         
         batches = chunk_list(non_zero_idx,32)
         nz_pred = torch.empty(0).to('cuda')
@@ -83,8 +94,19 @@ class CalcSHAP:
             preds[i,:] = nz_pred[idx]
         for idx in zero_idx:
             preds[idx] = self.avg_pred
+        
+        
+        # from torch.distributions import Normal
+        
+        # mean = 2e-4
+        # std = 2e-5
+        # dist = Normal(mean, std)
+        # pred = dist.sample((8, 101))
+        # pred[0,:] = self.avg_pred
+        return preds.detach().cpu().numpy()
 
-        return preds.detach().numpy()
+
+        # return preds.detach().numpy()
 
     def explain(self, video, groups, check=False):
         self.n_masks = 0
@@ -133,7 +155,6 @@ def calc_shap():
     # model(t)
 
 
-    pass
     inference_loader = ucf101dm.inference_loader
     inference_class_names = ucf101dm.inference_class_names
     class_names = ucf101dm.inference_class_names
@@ -167,6 +188,8 @@ def calc_shap():
 
             record = json.loads(line)
             filename = record['filename']
+            if filename!='v_ApplyEyeMakeup_g01_c01':
+                continue
             p = ucf101dm.construct_vid_path_from_full(filename)
             video = ucf101dm.load_jpg_ucf101(p, n=0)
             g = record['groups']

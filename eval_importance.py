@@ -22,13 +22,14 @@ def get_orig_logits(PATH):
     return d
 
 class EvalLogits:
-    def __init__(self, full_video, model, groups, ol, cls_idx, show_mask=False):
+    def __init__(self, full_video, model, groups, ol, cls_idx, fill_type, show_mask=False):
         self.full_video = full_video
         self.model = model
         self.groups = groups
         self.ol = ol
         self.cls_idx = cls_idx
         self.show_mask = show_mask
+        self.fill_type = fill_type
 
     def eval_remove(self, idx_order):
         logits = [self.ol]
@@ -42,8 +43,11 @@ class EvalLogits:
             if sum(mask) == 0:
                 logits.append(CONST.UCF_AVG_PRED[self.cls_idx].item())
                 continue
+            if self.fill_type == 'past':
+                g = func.past_fill_all(mask, self.groups)
+            elif self.fill_type == 'future':
+                g = func.future_fill_all(mask, self.groups)
 
-            g = func.past_fill_all(mask, self.groups)
             vid_g = func.create_grouped_video(self.full_video.permute(1,0,2,3), g)
             with torch.no_grad():
                 p = self.model(vid_g[None,:])
@@ -71,9 +75,10 @@ class EvalLogits:
         return logits
 
 def eval_UCF101():
+    FILL_TYPE = 'past'
     IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\exactSHAP_0.001.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
-    OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\eval_0.001.jsonl'
+    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\eval_{FILL_TYPE}_0.001.jsonl'
 
     orig_logits = get_orig_logits(GRP_PATH)
 
@@ -120,7 +125,7 @@ def eval_UCF101():
             for k in record['groups']:
                 groups[int(k)] = record['groups'][k]
 
-            el = EvalLogits(video, model, groups, ol, cls_idx)
+            el = EvalLogits(video, model, groups, ol, cls_idx, 'future')
 
             results = {
                 'filename': record['filename'],

@@ -9,7 +9,7 @@ from itertools import combinations
 import random
 from scipy.stats import entropy
 
-UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.005.jsonl'
+UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.01.jsonl'
 
 '''
 *************************************************************************************
@@ -224,15 +224,15 @@ def UCF101_metrics():
             entr_increase += entr_increase_
 
             #inter and intra group similarities
-            filename = ucf101dm.construct_vid_path_from_full(record['filename'])
+            # filename = ucf101dm.construct_vid_path_from_full(record['filename'])
             # if not filename=='C:\\Users\\lahir\\Downloads\\UCF101\\jpgs\\Archery\\v_Archery_g06_c02':
             #     continue
-            video = ucf101dm.load_jpg_ucf101(filename, n=0)
-            groups = record['groups']
-            if len(groups.keys())<=1: continue
-            is_, os_ = video_similarity_hist(video, groups)
-            in_sim += is_
-            out_sim += os_
+            # video = ucf101dm.load_jpg_ucf101(filename, n=0)
+            # groups = record['groups']
+            # if len(groups.keys())<=1: continue
+            # is_, os_ = video_similarity_hist(video, groups)
+            # in_sim += is_
+            # out_sim += os_
 
             n += 1
         
@@ -242,39 +242,9 @@ def UCF101_metrics():
         out_sim /= n
         in_sim /= n
         print(f'average number of groups: {n_g} \naverage margin change: {margin_dict} \naverage entropy increase: {entr_increase}')
-        print(f'inter-group similarity: {out_sim}')
+        # print(f'inter-group similarity: {out_sim}')
         print(f'intra-group similarity: {in_sim}')
 
-
-
-
-
-
-
-def test():
-    ucf101dm = func.UCF101_data_model()
-    model = ucf101dm.model
-
-    with open(UCF_PATH, 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            record = json.loads(line)
-            filename = ucf101dm.construct_vid_path_from_full(record['filename'])
-            video = ucf101dm.load_jpg_ucf101(filename, n=0)
-            groups = record['groups']
-            in_sim, out_sim = video_similarity_hist(video, groups)
-
-
-
-
-
-
-
-
-
-            pass
 
 
 if __name__ == '__main__':
