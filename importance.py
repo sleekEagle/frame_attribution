@@ -43,8 +43,9 @@ def batch_pred(model, t):
     return pred
         
 class CalcSHAP:
-    def __init__(self, model):
+    def __init__(self, model, fill_method):
         self.model = model.to('cuda')
+        self.fill_method = fill_method
         # self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # self.model = self.model.to(self.device) 
         self.model.eval()
@@ -80,7 +81,10 @@ class CalcSHAP:
             vid_t = torch.empty(0)
             for i in nzidx:
                 masked = self.video.clone()
-                g = func.past_fill_all(mask[i], self.groups)
+                if self.fill_method=='future':
+                    g = func.future_fill_all(mask[i], self.groups)
+                elif self.fill_method=='past':
+                    g = func.past_fill_all(mask[i], self.groups)
                 vid_g = func.create_grouped_video(masked.permute(1,0,2,3), g)
                 vid_g = vid_g.permute(1,0,2,3)[None,:]
                 vid_t = torch.concat([vid_t,vid_g])
@@ -167,10 +171,11 @@ def calc_shap():
     #*************************************************************************
     # initialize shap model 
     #*************************************************************************
-    ex = CalcSHAP(model)
+    FILL_METHOD = 'future'
+    ex = CalcSHAP(model, fill_method=FILL_METHOD)
 
     #construct the out path for logging
-    f = 'exactSHAP_' + Path(UCF_PATH).stem.split('_')[-1]+'.jsonl'
+    f = 'exactSHAP_'+ FILL_METHOD + '_' + Path(UCF_PATH).stem.split('_')[-1]+'.jsonl'
     d = os.path.dirname(UCF_PATH)
     out_path = os.path.join(d,f)
 
@@ -188,8 +193,8 @@ def calc_shap():
 
             record = json.loads(line)
             filename = record['filename']
-            if filename!='v_ApplyEyeMakeup_g01_c01':
-                continue
+            # if filename!='v_ApplyEyeMakeup_g01_c01':
+            #     continue
             p = ucf101dm.construct_vid_path_from_full(filename)
             video = ucf101dm.load_jpg_ucf101(p, n=0)
             g = record['groups']
