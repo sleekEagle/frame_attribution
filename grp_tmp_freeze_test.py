@@ -138,15 +138,21 @@ def grp_freeze():
             
             #decrease sizes of all groups one by one
             N_ITR = 4
+            d = {}
             for n_grp in groups:
                 groups_ = func.deep_copy_dict(groups)
+                grp_list = []
                 for i in range(N_ITR):
+                    if i == 0:
+                        d_key = n_grp
                     groups_, new_k = decrease_size(groups_, n_grp)
                     if new_k!=-1:
                         print(f'{n_grp} -> {new_k}')
                         n_grp = new_k
-                    if len(groups_[n_grp])==0:
+                    grp_list.append(groups_)
+                    if n_grp not in groups_:
                         break
+                d[d_key] = grp_list
                         
             for n_grp in groups:
                 groups_ = func.deep_copy_dict(groups)
