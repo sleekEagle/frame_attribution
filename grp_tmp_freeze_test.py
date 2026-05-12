@@ -148,6 +148,7 @@ def grp_freeze():
             if len(groups) == 1: continue 
 
             grp_dict = {}
+            grp_dict['filename'] = filename
             grp_dict['original'] = groups
 
             d = {}
@@ -200,6 +201,15 @@ def grp_freeze():
             with torch.no_grad():
                 pred = model(vid_t)
             grp_dict['pred'] = pred.tolist()
+
+
+            # analyze the pred changes
+            pred_orig = pred[0]
+            
+            list(grp_dict['increasing'].keys()).index()
+
+
+
 
             # save dict into a file
             with open(OUT_PATH, 'a') as f:
