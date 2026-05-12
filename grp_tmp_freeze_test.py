@@ -33,8 +33,8 @@ def which_group(f, group):
             return k
 
 def increase_size(group_dict, n):
-    # group_dict = {2: [0, 1, 3, 4, 5], 6: [], 13: [7, 8, 9, 10, 11, 12, 14], 15: []}
-    # n=13
+    # group_dict = {6: [0,1,2,3,4,5,6,7,8,9,10]}
+    # n=6
     group = func.deep_copy_dict(group_dict)
 
     frames = get_frames(group, n)
@@ -136,8 +136,27 @@ def grp_freeze():
                     f = []
                 groups[int(k)] = f
             
-            #decrease sizes of all groups one by one
+            # increase sizes of all groups one by one
             N_ITR = 4
+
+            if len(groups) == 1: continue 
+
+            grp_dict = {}
+            grp_dict['original'] = groups
+            
+            d = {}
+            for n_grp in groups:
+                groups_ = func.deep_copy_dict(groups)
+                grp_list = []
+                for i in range(N_ITR):
+                    groups_ = increase_size(groups_, n_grp)
+                    if len(groups_) == 1:
+                        break
+                    grp_list.append(groups_)
+                d[n_grp] = grp_list
+            grp_dict['increasing'] = d
+
+            # decrease sizes of all groups one by one
             d = {}
             for n_grp in groups:
                 groups_ = func.deep_copy_dict(groups)
@@ -153,12 +172,10 @@ def grp_freeze():
                     if n_grp not in groups_:
                         break
                 d[d_key] = grp_list
-                        
-            for n_grp in groups:
-                groups_ = func.deep_copy_dict(groups)
-                for i in range(3):
-                    groups_ = increase_size(groups_, n_grp)
+            grp_dict['decreasing'] = d
+
             pass
+                        
 
 
 if __name__ == "__main__":
