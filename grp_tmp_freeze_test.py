@@ -9,6 +9,9 @@ import CONST
 import func
 import random
 from pathlib import Path
+import torch.nn.functional as F
+from scipy.stats import entropy
+
 random.seed(78)
     
 UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
@@ -204,9 +207,11 @@ def grp_freeze():
 
 
             # analyze the pred changes
-            pred_orig = pred[0]
-            
-            list(grp_dict['increasing'].keys()).index()
+            pred = pred.cpu()
+            pred_sm = F.softmax(pred, dim=1)
+            entr = [float(entropy(p)) for p in pred_sm]
+            entr_increase = [entr[0]-entr[i] for i in range(1, len(entr))]
+            grp_dict['entropy_increase'] = entr_increase
 
 
 
