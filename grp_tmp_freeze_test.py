@@ -101,7 +101,10 @@ def decrease_size(group_dict, n):
 
 def grp_freeze():
     ucf101dm = func.UCF101_data_model()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = ucf101dm.model
+    model = model.to(device)
+    model.eval()
 
     class_names = ucf101dm.inference_class_names
     class_labels = {}
@@ -143,7 +146,7 @@ def grp_freeze():
 
             grp_dict = {}
             grp_dict['original'] = groups
-            
+
             d = {}
             for n_grp in groups:
                 groups_ = func.deep_copy_dict(groups)
@@ -173,6 +176,28 @@ def grp_freeze():
                         break
                 d[d_key] = grp_list
             grp_dict['decreasing'] = d
+
+
+            # create grouped videos
+            vid_t = torch.empty(0)
+
+            v_ = func.create_grouped_video(video.permute(1,0,2,3), grp_dict['original'])
+            vid_t = torch.concat([vid_t,v_[None,:]], dim=0)
+
+            for grp_id in grp_dict['increasing']:
+                for g in grp_dict['increasing'][grp_id]:
+                    v_ = func.create_grouped_video(video.permute(1,0,2,3), g)
+                    vid_t = torch.concat([vid_t,v_[None,:]], dim=0)
+
+            for grp_id in grp_dict['decreasing']:
+                for g in grp_dict['decreasing'][grp_id]:
+                    v_ = func.create_grouped_video(video.permute(1,0,2,3), g)
+                    vid_t = torch.concat([vid_t,v_[None,:]], dim=0)
+
+            vid_t = vid_t.to(device)
+            with torch.no_grad():
+                pred = model(vid_t)
+            
 
             pass
                         
