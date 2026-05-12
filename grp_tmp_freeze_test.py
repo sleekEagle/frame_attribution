@@ -8,10 +8,13 @@ from pathlib import Path
 import CONST
 import func
 import random
+from pathlib import Path
 random.seed(78)
     
 UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
-
+OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\grp_tmp_freeze'
+thr = Path(UCF_PATH).stem.split('_')[-1]
+OUT_PATH = os.path.join(OUT_PATH, f'{thr}.jsonl')
 
 def get_frames(group, n):
     assert n in group, 'n must be a key in the group dict'
@@ -169,7 +172,6 @@ def grp_freeze():
                         d_key = n_grp
                     groups_, new_k = decrease_size(groups_, n_grp)
                     if new_k!=-1:
-                        print(f'{n_grp} -> {new_k}')
                         n_grp = new_k
                     grp_list.append(groups_)
                     if n_grp not in groups_:
@@ -197,11 +199,12 @@ def grp_freeze():
             vid_t = vid_t.to(device)
             with torch.no_grad():
                 pred = model(vid_t)
-            
+            grp_dict['pred'] = pred.tolist()
 
-            pass
-                        
-
+            # save dict into a file
+            with open(OUT_PATH, 'a') as f:
+                f.write(json.dumps(grp_dict) + '\n')
+                    
 
 if __name__ == "__main__":
     grp_freeze()
