@@ -15,6 +15,7 @@ from scipy.stats import entropy
 random.seed(78)
 
 KMAX = 3 # number of different margins
+N_ITR = 4
 UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
 OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\grp_tmp_freeze'
 thr = Path(UCF_PATH).stem.split('_')[-1]
@@ -151,7 +152,7 @@ def grp_freeze():
                 groups[int(k)] = f
             
             # increase sizes of all groups one by one
-            N_ITR = 4
+           
 
             if len(groups) == 1: continue 
 
@@ -262,12 +263,17 @@ def create_plot():
 
     #init metric dictionary
     all_met = {}
-    d = {
+    d_ = {
         'margin_diff': {k: [] for k in range(1,KMAX+1)},
         'entropy_increase': []
     }
-    for i in range(16):
-        all_met[i] = func.deep_copy_dict(d)
+    d = {}
+    for i in range(11):
+        d[i/10] = func.deep_copy_dict(d_)
+
+    for it in range(N_ITR):
+        
+
 
     n=0
     with open(OUT_PATH, 'r', encoding='utf-8') as f:
@@ -286,6 +292,10 @@ def create_plot():
             sort_idx = np.argsort(np.array(sv['shapley_values']))
             asc_grps = np.array(sv['groups'])[sort_idx] # groups ordered in ascending order of importance
             asc_grps = [int(g) for g in asc_grps]
+
+            sv_norm = sv['shapley_values']
+            sv_norm = (sv_norm - np.min(sv_norm)) / (np.max(sv_norm) - np.min(sv_norm))
+            asc_sv_norm = np.array(sv_norm)[sort_idx]
 
             i = 0
             metrics = {}
@@ -321,18 +331,20 @@ def create_plot():
 
             for th, g in enumerate(asc_grps):
                 val = metrics['increasing'][str(g)]
+                key = int(float(asc_sv_norm[th])*10)/10
+
                 for step in val.keys():
-                    all_met[g]['margin_diff'][1].append(val[step]['margin_diff_1'])
-                    all_met[g]['margin_diff'][2].append(val[step]['margin_diff_2'])
-                    all_met[g]['margin_diff'][3].append(val[step]['margin_diff_3'])
-                    all_met[g]['entropy_increase'].append(val[step]['entropy_increase'])
+                    all_met[key]['margin_diff'][1].append(val[step]['margin_diff_1'])
+                    all_met[key]['margin_diff'][2].append(val[step]['margin_diff_2'])
+                    all_met[key]['margin_diff'][3].append(val[step]['margin_diff_3'])
+                    all_met[key]['entropy_increase'].append(val[step]['entropy_increase'])
                 
                 val = metrics['decreasing'][str(g)]
                 for step in val.keys():
-                    all_met[g]['margin_diff'][1].append(val[step]['margin_diff_1'])
-                    all_met[g]['margin_diff'][2].append(val[step]['margin_diff_2'])
-                    all_met[g]['margin_diff'][3].append(val[step]['margin_diff_3'])
-                    all_met[g]['entropy_increase'].append(val[step]['entropy_increase'])
+                    all_met[key]['margin_diff'][1].append(val[step]['margin_diff_1'])
+                    all_met[key]['margin_diff'][2].append(val[step]['margin_diff_2'])
+                    all_met[key]['margin_diff'][3].append(val[step]['margin_diff_3'])
+                    all_met[key]['entropy_increase'].append(val[step]['entropy_increase'])
                 
 
 
