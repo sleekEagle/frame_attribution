@@ -322,17 +322,17 @@ def create_plot():
             for th, g in enumerate(asc_grps):
                 val = metrics['increasing'][str(g)]
                 for step in val.keys():
-                    all_met[th]['margin_diff'][1].append(val[step]['margin_diff_1'])
-                    all_met[th]['margin_diff'][2].append(val[step]['margin_diff_2'])
-                    all_met[th]['margin_diff'][3].append(val[step]['margin_diff_3'])
-                    all_met[th]['entropy_increase'].append(val[step]['entropy_increase'])
+                    all_met[g]['margin_diff'][1].append(val[step]['margin_diff_1'])
+                    all_met[g]['margin_diff'][2].append(val[step]['margin_diff_2'])
+                    all_met[g]['margin_diff'][3].append(val[step]['margin_diff_3'])
+                    all_met[g]['entropy_increase'].append(val[step]['entropy_increase'])
                 
                 val = metrics['decreasing'][str(g)]
                 for step in val.keys():
-                    all_met[th]['margin_diff'][1].append(val[step]['margin_diff_1'])
-                    all_met[th]['margin_diff'][2].append(val[step]['margin_diff_2'])
-                    all_met[th]['margin_diff'][3].append(val[step]['margin_diff_3'])
-                    all_met[th]['entropy_increase'].append(val[step]['entropy_increase'])
+                    all_met[g]['margin_diff'][1].append(val[step]['margin_diff_1'])
+                    all_met[g]['margin_diff'][2].append(val[step]['margin_diff_2'])
+                    all_met[g]['margin_diff'][3].append(val[step]['margin_diff_3'])
+                    all_met[g]['entropy_increase'].append(val[step]['entropy_increase'])
                 
 
 
