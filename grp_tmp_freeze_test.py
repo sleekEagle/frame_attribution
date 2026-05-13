@@ -13,11 +13,13 @@ import torch.nn.functional as F
 from scipy.stats import entropy
 
 random.seed(78)
-    
+
+KMAX = 3 # number of different margins
 UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
 OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\grp_tmp_freeze'
 thr = Path(UCF_PATH).stem.split('_')[-1]
 OUT_PATH = os.path.join(OUT_PATH, f'{thr}.jsonl')
+IMP_PATH = os.path.join(Path(UCF_PATH).parent , 'shap', f'exactSHAP_future_{thr}.jsonl')
 
 def get_frames(group, n):
     assert n in group, 'n must be a key in the group dict'
@@ -39,8 +41,9 @@ def which_group(f, group):
             return k
 
 def increase_size(group_dict, n):
-    # group_dict = {6: [0,1,2,3,4,5,6,7,8,9,10]}
+    # group_dict = {1:[0,2,3], 6: [4,5,7,8], 9:[], 11:[10], 12:[13,14,15]}
     # n=6
+
     group = func.deep_copy_dict(group_dict)
 
     frames = get_frames(group, n)
@@ -52,6 +55,8 @@ def increase_size(group_dict, n):
         if search_frame<0 or search_frame>max_frame(group):
             return -1
         belong_k = which_group(search_frame, group)
+        if len(group[belong_k]) == 0: 
+            return -1
         if belong_k==search_frame: # key is the frame we are looking for
             if len(group[search_frame])>0: 
                 new_k = random.choice(group[search_frame])
@@ -160,6 +165,8 @@ def grp_freeze():
                 grp_list = []
                 for i in range(N_ITR):
                     groups_ = increase_size(groups_, n_grp)
+                    if groups_ == -1:
+                        break
                     if len(groups_) == 1:
                         break
                     grp_list.append(groups_)
@@ -208,18 +215,130 @@ def grp_freeze():
 
             # analyze the pred changes
             pred = pred.cpu()
+
+            #margin difference between original pred and the grouped
+            margin_dict = {}
+            for k in range(1,KMAX+1):
+                margins = [float(func.get_margin(p, k=k)) for p in pred]
+                marg_diffs = [margin - margins[0] for margin in margins[1:]]
+                margin_dict[k] = marg_diffs
+            grp_dict['margin_diff'] = margin_dict
+
+            #entropy difference
             pred_sm = F.softmax(pred, dim=1)
             entr = [float(entropy(p)) for p in pred_sm]
             entr_increase = [entr[0]-entr[i] for i in range(1, len(entr))]
             grp_dict['entropy_increase'] = entr_increase
-
-
-
 
             # save dict into a file
             with open(OUT_PATH, 'a') as f:
                 f.write(json.dumps(grp_dict) + '\n')
                     
 
+def create_plot():
+    ucf101dm = func.UCF101_data_model()
+    class_names = ucf101dm.inference_class_names
+    class_labels = {}
+    for k in class_names.keys():
+        cls_name = class_names[k]
+        class_labels[cls_name.lower()] = k
+
+    with open(IMP_PATH, 'r') as f:
+        data = [json.loads(line) for line in f]
+    
+    sv_dict = {}
+    for d in data:
+        f = d['filename']
+        cls_idx = class_labels[f.split('_')[1].lower()]
+        g = [int(k) for k in list(d['groups'].keys())]
+        sv = d['shapley_values'][0]
+
+        sv_g = []
+        for i in range(len(g)):
+            sv_g.append(sv[i][cls_idx])
+
+        sv_dict[f] = {'groups': g, 'shapley_values': sv_g}
+    del data
+
+    #init metric dictionary
+    all_met = {}
+    d = {
+        'margin_diff': {k: [] for k in range(1,KMAX+1)},
+        'entropy_increase': []
+    }
+    for i in range(16):
+        all_met[i] = func.deep_copy_dict(d)
+
+    n=0
+    with open(OUT_PATH, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f))
+    with open(OUT_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            print(f'{n/line_count*100:.1f}% is done.', end='\r')
+            n+=1
+            line = line.strip()
+            record = json.loads(line)
+            sv = sv_dict[record['filename']]
+
+            #sanity check
+            assert sorted(sv['groups']) == sorted( [int(k) for k in list(record['original'].keys())]), 'Groups do not match'
+
+            sort_idx = np.argsort(np.array(sv['shapley_values']))
+            asc_grps = np.array(sv['groups'])[sort_idx] # groups ordered in ascending order of importance
+            asc_grps = [int(g) for g in asc_grps]
+
+            i = 0
+            metrics = {}
+
+            met = {}
+            for g in record['increasing'].keys():
+                met_ = {}
+                for idx in range(len(record['increasing'][g])):
+                    m_ = {}
+                    margin_ks = record['margin_diff'].keys()
+                    for mk in margin_ks:
+                        m_[f'margin_diff_{mk}'] = record['margin_diff'][mk][i]
+                    m_[f'entropy_increase'] = record['entropy_increase'][i]
+                    met_[idx] = m_
+                    i+=1
+                met[g] = met_
+            metrics['increasing'] = met
+
+            met = {}
+            for g in record['decreasing'].keys():
+                met_ = {}
+                for idx in range(len(record['decreasing'][g])):
+                    m_ = {}
+                    margin_ks = record['margin_diff'].keys()
+                    for mk in margin_ks:
+                        m_[f'margin_diff_{mk}'] = record['margin_diff'][mk][i]
+                    m_[f'entropy_increase'] = record['entropy_increase'][i]
+                    met_[idx] = m_
+                    i+=1
+                met[g] = met_
+            metrics['decreasing'] = met
+
+
+            for th, g in enumerate(asc_grps):
+                val = metrics['increasing'][str(g)]
+                for step in val.keys():
+                    all_met[th]['margin_diff'][1].append(val[step]['margin_diff_1'])
+                    all_met[th]['margin_diff'][2].append(val[step]['margin_diff_2'])
+                    all_met[th]['margin_diff'][3].append(val[step]['margin_diff_3'])
+                    all_met[th]['entropy_increase'].append(val[step]['entropy_increase'])
+                
+                val = metrics['decreasing'][str(g)]
+                for step in val.keys():
+                    all_met[th]['margin_diff'][1].append(val[step]['margin_diff_1'])
+                    all_met[th]['margin_diff'][2].append(val[step]['margin_diff_2'])
+                    all_met[th]['margin_diff'][3].append(val[step]['margin_diff_3'])
+                    all_met[th]['entropy_increase'].append(val[step]['entropy_increase'])
+                
+
+
+    pass
+
+
+
 if __name__ == "__main__":
-    grp_freeze()
+    create_plot()
