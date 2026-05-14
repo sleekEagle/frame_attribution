@@ -220,6 +220,7 @@ def grp_freeze():
 
             #margin difference between original pred and the grouped
             margin_dict = {}
+            #margins = 1,2,3 : 1: highest - 2nd highest  2: highest - mean(2nd , 3rd)
             for k in range(1,KMAX+1):
                 margins = [float(func.get_margin(p, k=k)) for p in pred]
                 marg_diffs = [margin - margins[0] for margin in margins[1:]]
@@ -392,7 +393,7 @@ def create_plot():
             for mk in range(1,KMAX+1):  
                 stat_decreasing[k][step][f'margin_diff'][mk]['mean'] = np.mean(all_met_decreasing[k][step]['margin_diff'][mk])
                 stat_decreasing[k][step][f'margin_diff'][mk]['std'] = np.std(all_met_decreasing[k][step]['margin_diff'][mk])
-                create_plot[k][step][f'margin_diff'][mk]['count'] += len(all_met_decreasing[k][step]['margin_diff'][mk])
+                stat_decreasing[k][step][f'margin_diff'][mk]['count'] += len(all_met_decreasing[k][step]['margin_diff'][mk])
 
     #plot metrics
     imps = list(all_met_increasing.keys())
@@ -439,67 +440,52 @@ def create_plot():
             'entr_std': entr_std,
         }
         return metrics
-
-    metrics0 = im_metrics(imps[0])
-    metrics1 = im_metrics(imps[-1])
-    plt.figure(figsize=(10, 6))
-    plt.errorbar(metrics0['steps'], metrics0['entr_m'], yerr=metrics0['entr_std'], 
-                fmt='o-',           # line with circles
-                capsize=5,          # size of error bar caps
-                capthick=2,         # thickness of caps
-                elinewidth=2,       # thickness of error bars
-                color='blue',       # color of everything
-                ecolor='red',       # color of error bars only
-                label='Mean ± Std')
-    plt.errorbar(metrics1['steps'], metrics1['entr_m'], yerr=metrics1['entr_std'], 
-                fmt='o-',           # line with circles
-                capsize=5,          # size of error bar caps
-                capthick=2,         # thickness of caps
-                elinewidth=2,       # thickness of error bars
-                color='green',      # color of everything
-                ecolor='red',       # color of error bars only
-                label='Mean ± Std')
-    plt.xlabel('X values')
-    plt.ylabel('Y values')
-    plt.title('Mean Values with Standard Deviation Error Bars')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.show()
-
-
-
-
-# Your data
-x_values = [-2,-1,0,1,2]
-y_means = [10, 15, 13, 18, 16]
-y_stds = [1.2, 1.5, 0.8, 1.1, 1.4]
-
-plt.figure(figsize=(10, 6))
-plt.errorbar(x_values, y_means, yerr=y_stds, 
-             fmt='o-',           # line with circles
-             capsize=5,          # size of error bar caps
-             capthick=2,         # thickness of caps
-             elinewidth=2,       # thickness of error bars
-             color='blue',       # color of everything
-             ecolor='red',       # color of error bars only
-             label='Mean ± Std')
-plt.xlabel('X values')
-plt.ylabel('Y values')
-plt.title('Mean Values with Standard Deviation Error Bars')
-plt.legend()
-plt.grid(True, alpha=0.3)
-plt.show()
-
     
-            
+    PLOT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\grp_size_change\margin3'
 
+    plt.ioff() 
+    for imp in imps:
+        metrics = im_metrics(imp)
+        plt.figure(figsize=(10, 6))
+        plt.errorbar(metrics['steps'], metrics['marg3_m'], yerr=metrics['marg3_std'], 
+                    fmt='o-',           # line with circles
+                    capsize=5,          # size of error bar caps
+                    capthick=2,         # thickness of caps
+                    elinewidth=2,       # thickness of error bars
+                    color='green',      # color of everything
+                    ecolor='red',       # color of error bars only
+                    label='Mean ± Std')
+        plt.xlabel('Step')
+        plt.ylabel('Margin 3 Change')
+        plt.title(f'Importance={imp}')
+        # plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.savefig(os.path.join(PLOT_DIR, f'imp_{imp}.png'), dpi=300, bbox_inches='tight')
+        # plt.show()
+        plt.close()
 
+    #all on the same plot
+    PLOT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\grp_size_change\entropy_change'
 
-
-
-
-
-
+    colormap = plt.cm.viridis
+    norm = plt.Normalize(min(imps), max(imps))
+    legend_handles = []
+    for imp in imps:
+        metrics = im_metrics(imp)
+        color = colormap(norm(imp))
+        line, = plt.plot(metrics['steps'], metrics['entr_m'], marker='o', color=color, label=f'{imp}', markersize=3, linewidth=1)
+        legend_handles.append(line)
+    
+    # Add colorbar
+    plt.legend(handles=legend_handles, bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.xlabel('Steps')
+    plt.ylabel('Entropy Increase')
+    plt.title('Entropy Increase Evolution by Importance')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(os.path.join(PLOT_DIR, f'evolution.png'), dpi=300, bbox_inches='tight')
+    plt.show()
+    
 
 if __name__ == "__main__":
     create_plot()
