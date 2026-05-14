@@ -441,13 +441,20 @@ def create_plot():
         }
         return metrics
     
-    PLOT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\grp_size_change\margin3'
+    PLOT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\grp_size_change\entropy_change'
 
     plt.ioff() 
     for imp in imps:
         metrics = im_metrics(imp)
+        steps = metrics['steps']
+        steps.insert(4, 0)
+        y_vals = metrics['entr_m']
+        y_vals.insert(4, 0)
+        y_err = metrics['entr_std']
+        y_err.insert(4, 0)
+
         plt.figure(figsize=(10, 6))
-        plt.errorbar(metrics['steps'], metrics['marg3_m'], yerr=metrics['marg3_std'], 
+        plt.errorbar(metrics['steps'], y_vals, yerr=y_err, 
                     fmt='o-',           # line with circles
                     capsize=5,          # size of error bar caps
                     capthick=2,         # thickness of caps
@@ -456,7 +463,7 @@ def create_plot():
                     ecolor='red',       # color of error bars only
                     label='Mean ± Std')
         plt.xlabel('Step')
-        plt.ylabel('Margin 3 Change')
+        plt.ylabel('Entropy Increase')
         plt.title(f'Importance={imp}')
         # plt.legend()
         plt.grid(True, alpha=0.3)
@@ -465,22 +472,27 @@ def create_plot():
         plt.close()
 
     #all on the same plot
-    PLOT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\grp_size_change\entropy_change'
+    PLOT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\grp_size_change\margin3'
 
     colormap = plt.cm.viridis
     norm = plt.Normalize(min(imps), max(imps))
     legend_handles = []
     for imp in imps:
         metrics = im_metrics(imp)
+        steps = metrics['steps']
+        steps.insert(4, 0)
+        y_vals = metrics['marg3_m']
+        y_vals.insert(4, 0)
+
         color = colormap(norm(imp))
-        line, = plt.plot(metrics['steps'], metrics['entr_m'], marker='o', color=color, label=f'{imp}', markersize=3, linewidth=1)
+        line, = plt.plot(steps, y_vals, marker='o', color=color, label=f'{imp}', markersize=3, linewidth=1)
         legend_handles.append(line)
     
     # Add colorbar
     plt.legend(handles=legend_handles, bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.xlabel('Steps')
-    plt.ylabel('Entropy Increase')
-    plt.title('Entropy Increase Evolution by Importance')
+    plt.ylabel('Margin 3 Change')
+    plt.title('Margin 3 Change Evolution by Importance')
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(os.path.join(PLOT_DIR, f'evolution.png'), dpi=300, bbox_inches='tight')
