@@ -517,10 +517,15 @@ def read_json_line(path):
     return data
 
 #create a deep copy of a dictionary 
-def deep_copy_dict(dict):
+def deep_copy_dict(d):
     new_dict = {}
-    for k in dict:
-        new_dict[k] = dict[k].copy()
+    for k in d:
+        if isinstance(d[k], dict):
+            new_dict[k] = deep_copy_dict(d[k])
+        elif isinstance(d[k], list):
+            new_dict[k] = d[k].copy()
+        else:
+            new_dict[k] = d[k]
     return new_dict
 
 '''

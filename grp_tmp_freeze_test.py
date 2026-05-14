@@ -11,6 +11,7 @@ import random
 from pathlib import Path
 import torch.nn.functional as F
 from scipy.stats import entropy
+import matplotlib.pyplot as plt
 
 random.seed(78)
 
@@ -262,17 +263,23 @@ def create_plot():
     del data
 
     #init metric dictionary
-    all_met = {}
-    d_ = {
+    met = {
         'margin_diff': {k: [] for k in range(1,KMAX+1)},
         'entropy_increase': []
     }
-    d = {}
+    all_met_increasing = {}
     for i in range(11):
-        d[i/10] = func.deep_copy_dict(d_)
+        d_ = {}
+        for it in range(N_ITR):
+            d_[it] = func.deep_copy_dict(met)
+        all_met_increasing[i/10] = d_    
 
-    for it in range(N_ITR):
-        
+    all_met_decreasing = {}
+    for i in range(11):    
+        d_ = {}
+        for it in range(N_ITR):
+            d_[it] = func.deep_copy_dict(met)
+        all_met_decreasing[i/10] = d_    
 
 
     n=0
@@ -334,21 +341,163 @@ def create_plot():
                 key = int(float(asc_sv_norm[th])*10)/10
 
                 for step in val.keys():
-                    all_met[key]['margin_diff'][1].append(val[step]['margin_diff_1'])
-                    all_met[key]['margin_diff'][2].append(val[step]['margin_diff_2'])
-                    all_met[key]['margin_diff'][3].append(val[step]['margin_diff_3'])
-                    all_met[key]['entropy_increase'].append(val[step]['entropy_increase'])
+                    all_met_increasing[key][step]['margin_diff'][1].append(val[step]['margin_diff_1'])
+                    all_met_increasing[key][step]['margin_diff'][2].append(val[step]['margin_diff_2'])
+                    all_met_increasing[key][step]['margin_diff'][3].append(val[step]['margin_diff_3'])
+                    all_met_increasing[key][step]['entropy_increase'].append(val[step]['entropy_increase'])
                 
                 val = metrics['decreasing'][str(g)]
                 for step in val.keys():
-                    all_met[key]['margin_diff'][1].append(val[step]['margin_diff_1'])
-                    all_met[key]['margin_diff'][2].append(val[step]['margin_diff_2'])
-                    all_met[key]['margin_diff'][3].append(val[step]['margin_diff_3'])
-                    all_met[key]['entropy_increase'].append(val[step]['entropy_increase'])
-                
+                    all_met_decreasing[key][step]['margin_diff'][1].append(val[step]['margin_diff_1'])
+                    all_met_decreasing[key][step]['margin_diff'][2].append(val[step]['margin_diff_2'])
+                    all_met_decreasing[key][step]['margin_diff'][3].append(val[step]['margin_diff_3'])
+                    all_met_decreasing[key][step]['entropy_increase'].append(val[step]['entropy_increase'])
 
 
-    pass
+
+    #calculate metric means, stds
+    stat = {
+        'margin_diff': {k: {'mean': -1, 'std': -1, 'count': 0} for k in range(1,KMAX+1)},
+        'entropy_increase': {'mean': -1, 'std': -1, 'count': 0}
+    }
+    stat_increasing = {}
+    for i in range(11):
+        d_ = {}
+        for it in range(N_ITR):
+            d_[it] = func.deep_copy_dict(stat)
+        stat_increasing[i/10] = d_    
+
+    stat_decreasing = {}
+    for i in range(11):    
+        d_ = {}
+        for it in range(N_ITR):
+            d_[it] = func.deep_copy_dict(stat)
+        stat_decreasing[i/10] = d_ 
+
+
+    for k in all_met_increasing:
+        for step in all_met_increasing[k]:
+            #increasing
+            stat_increasing[k][step]['entropy_increase']['mean'] = np.mean(all_met_increasing[k][step]['entropy_increase'])
+            stat_increasing[k][step]['entropy_increase']['std'] = np.std(all_met_increasing[k][step]['entropy_increase'])
+            stat_increasing[k][step]['entropy_increase']['count']+=len(all_met_increasing[k][step]['entropy_increase'])
+            for mk in range(1,KMAX+1):
+                stat_increasing[k][step][f'margin_diff'][mk]['mean'] = np.mean(all_met_increasing[k][step]['margin_diff'][mk])
+                stat_increasing[k][step][f'margin_diff'][mk]['std'] = np.std(all_met_increasing[k][step]['margin_diff'][mk])
+                stat_increasing[k][step][f'margin_diff'][mk]['count'] += len(all_met_increasing[k][step]['margin_diff'][mk])
+            #decreasing
+            stat_decreasing[k][step]['entropy_increase']['mean'] = np.mean(all_met_decreasing[k][step]['entropy_increase'])
+            stat_decreasing[k][step]['entropy_increase']['std'] = np.std(all_met_decreasing[k][step]['entropy_increase'])
+            stat_decreasing[k][step]['entropy_increase']['count'] += len(all_met_decreasing[k][step]['entropy_increase'])
+            for mk in range(1,KMAX+1):  
+                stat_decreasing[k][step][f'margin_diff'][mk]['mean'] = np.mean(all_met_decreasing[k][step]['margin_diff'][mk])
+                stat_decreasing[k][step][f'margin_diff'][mk]['std'] = np.std(all_met_decreasing[k][step]['margin_diff'][mk])
+                create_plot[k][step][f'margin_diff'][mk]['count'] += len(all_met_decreasing[k][step]['margin_diff'][mk])
+
+    #plot metrics
+    imps = list(all_met_increasing.keys())
+
+    def im_metrics(im):
+        steps = list(range(1,5))
+        steps = [-1*i for i in steps[::-1]] + steps
+        marg1_m, marg2_m, marg3_m = [], [], []
+        entr_m = []
+        marg1_std, marg2_std, marg3_std = [], [], []
+        entr_std = []
+        for step in steps:
+            if step < 0:
+                idx = step*-1 -1
+                val = stat_decreasing[im][idx]
+                marg1_m.append(val['margin_diff'][1]['mean'])
+                marg2_m.append(val['margin_diff'][2]['mean'])
+                marg3_m.append(val['margin_diff'][3]['mean'])
+                entr_m.append(val['entropy_increase']['mean'])
+                marg1_std.append(val['margin_diff'][1]['std'])
+                marg2_std.append(val['margin_diff'][2]['std'])  
+                marg3_std.append(val['margin_diff'][3]['std'])
+                entr_std.append(val['entropy_increase']['std'])
+            else:
+                idx = step -1
+                val = stat_increasing[im][idx]
+                marg1_m.append(val['margin_diff'][1]['mean'])
+                marg2_m.append(val['margin_diff'][2]['mean'])
+                marg3_m.append(val['margin_diff'][3]['mean'])
+                entr_m.append(val['entropy_increase']['mean'])
+                marg1_std.append(val['margin_diff'][1]['std'])
+                marg2_std.append(val['margin_diff'][2]['std'])  
+                marg3_std.append(val['margin_diff'][3]['std'])
+                entr_std.append(val['entropy_increase']['std'])
+        metrics = {
+            'steps': steps,
+            'marg1_m': marg1_m,
+            'marg2_m': marg2_m,
+            'marg3_m': marg3_m,
+            'entr_m': entr_m,
+            'marg1_std': marg1_std,
+            'marg2_std': marg2_std,
+            'marg3_std': marg3_std,
+            'entr_std': entr_std,
+        }
+        return metrics
+
+    metrics0 = im_metrics(imps[0])
+    metrics1 = im_metrics(imps[-1])
+    plt.figure(figsize=(10, 6))
+    plt.errorbar(metrics0['steps'], metrics0['entr_m'], yerr=metrics0['entr_std'], 
+                fmt='o-',           # line with circles
+                capsize=5,          # size of error bar caps
+                capthick=2,         # thickness of caps
+                elinewidth=2,       # thickness of error bars
+                color='blue',       # color of everything
+                ecolor='red',       # color of error bars only
+                label='Mean ± Std')
+    plt.errorbar(metrics1['steps'], metrics1['entr_m'], yerr=metrics1['entr_std'], 
+                fmt='o-',           # line with circles
+                capsize=5,          # size of error bar caps
+                capthick=2,         # thickness of caps
+                elinewidth=2,       # thickness of error bars
+                color='green',      # color of everything
+                ecolor='red',       # color of error bars only
+                label='Mean ± Std')
+    plt.xlabel('X values')
+    plt.ylabel('Y values')
+    plt.title('Mean Values with Standard Deviation Error Bars')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.show()
+
+
+
+
+# Your data
+x_values = [-2,-1,0,1,2]
+y_means = [10, 15, 13, 18, 16]
+y_stds = [1.2, 1.5, 0.8, 1.1, 1.4]
+
+plt.figure(figsize=(10, 6))
+plt.errorbar(x_values, y_means, yerr=y_stds, 
+             fmt='o-',           # line with circles
+             capsize=5,          # size of error bar caps
+             capthick=2,         # thickness of caps
+             elinewidth=2,       # thickness of error bars
+             color='blue',       # color of everything
+             ecolor='red',       # color of error bars only
+             label='Mean ± Std')
+plt.xlabel('X values')
+plt.ylabel('Y values')
+plt.title('Mean Values with Standard Deviation Error Bars')
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.show()
+
+    
+            
+
+
+
+
+
+
 
 
 
