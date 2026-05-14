@@ -481,6 +481,14 @@ def replace_frame(video, ordered_keys, frame_cluster_idxs, key, img):
             cur_idx += 1
     return new_video
 
+#create a new video by repeating a given frame (the whole video will be a single frame repeated)
+# video: 3, t , h , w
+# f_idx: the index of the frame to be repeated
+def repeat_frame(video, f_idx):
+    frame = video[f_idx,:][None]
+    frame = frame.repeat([video.size(0),1,1,1])
+    return frame
+
 def get_motion_pairs(ids):
     pairs = []
     keys = list(ids.keys())

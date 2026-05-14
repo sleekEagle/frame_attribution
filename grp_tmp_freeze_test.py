@@ -21,6 +21,7 @@ UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
 OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\grp_tmp_freeze'
 thr = Path(UCF_PATH).stem.split('_')[-1]
 OUT_PATH = os.path.join(OUT_PATH, f'{thr}.jsonl')
+OUT_PATH_REPLACE = os.path.join(OUT_PATH, f'{thr}_repl.jsonl')
 IMP_PATH = os.path.join(Path(UCF_PATH).parent , 'shap', f'exactSHAP_future_{thr}.jsonl')
 
 def get_frames(group, n):
@@ -499,5 +500,126 @@ def create_plot():
     plt.show()
     
 
+# print the margin diff and ent increase when we only use the best frame and the worst frame to 
+# represent the whole video
+def replace_test():
+
+    # data loader and model
+    ucf101dm = func.UCF101_data_model()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = ucf101dm.model
+    model = model.to(device)
+    model.eval()
+
+    class_names = ucf101dm.inference_class_names
+    class_labels = {}
+    for k in class_names.keys():
+        cls_name = class_names[k]
+        class_labels[cls_name.lower()] = k
+
+    #construct SHAP value data dict
+    with open(IMP_PATH, 'r') as f:
+        data = [json.loads(line) for line in f]
+    
+    sv_dict = {}
+    for d in data:
+        f = d['filename']
+        cls_idx = class_labels[f.split('_')[1].lower()]
+        g = [int(k) for k in list(d['groups'].keys())]
+        sv = d['shapley_values'][0]
+
+        sv_g = []
+        for i in range(len(g)):
+            sv_g.append(sv[i][cls_idx])
+
+        sv_dict[f] = {'groups': g, 'shapley_values': sv_g}
+    del data
+
+    # to store metrics
+    metrics = {
+        'l_margin_diff': {k: [] for k in range(1,KMAX+1)},
+        'l_entropy_increase': [],
+        'w_margin_diff': {k: [] for k in range(1,KMAX+1)},
+        'w_entropy_increase': []
+    }
+
+    n=0
+    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f))
+    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            print(f'{n/line_count*100:.1f}% is done.', end='\r')
+            n+=1
+            line = line.strip()
+            if not line:
+                continue
+
+            record = json.loads(line)
+            filename = record['filename']
+            # if filename!='v_ApplyEyeMakeup_g01_c01':
+            #     continue
+            p = ucf101dm.construct_vid_path_from_full(filename)
+            video = ucf101dm.load_jpg_ucf101(p, n=0)
+            g = record['groups']
+            groups = {}
+            for k in g:
+                if 'frames' in g[k]:
+                    f = g[k]['frames']
+                else: 
+                    f = []
+                groups[int(k)] = f
+            pass
+
+            grps = sv_dict[filename]['groups']
+            shap = sv_dict[filename]['shapley_values']
+            sorted_idx = np.argsort(shap)
+            sorted_grps = np.array(grps)[sorted_idx]
+            l_grp = int(sorted_grps[0]) #best group
+            w_grp = int(sorted_grps[-1]) #worst group
+
+            l_v = func.repeat_frame(video, l_grp)
+            w_v = func.repeat_frame(video, w_grp)
+
+            with torch.no_grad():
+                orig_pred = model(video.permute(1,0,2,3)[None,:].to(device))
+                l_pred = model(l_v.permute(1,0,2,3)[None,:].to(device))
+                w_pred = model(w_v.permute(1,0,2,3)[None,:].to(device))
+
+            #calc metrics
+            for k in range(1, KMAX+1):
+                orig_margin = func.get_margin(orig_pred[0], k=k)
+                l_margin = func.get_margin(l_pred[0], k=k)
+                w_margin = func.get_margin(w_pred[0], k=k)
+                l_marg_diff = l_margin - orig_margin
+                w_marg_diff = w_margin - orig_margin
+                metrics['l_margin_diff'][k].append(l_marg_diff.item())
+                metrics['w_margin_diff'][k].append(w_marg_diff.item())
+            orig_sm = F.softmax(orig_pred, dim=1)
+            l_sm = F.softmax(l_pred, dim=1)
+            w_sm = F.softmax(w_pred, dim=1)
+            orig_entr = entropy(orig_sm.cpu().numpy()[0], base=2)
+            l_entr = entropy(l_sm.cpu().numpy()[0], base=2)
+            w_entr = entropy(w_sm.cpu().numpy()[0], base=2)
+            l_entr_increase = orig_entr - l_entr
+            w_entr_increase = orig_entr - w_entr
+            metrics['l_entropy_increase'].append(l_entr_increase)
+            metrics['w_entropy_increase'].append(w_entr_increase)
+
+    #print metrics
+    for k in range(1, KMAX+1):
+        l_marg_diff_mean = np.mean(metrics['l_margin_diff'][k])
+        l_marg_diff_std = np.std(metrics['l_margin_diff'][k])
+        w_marg_diff_mean = np.mean(metrics['w_margin_diff'][k])
+        w_marg_diff_std = np.std(metrics['w_margin_diff'][k])
+        print(f'Margin {k} Diff - Best Group: Mean={w_marg_diff_mean:.4f}, Std={w_marg_diff_std:.4f}')
+        print(f'Margin {k} Diff - Worst Group: Mean={l_marg_diff_mean:.4f}, Std={l_marg_diff_std:.4f}')
+    l_entr_mean = np.mean(metrics['l_entropy_increase'])
+    l_entr_std = np.std(metrics['l_entropy_increase'])
+    w_entr_mean = np.mean(metrics['w_entropy_increase'])
+    w_entr_std = np.std(metrics['w_entropy_increase'])
+    print(f'Entropy Increase - Best Group: Mean={w_entr_mean:.4f}, Std={w_entr_std:.4f}')
+    print(f'Entropy Increase - Worst Group: Mean={l_entr_mean:.4f}, Std={l_entr_std:.4f}')
+
+
 if __name__ == "__main__":
-    create_plot()
+    replace_test()
