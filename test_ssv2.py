@@ -22,6 +22,10 @@ def make_inference(model, video, class_names):
 
     return ret
 
+'''
+Accuracy = 72.24288397098354
+'''
+
 def test_s2s():
     model = VJEPA2()
     model.eval()
@@ -39,22 +43,36 @@ def test_s2s():
     n_samples = 0
 
     for idx, p in enumerate(paths):
-        print(f'{idx} of {n_files} is done.', end='\r')
+        if idx>0:
+            print(f'{idx/n_files*100:.2f} % is done. Running acc: {n_correct/n_samples*100:.2f} %', end='\r')
         gt_idx = model.label2id[d_names[idx]]
         with torch.no_grad():
-            # preds = model.predict_from_path(p)
-            v = model.video_from_path(p)['pixel_values'][0,:].permute(1,0,2,3)
-            ret = make_inference(model, v.unsqueeze(0), class_names)
-            
-            # preds = model(v[None,:])
-            # pred_idx = torch.argmax(preds,dim=1).item()
-            if ret['pred_original_idx']==gt_idx:
+            pred_cls = model.predict_from_path(p)
+            if pred_cls==gt_idx:
                 n_correct += 1
             else:
-                with open(r'C:\Users\lahir\Downloads\UCF101\analysis\ssv2_incorrect.txt', 'w') as file:
+                with open(r'C:\Users\lahir\Downloads\ssv2_analysis\ssv2_incorrect.txt', 'w') as file:
                     file.write(str(p))
         n_samples += 1
     print(f'Accuracy = {n_correct/n_samples*100} \%')
+
+
+def test_s2s_batch():
+    model = VJEPA2()
+    model.eval()
+    class_names = list(model.label2id.keys())
+
+    d_names, paths = ssv2.get_ssv2_paths()
+    n_files = len(paths)
+    
+    #make sure all the class names are present in the list of dirs
+    for c in class_names:
+        assert c in d_names , f'{c} is not in the list of dirs'
+        pass
+    
+    pred_t = model.predict_from_batch_path(paths)
+    pass
+
 
 if __name__ == '__main__':
     test_s2s()
