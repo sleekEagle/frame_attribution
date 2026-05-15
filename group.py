@@ -2,6 +2,8 @@ import os
 from glob import glob
 import func
 import json
+from models.ssv2 import VJEPA2
+from dataloaders import ssv2
 
 def replace_frame(video, src_idx, dst_idx):
     new_video = video.clone()
@@ -199,6 +201,36 @@ def group_frames_loader_UCF101(GRP_THRESHOLD = 1e-3):
         group_dict['filename'] = filename
         with open(out_path, 'a') as f:
             f.write(json.dumps(group_dict) + '\n')
+
+def group_frames_loader_SSV2(GRP_THRESHOLD = 1e-3):
+    out_path = os.path.join(r'C:\Users\lahir\Downloads\ssv2_analysis', f'groups_{GRP_THRESHOLD}.jsonl')
+
+    model = VJEPA2()
+    model.eval()
+    class_names = list(model.label2id.keys())
+
+    d_names, paths = ssv2.get_ssv2_paths()
+    n_files = len(paths)
+    
+    #make sure all the class names are present in the list of dirs
+    for c in class_names:
+        assert c in d_names , f'{c} is not in the list of dirs'
+        pass
+
+    n_correct = 0
+    n_samples = 0
+
+    for idx, p in enumerate(paths):
+        print(f'{idx} of {n_files} is done.', end='\r')
+        video = model.video_from_path(p)['pixel_values'][0,:].permute(1,0,2,3)
+        gt_idx = model.label2id[d_names[idx]]
+        group_dict = group_frames(model, video, gt_idx, GRP_THRESHOLD)
+        if group_dict==-1:
+            continue
+        group_dict['filename'] = p
+        with open(out_path, 'a') as f:
+            f.write(json.dumps(group_dict) + '\n')
+
         
 if __name__ == '__main__':
-    group_frames_loader_UCF101(GRP_THRESHOLD=1e-2)
+    group_frames_loader_SSV2(GRP_THRESHOLD=1e-2)
