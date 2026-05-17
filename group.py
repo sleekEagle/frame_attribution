@@ -15,6 +15,9 @@ def replace_frames(video, src_idx, dst_idx_list):
         video = replace_frame(video, src_idx, dst)
     return video
 
+'''
+video : 3,T,H,W
+'''
 def group_frames(model, video, gt_idx, GRP_THRESHOLD):
     _,T,_,_ = video.size()
 
@@ -222,7 +225,7 @@ def group_frames_loader_SSV2(GRP_THRESHOLD = 1e-3):
 
     for idx, p in enumerate(paths):
         print(f'{idx} of {n_files} is done.', end='\r')
-        video = model.video_from_path(p)['pixel_values'][0,:].permute(1,0,2,3)
+        video = model.video_from_path(p)['pixel_values_videos'][0,:].permute(1,0,2,3)
         gt_idx = model.label2id[d_names[idx]]
         group_dict = group_frames(model, video, gt_idx, GRP_THRESHOLD)
         if group_dict==-1:

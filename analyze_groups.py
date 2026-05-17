@@ -1,5 +1,6 @@
 import os
 from glob import glob
+from xml.sax.handler import all_features
 import func
 import json
 import numpy as np
@@ -9,7 +10,7 @@ from itertools import combinations
 import random
 from scipy.stats import entropy
 
-UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.01.jsonl'
+UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.0001.jsonl'
 
 '''
 *************************************************************************************
@@ -292,6 +293,195 @@ def save_orig_features():
 
             n+=1
 
+   
+def save_grp_features():
+
+    OUT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\features'
+    OUT_PATH = os.path.join(OUT_DIR, "grp_" + os.path.basename(UCF_PATH).split('_')[-1])
+    if os.path.exists(OUT_PATH):
+        os.remove(OUT_PATH)
+
+    ucf101dm = func.UCF101_data_model()
+    model = ucf101dm.model
+    model.eval()
+
+    # register hook to get features
+    activation = {}
+    def get_activation(name):
+        """Hook function to capture layer output"""
+        def hook(model, input, output):
+            activation[name] = output.detach()
+        return hook
+    handle = model.avgpool.register_forward_hook(get_activation('features'))
+
+    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f))    
+
+    n = 0
+    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            print(f'{n/line_count*100:.0f}% is done', end='\r')
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            g  = record['groups']
+            filename = record['filename']
+            p = ucf101dm.construct_vid_path_from_full(record['filename'])
+            video = ucf101dm.load_jpg_ucf101(p, n=0).permute(1,0,2,3)
+
+            groups = {}
+            for k in g:
+                if 'frames' not in g[k]:
+                    groups[int(k)] = []
+                else:
+                    groups[int(k)] = g[k]['frames']
+
+            vid_g = func.create_grouped_video(video, groups)
+
+            p = model(vid_g[None,:])
+            features = activation['features']
+            d = {}
+            d['filename'] = filename
+            d['feat'] = features[0,:,0,0,0].tolist()
+
+            with open(OUT_PATH, 'a') as f:
+                f.write(json.dumps(d) + '\n')
+
+            n+=1
+
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+from sklearn.metrics.pairwise import euclidean_distances, cosine_distances
+import torch
+from sklearn.preprocessing import StandardScaler
+
+def cluster_features():
+
+    import numpy as np
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.decomposition import PCA
+    import matplotlib.pyplot as plt
+
+    # --------------------------------------------------
+    # Create dummy data
+    # 100 samples, each with 50 features
+    # --------------------------------------------------
+    np.random.seed(42)
+
+    # Class 1 features
+    X1 = np.random.randn(100, 512)
+
+    # Class 2 features shifted slightly
+    X2 = np.random.randn(100, 512) + 2.0
+
+    # Combine into one matrix
+    X = np.vstack([X1, X2])   # Shape: (200, 50)
+
+    print("Original shape:", X.shape)
+
+    # --------------------------------------------------
+    # Standardize features (important for PCA)
+    # --------------------------------------------------
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    print("Scaled shape:", X_scaled.shape)
+    print("Mean of first feature:", X_scaled[:, 0].mean())
+    print("Std of first feature:", X_scaled[:, 0].std())
+
+    # --------------------------------------------------
+    # Perform PCA to reduce to 2 dimensions
+    # --------------------------------------------------
+    pca = PCA(n_components=2)
+    X_pca = pca.fit_transform(X_scaled)
+
+    print("PCA output shape:", X_pca.shape)
+    print("Explained variance ratio:", pca.explained_variance_ratio_)
+    print("Total explained variance:", pca.explained_variance_ratio_.sum())
+
+
+
+
+    DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\features'
+    GRP_PATH = os.path.join(DIR, "grp_" + os.path.basename(UCF_PATH).split('_')[-1])
+    ORIG_PATH = os.path.join(DIR, "orig.jsonl")
+    scaler = StandardScaler()
+
+    with open(ORIG_PATH, 'r') as f:
+        orig_feat = [json.loads(line)['feat'] for line in f]
+    
+    with open(GRP_PATH, 'r') as f:
+        grp_feat = [json.loads(line)['feat'] for line in f]
+
+    orig_feat, grp_feat = np.array(orig_feat).astype(np.float32), np.array(grp_feat).astype(np.float32)
+
+    orig_feat = np.array(orig_feat, dtype=np.float32)[:10, 0:50]
+    grp_feat = np.array(grp_feat, dtype=np.float32)[:10, 0:50]
+    all_features = np.vstack([orig_feat, grp_feat])
+    scaler = StandardScaler()
+    all_features = scaler.fit_transform(all_features)
+    
+    pca = PCA(n_components=2)
+    features_2d = pca.fit_transform(all_features)
+    print('here!!!!!!')
+    pass
+
+
+    # print("Checking your data...")
+    # print(f"Shape: {grp_feat.shape}")
+    # print(f"Dtype: {grp_feat.dtype}")
+    # print(f"Any NaN: {np.isnan(grp_feat).any()}")
+    # print(f"Any Inf: {np.isinf(grp_feat).any()}")
+    # print(f"Memory: {grp_feat.nbytes / 1024**2:.2f} MB")
+
+    orig_feat = scaler.fit_transform(orig_feat)[:10]
+    grp_feat = scaler.fit_transform(grp_feat)[:10]
+
+    # orig_idx = np.random.choice(orig_feat.shape[0], size=100, replace=False)
+    # grp_idx = np.random.choice(grp_feat.shape[0], size=100, replace=False)
+    # orig_feat_sample, grp_feat_sample = orig_feat[orig_idx], grp_feat[grp_idx]
+
+
+    try:
+        all_features = np.vstack([orig_feat, grp_feat])
+        pca = PCA(n_components=2)
+        features_2d = pca.fit_transform(all_features)
+    except Exception as e:
+        print(f"Error: {e}")
+    print('here!!!')
+    
+    # orig_pca = features_2d[:len(orig_feat_sample)]
+    # grp_pca = features_2d[len(orig_feat_sample):]
+    pass
+    
+
+    
+
+def test():
+    import numpy as np
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.decomposition import PCA
+
+    np.random.seed(42)
+    X1 = np.random.randn(100, 512)
+    X2 = np.random.randn(100, 512) + 2.0
+    X = np.vstack([X1, X2]).astype(np.float16)
+    print("Shape:", X.shape)          # (200, 512)
+    print("dtype:", X.dtype)          # float64
+    print("NaN:", np.isnan(X).any())  # False
+    print("Inf:", np.isinf(X).any())  # False
+
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    pca = PCA(n_components=2)
+    X_pca = pca.fit_transform(X_scaled)
+    print("Done:", X_pca.shape)       # (200, 2)
+
+
 
 if __name__ == '__main__':
-    save_orig_features()
+    save_grp_features()
