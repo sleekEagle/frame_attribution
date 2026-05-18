@@ -5,6 +5,7 @@ from sklearn.metrics.pairwise import euclidean_distances, cosine_distances
 from sklearn.preprocessing import StandardScaler
 import os
 import json
+import random
 
 UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
 PLOT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\grp_clustering'
@@ -83,5 +84,154 @@ def cluster_features():
     plt.savefig(os.path.join(PLOT_PATH, f'threshold_{thre}.png'), dpi=300, bbox_inches='tight')
     plt.show()
 
+def tmp_freeze_grps():
+    import torch
+    import func
+    FILL = 'future'
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    f = f'{FILL}.jsonl'
+    OUT_PATH = os.path.join(r'C:\Users\lahir\Downloads\UCF101\analysis\features\tmp_freeze',f)
+    if os.path.exists(OUT_PATH):
+        os.remove(OUT_PATH)
+    
+    ucf101dm = func.UCF101_data_model()
+    model = ucf101dm.model
+    model.eval()
+    model.to(device)
+    # register hook to get features
+    activation = {}
+    def get_activation(name):
+        """Hook function to capture layer output"""
+        def hook(model, input, output):
+            activation[name] = output.detach()
+        return hook
+    handle = model.avgpool.register_forward_hook(get_activation('features'))
+
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f)) 
+    
+    n = 0
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            print(f'{n/line_count*100:.0f}% is done', end='\r')
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            g = record['groups']
+            groups = {}
+            for k in g:
+                if 'frames' not in g[k]:
+                    groups[int(k)] = []
+                else:
+                    groups[int(k)] = g[k]['frames']
+            p = ucf101dm.construct_vid_path_from_full(record['filename'])
+            video = ucf101dm.load_jpg_ucf101(p, n=0)
+
+            #remove a randomly choosen group
+ 
+            sel_idx = random.sample(list(range(len(groups.keys()))),1)[0]
+            mask = [True]*len(groups.keys())
+            mask[sel_idx] = False
+
+            if FILL=='past':
+                groups_filled = func.past_fill_all(mask, groups)
+                vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
+                p = model(vid_g[None,:])
+                feat = activation['features'][0,:,0,0,0]
+            elif FILL=='future':
+                groups_filled = func.future_fill_all(mask, groups)
+                vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
+                p = model(vid_g[None,:])
+                feat = activation['features'][0,:,0,0,0]
+            elif FILL=='comb':
+                groups_filled = func.past_fill_all(mask, groups)
+                vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
+                p = model(vid_g[None,:])
+                feat_past = activation['features'][0,:,0,0,0]
+
+                groups_filled = func.future_fill_all(mask, groups)
+                vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
+                p = model(vid_g[None,:])
+                feat_future = activation['features'][0,:,0,0,0]
+
+                feat = (feat_past+feat_future)*0.5
+            
+            d = {}
+            d['filename'] = record['filename']
+            d['feat'] = feat.tolist()
+
+            with open(OUT_PATH, 'a') as f:
+                f.write(json.dumps(d) + '\n')
+
+
+            n+=1
+
+
+def cluster_frozen():
+    import pandas as pd
+    df = pd.DataFrame(columns=['filename', 'orig', 'future', 'past', 'comb'])
+
+    ORIG_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\features\orig.jsonl'
+    FUTURE_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\features\tmp_freeze\future.jsonl'
+    PAST_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\features\tmp_freeze\past.jsonl'
+    COMB_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\features\tmp_freeze\comb.jsonl'
+
+    #read original features
+    def get_data(path):
+        d = {}
+        with open(path, 'r') as f:
+            for line in f:
+                d[json.loads(line)['filename']] = json.loads(line)['feat']
+        return d
+    
+    d_orig = get_data(ORIG_PATH)
+    d_future = get_data(FUTURE_PATH)
+    d_past = get_data(PAST_PATH)
+    d_comb = get_data(COMB_PATH)
+
+    rows_list = []
+    for k in d_orig:
+        row = {'filename': k, 
+               'orig': np.array(d_orig[k]), 
+               'future': np.array(d_future[k]), 
+               'past': np.array(d_past[k]), 
+               'comb': np.array(d_comb[k])}
+        rows_list.append(row)
+    df = pd.concat([df, pd.DataFrame(rows_list)], ignore_index=True)
+
+    o = np.stack(df['orig'].values)  # Shape: (n_rows, 128)
+    f = np.stack(df['future'].values)  # Shape: (n_rows, 128)
+    p = np.stack(df['past'].values) 
+    c = np.stack(df['comb'].values) 
+
+    # Calculate L2 distances for all rows at once
+    df['diff_future'] = np.linalg.norm(o - f, axis=1)
+    df['diff_past'] = np.linalg.norm(o - p, axis=1)
+    df['diff_comb'] = np.linalg.norm(o - c, axis=1)
+
+    probs_orig = softmax(o, axis=1)  
+    probs_f = softmax(f, axis=1) 
+    probs_p = softmax(p, axis=1)
+    probs_c = softmax(c, axis=1)
+
+    epsilon = 1e-10
+    probs_orig = np.clip(probs_orig, epsilon, 1.0)
+    probs_f = np.clip(probs_f, epsilon, 1.0)
+    probs_p = np.clip(probs_p, epsilon, 1.0)
+    probs_c = np.clip(probs_c, epsilon, 1.0)
+    kl_f = np.sum(rel_entr(probs_orig, probs_f), axis=1)
+    kl_p = np.sum(rel_entr(probs_orig, probs_p), axis=1)
+    kl_c = np.sum(rel_entr(probs_orig, probs_c), axis=1)
+    
+    df['entr_future'] = kl_f
+    df['entr_past'] = kl_p
+    df['entr_comb'] = kl_c
+
+    pass
+
+
+
 if __name__ == '__main__':
-    cluster_features()
+    cluster_frozen()
