@@ -23,7 +23,10 @@ def make_inference(model, video, class_names):
     return ret
 
 '''
+on local:
 Accuracy = 72.24288397098354
+on kaggle GPU T4 x2:
+Accuracy : 72.23183709540818
 '''
 
 def test_s2s():
