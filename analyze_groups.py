@@ -351,59 +351,12 @@ def save_grp_features():
             n+=1
 
 import numpy as np
-import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.metrics.pairwise import euclidean_distances, cosine_distances
-import torch
 from sklearn.preprocessing import StandardScaler
 
 def cluster_features():
-
-    import numpy as np
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.decomposition import PCA
-    import matplotlib.pyplot as plt
-
-    # --------------------------------------------------
-    # Create dummy data
-    # 100 samples, each with 50 features
-    # --------------------------------------------------
-    np.random.seed(42)
-
-    # Class 1 features
-    X1 = np.random.randn(100, 512)
-
-    # Class 2 features shifted slightly
-    X2 = np.random.randn(100, 512) + 2.0
-
-    # Combine into one matrix
-    X = np.vstack([X1, X2])   # Shape: (200, 50)
-
-    print("Original shape:", X.shape)
-
-    # --------------------------------------------------
-    # Standardize features (important for PCA)
-    # --------------------------------------------------
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-
-    print("Scaled shape:", X_scaled.shape)
-    print("Mean of first feature:", X_scaled[:, 0].mean())
-    print("Std of first feature:", X_scaled[:, 0].std())
-
-    # --------------------------------------------------
-    # Perform PCA to reduce to 2 dimensions
-    # --------------------------------------------------
-    pca = PCA(n_components=2)
-    X_pca = pca.fit_transform(X_scaled)
-
-    print("PCA output shape:", X_pca.shape)
-    print("Explained variance ratio:", pca.explained_variance_ratio_)
-    print("Total explained variance:", pca.explained_variance_ratio_.sum())
-
-
-
 
     DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\features'
     GRP_PATH = os.path.join(DIR, "grp_" + os.path.basename(UCF_PATH).split('_')[-1])
@@ -484,4 +437,4 @@ def test():
 
 
 if __name__ == '__main__':
-    save_grp_features()
+    cluster_features()

@@ -1,10 +1,8 @@
 import torch
 import numpy as np
 from torchcodec.decoders import VideoDecoder
-# from transformers import VideoMAEImageProcessor, VideoMAEForVideoClassification
 import torch.nn as nn
-from transformers import AutoImageProcessor, AutoModel, AutoModelForVideoClassification, AutoVideoProcessor, TimesformerForVideoClassification
-from transformers import VideoMAEImageProcessor, VideoMAEForVideoClassification
+from transformers import AutoModelForVideoClassification, AutoVideoProcessor
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 

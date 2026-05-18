@@ -4,6 +4,7 @@ import func
 import json
 from models.ssv2 import VJEPA2
 from dataloaders import ssv2
+import random
 
 def replace_frame(video, src_idx, dst_idx):
     new_video = video.clone()
@@ -205,7 +206,6 @@ def group_frames_loader_UCF101(GRP_THRESHOLD = 1e-3):
         with open(out_path, 'a') as f:
             f.write(json.dumps(group_dict) + '\n')
 
-import random
 def group_frames_loader_SSV2(GRP_THRESHOLD = 1e-3):
     out_path = os.path.join(r'C:\Users\lahir\Downloads\ssv2_analysis', f'groups_{GRP_THRESHOLD}.jsonl')
     if os.path.exists(out_path):
