@@ -550,6 +550,9 @@ def create_plot_corr():
     s_values, step_values = [], []
     entr_values, marg1_values, marg2_values, marg3_values = [], [], [], []
 
+    test_vals = []
+    test_s = []
+
     with open(OUT_PATH, 'r', encoding='utf-8') as f:
         line_count = sum(1 for _ in enumerate(f))
     with open(OUT_PATH, 'r', encoding='utf-8') as f:
@@ -602,24 +605,34 @@ def create_plot_corr():
                 met[g] = met_
             metrics['decreasing'] = met
 
-            for g_idx, g in enumerate(metrics['increasing']):
-                s = sv['shapley_values'][sv['groups'].index(int(g))]
-                for step in metrics['increasing'][g]:
-                    met = metrics['increasing'][g][step]
-                    s_values.append(s)
-                    step_values.append(step+1)
-                    entr_values.append(met['entropy_increase'])
-                    marg1_values.append(met['margin_diff_1'])
-                    marg2_values.append(met['margin_diff_2'])
-                    marg3_values.append(met['margin_diff_3'])
-                for step in metrics['decreasing'][g]:
-                    met = metrics['decreasing'][g][step]
-                    s_values.append(s)
-                    step_values.append(-1*(step+1))
-                    entr_values.append(met['entropy_increase'])
-                    marg1_values.append(met['margin_diff_1'])
-                    marg2_values.append(met['margin_diff_2'])
-                    marg3_values.append(met['margin_diff_3'])
+            k = list(metrics['increasing'].keys())[0]
+            e = metrics['increasing'][k][0]['entropy_increase']
+            s = sv['shapley_values'][0]
+            test_vals.append(e)
+            test_s.append(s)
+
+
+            # for g_idx, g in enumerate(metrics['increasing']):
+            #     s = sv['shapley_values'][sv['groups'].index(int(g))]
+            #     for step in metrics['increasing'][g]:
+            #         met = metrics['increasing'][g][step]
+            #         s_values.append(s)
+            #         step_values.append(step+1)
+            #         entr_values.append(met['entropy_increase'])
+            #         marg1_values.append(met['margin_diff_1'])
+            #         marg2_values.append(met['margin_diff_2'])
+            #         marg3_values.append(met['margin_diff_3'])
+            #     for step in metrics['decreasing'][g]:
+            #         met = metrics['decreasing'][g][step]
+            #         s_values.append(s)
+            #         step_values.append(-1*(step+1))
+            #         entr_values.append(met['entropy_increase'])
+            #         marg1_values.append(met['margin_diff_1'])
+            #         marg2_values.append(met['margin_diff_2'])
+            #         marg3_values.append(met['margin_diff_3'])
+
+    
+    plt.scatter(test_s, test_vals)
 
     
     s_values, step_values = np.array(s_values), np.array(step_values)
@@ -920,6 +933,122 @@ def delete_groups():
         plt.savefig(os.path.join(PLOT_DIR, f'entropy.png'), dpi=300, bbox_inches='tight')
         plt.show()
 
+def insert_groups():
+    PLOT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\shap_vs_metrics\insert'
+
+    ucf101dm = func.UCF101_data_model()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = ucf101dm.model
+    model = model.to(device)
+    model.eval()
+
+    class_names = ucf101dm.inference_class_names
+    class_labels = {}
+    for k in class_names.keys():
+        cls_name = class_names[k]
+        class_labels[cls_name.lower()] = k
+
+    #construct SHAP value data dict
+    with open(IMP_PATH, 'r') as f:
+        data = [json.loads(line) for line in f]
+    
+    sv_dict = {}
+    for d in data:
+        f = d['filename']
+        cls_idx = class_labels[f.split('_')[1].lower()]
+        g = [int(k) for k in list(d['groups'].keys())]
+        sv = d['shapley_values'][0]
+
+        sv_g = []
+        for i in range(len(g)):
+            sv_g.append(sv[i][cls_idx])
+
+        sv_dict[f] = {'groups': g, 'shapley_values': sv_g}
+    del data
+
+    #read groups
+    d_entr = {}
+    d_m1 = {}
+    d_m2 = {}
+    d_m3 = {}
+
+    n=0
+    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f))
+    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            print(f'{n/line_count*100:.1f}% is done.', end='\r')
+            n+=1
+            line = line.strip()
+            if not line:
+                continue
+
+            record = json.loads(line)
+            filename = record['filename']
+            # if filename!='v_ApplyEyeMakeup_g01_c01':
+            #     continue
+            p = ucf101dm.construct_vid_path_from_full(filename)
+            video = ucf101dm.load_jpg_ucf101(p, n=0).permute(1,0,2,3).to(device)
+            g = record['groups']
+            groups = {}
+            for k in g:
+                if 'frames' in g[k]:
+                    f = g[k]['frames']
+                else: 
+                    f = []
+                groups[int(k)] = f           
+
+            if len(groups) == 1: continue 
+
+            grp_dict = {}
+            grp_dict['filename'] = filename
+            grp_dict['original'] = groups
+
+            grps = sv_dict[filename]['groups']
+            shap = sv_dict[filename]['shapley_values']
+            # scale shap values
+            # shap = np.array(shap)
+            # shap = (shap-min(shap))/(max(shap)-min(shap)+1e-5)
+            orig_stat = func.get_pred_stats(model, video)
+
+            for g_idx, g in enumerate(grps):
+                mask = [False]*len(grps)
+                mask[g_idx] = True
+                grp_filled = func.past_fill_all(mask, groups)
+                grp_video = func.create_new_video(video, grp_filled)
+                grp_stat = func.get_pred_stats(model, grp_video, orig_stat['pred_logits'])
+                d_entr[shap[g_idx]] = grp_stat['entropy_change']
+                d_m1[shap[g_idx]] = grp_stat['margin_change_1']
+                d_m2[shap[g_idx]] = grp_stat['margin_change_2']
+                d_m3[shap[g_idx]] = grp_stat['margin_change_3']
+
+        entr_s, entr = [], []
+        for k in d_entr:
+            entr_s.append(k)
+            entr.append(d_entr[k])
+       
+        m1_s, m1 = [], []
+        for k in d_m1:
+            m1_s.append(k)
+            m1.append(d_m1[k])
+        
+        m2_s, m2 = [], []
+        for k in d_m2:
+            m2_s.append(k)
+            m2.append(d_m2[k])
+        
+        m3_s, m3 = [], []
+        for k in d_m3:
+            m3_s.append(k)
+            m3.append(d_m3[k])
+
+        plt.scatter(entr_s, entr, s=10)
+        plt.xlabel('Shapley value')
+        plt.ylabel('Entropy Change')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'entropy.png'), dpi=300, bbox_inches='tight')
+        plt.show()
 
 def grp_imp_vs_len():
     PLOT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\shap_vs_metrics'
@@ -1005,4 +1134,4 @@ def grp_imp_vs_len():
 
 
 if __name__ == "__main__":
-    create_plot_corr()
+    insert_groups()
