@@ -808,21 +808,19 @@ def grp_imp_vs_len():
                 shap_values.append(s)
                 lengths.append(l)
 
-
-        pass
         # shap_values = np.array(shap_values)
         # lengths = np.array(lengths)
         # sort_idx = np.argsort(shap_values)
-        plt.scatter(shap_values, lengths, s=10)
-        plt.xlabel('Shapley value')
-        plt.ylabel('Entropy Change')
+        plt.scatter(lengths, shap_values, s=10)
+        plt.xlabel('Group Length')
+        plt.ylabel('Shapley Value')
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
-        plt.savefig(os.path.join(PLOT_DIR, f'entropy.png'), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(PLOT_DIR, f'grpLength.png'), dpi=300, bbox_inches='tight')
         plt.show()
 
 
 
 
 if __name__ == "__main__":
-    grp_imp_vs_len()
+    delete_groups()
