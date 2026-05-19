@@ -500,6 +500,188 @@ def create_plot():
     plt.show()
     
 
+
+def create_plot_corr():
+    ucf101dm = func.UCF101_data_model()
+    class_names = ucf101dm.inference_class_names
+    class_labels = {}
+    for k in class_names.keys():
+        cls_name = class_names[k]
+        class_labels[cls_name.lower()] = k
+
+    with open(IMP_PATH, 'r') as f:
+        data = [json.loads(line) for line in f]
+    
+    sv_dict = {}
+    for d in data:
+        f = d['filename']
+        cls_idx = class_labels[f.split('_')[1].lower()]
+        g = [int(k) for k in list(d['groups'].keys())]
+        sv = d['shapley_values'][0]
+
+        sv_g = []
+        for i in range(len(g)):
+            sv_g.append(sv[i][cls_idx])
+
+        sv_dict[f] = {'groups': g, 'shapley_values': sv_g}
+    del data
+
+    #init metric dictionary
+    met = {
+        'margin_diff': {k: [] for k in range(1,KMAX+1)},
+        'entropy_increase': []
+    }
+    all_met_increasing = {}
+    for i in range(11):
+        d_ = {}
+        for it in range(N_ITR):
+            d_[it] = func.deep_copy_dict(met)
+        all_met_increasing[i/10] = d_    
+
+    all_met_decreasing = {}
+    for i in range(11):    
+        d_ = {}
+        for it in range(N_ITR):
+            d_[it] = func.deep_copy_dict(met)
+        all_met_decreasing[i/10] = d_    
+
+
+    n=0
+    s_values, step_values = [], []
+    entr_values, marg1_values, marg2_values, marg3_values = [], [], [], []
+
+    with open(OUT_PATH, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f))
+    with open(OUT_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            print(f'{n/line_count*100:.1f}% is done.', end='\r')
+            n+=1
+            line = line.strip()
+            record = json.loads(line)
+            sv = sv_dict[record['filename']]
+
+            #sanity check
+            assert sorted(sv['groups']) == sorted( [int(k) for k in list(record['original'].keys())]), 'Groups do not match'
+
+            sort_idx = np.argsort(np.array(sv['shapley_values']))
+            asc_grps = np.array(sv['groups'])[sort_idx] # groups ordered in ascending order of importance
+            asc_grps = [int(g) for g in asc_grps]
+
+            # sv_norm = sv['shapley_values']
+            # sv_norm = (sv_norm - np.min(sv_norm)) / (np.max(sv_norm) - np.min(sv_norm))
+            # asc_sv_norm = np.array(sv_norm)[sort_idx]
+
+            i = 0
+            metrics = {}
+
+            met = {}
+            for g in record['increasing'].keys():
+                met_ = {}
+                for idx in range(len(record['increasing'][g])):
+                    m_ = {}
+                    margin_ks = record['margin_diff'].keys()
+                    for mk in margin_ks:
+                        m_[f'margin_diff_{mk}'] = record['margin_diff'][mk][i]
+                    m_[f'entropy_increase'] = record['entropy_increase'][i]
+                    met_[idx] = m_
+                    i+=1
+                met[g] = met_
+            metrics['increasing'] = met
+
+            met = {}
+            for g in record['decreasing'].keys():
+                met_ = {}
+                for idx in range(len(record['decreasing'][g])):
+                    m_ = {}
+                    margin_ks = record['margin_diff'].keys()
+                    for mk in margin_ks:
+                        m_[f'margin_diff_{mk}'] = record['margin_diff'][mk][i]
+                    m_[f'entropy_increase'] = record['entropy_increase'][i]
+                    met_[idx] = m_
+                    i+=1
+                met[g] = met_
+            metrics['decreasing'] = met
+
+            for g_idx, g in enumerate(metrics['increasing']):
+                s = sv['shapley_values'][sv['groups'].index(int(g))]
+                for step in metrics['increasing'][g]:
+                    met = metrics['increasing'][g][step]
+                    s_values.append(s)
+                    step_values.append(step+1)
+                    entr_values.append(met['entropy_increase'])
+                    marg1_values.append(met['margin_diff_1'])
+                    marg2_values.append(met['margin_diff_2'])
+                    marg3_values.append(met['margin_diff_3'])
+                for step in metrics['decreasing'][g]:
+                    met = metrics['decreasing'][g][step]
+                    s_values.append(s)
+                    step_values.append(-1*(step+1))
+                    entr_values.append(met['entropy_increase'])
+                    marg1_values.append(met['margin_diff_1'])
+                    marg2_values.append(met['margin_diff_2'])
+                    marg3_values.append(met['margin_diff_3'])
+
+    
+    s_values, step_values = np.array(s_values), np.array(step_values)
+    entr_values, marg1_values, marg2_values, marg3_values = np.array(entr_values), np.array(marg1_values), np.array(marg2_values), np.array(marg3_values)
+    pass
+    for s in range(-4,5):
+        if s==0: continue
+        idxs = np.argwhere(step_values==s)
+        s_ = s_values[idxs]
+        e_ = entr_values[idxs]
+        # e_ = moving_average(e_[:,0],10)
+        cent, avg = bin_and_average(s_,e_,3)
+        plt.plot(cent,avg, label=f'step = {s}')
+
+    plt.xlabel("Averaged Shapley Value")
+    plt.ylabel('Entropy Difference')
+    plt.legend()
+    plt.show()
+
+
+
+
+    m1_ = marg1_values[idxs]
+    m2_ = marg2_values[idxs]
+    m3_ = marg3_values[idxs]
+    
+
+def bin_and_average(x, y, bin_size):
+    """
+    Bin x values and compute average y for each bin.
+    
+    Parameters:
+    x: array of x values
+    y: array of y values  
+    bin_size: size of each bin
+    
+    Returns:
+    bin_centers: center points of each bin
+    avg_y: average y value for each bin
+    """
+    # Determine bin edges
+    min_x, max_x = np.min(x), np.max(x)
+    bin_edges = np.arange(min_x, max_x + bin_size, bin_size)
+    
+    # Digitize x values into bins
+    bin_indices = np.digitize(x, bin_edges)
+    
+    # Calculate average y for each bin
+    bin_centers = []
+    avg_y = []
+    
+    for i in range(1, len(bin_edges)):
+        mask = bin_indices == i
+        if np.any(mask):
+            bin_centers.append((bin_edges[i-1] + bin_edges[i]) / 2)
+            avg_y.append(np.mean(y[mask]))
+    
+    return np.array(bin_centers), np.array(avg_y)
+
+
+
+
 # print the margin diff and ent increase when we only use the best frame and the worst frame to 
 # represent the whole video
 def replace_test():
@@ -823,4 +1005,4 @@ def grp_imp_vs_len():
 
 
 if __name__ == "__main__":
-    delete_groups()
+    create_plot_corr()
