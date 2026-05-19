@@ -622,6 +622,8 @@ def replace_test():
 
 
 def delete_groups():
+    PLOT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\shap_vs_metrics'
+
     ucf101dm = func.UCF101_data_model()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = ucf101dm.model
@@ -653,6 +655,11 @@ def delete_groups():
     del data
 
     #read groups
+    d_entr = {}
+    d_m1 = {}
+    d_m2 = {}
+    d_m3 = {}
+
     n=0
     with open(UCF_PATH, 'r', encoding='utf-8') as f:
         line_count = sum(1 for _ in enumerate(f))
@@ -687,26 +694,135 @@ def delete_groups():
 
             grps = sv_dict[filename]['groups']
             shap = sv_dict[filename]['shapley_values']
-            sorted_idx = np.argsort(shap)
-            sorted_grps = np.array(grps)[sorted_idx]
-
+            # scale shap values
+            # shap = np.array(shap)
+            # shap = (shap-min(shap))/(max(shap)-min(shap)+1e-5)
             orig_stat = func.get_pred_stats(model, video)
 
-            d = {}
-            for grp in sorted_grps:
+            for g_idx, g in enumerate(grps):
                 mask = [True]*len(grps)
-                mask[grps.index(grp)] = False
+                mask[g_idx] = False
                 grp_filled = func.past_fill_all(mask, groups)
                 grp_video = func.create_new_video(video, grp_filled)
-                grp_stat = func.get_pred_stats(model, grp_video)
-                
+                grp_stat = func.get_pred_stats(model, grp_video, orig_stat['pred_logits'])
+                d_entr[shap[g_idx]] = grp_stat['entropy_change']
+                d_m1[shap[g_idx]] = grp_stat['margin_change_1']
+                d_m2[shap[g_idx]] = grp_stat['margin_change_2']
+                d_m3[shap[g_idx]] = grp_stat['margin_change_3']
+
+        entr_s, entr = [], []
+        for k in d_entr:
+            entr_s.append(k)
+            entr.append(d_entr[k])
+       
+        m1_s, m1 = [], []
+        for k in d_m1:
+            m1_s.append(k)
+            m1.append(d_m1[k])
+        
+        m2_s, m2 = [], []
+        for k in d_m2:
+            m2_s.append(k)
+            m2.append(d_m2[k])
+        
+        m3_s, m3 = [], []
+        for k in d_m3:
+            m3_s.append(k)
+            m3.append(d_m3[k])
+
+        plt.scatter(entr_s, entr, s=10)
+        plt.xlabel('Shapley value')
+        plt.ylabel('Entropy Change')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'entropy.png'), dpi=300, bbox_inches='tight')
+        plt.show()
 
 
+def grp_imp_vs_len():
+    PLOT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\shap_vs_metrics'
+
+    ucf101dm = func.UCF101_data_model()
+
+    class_names = ucf101dm.inference_class_names
+    class_labels = {}
+    for k in class_names.keys():
+        cls_name = class_names[k]
+        class_labels[cls_name.lower()] = k
+
+    #construct SHAP value data dict
+    with open(IMP_PATH, 'r') as f:
+        data = [json.loads(line) for line in f]
+    
+    sv_dict = {}
+    for d in data:
+        f = d['filename']
+        cls_idx = class_labels[f.split('_')[1].lower()]
+        g = [int(k) for k in list(d['groups'].keys())]
+        sv = d['shapley_values'][0]
+
+        sv_g = []
+        for i in range(len(g)):
+            sv_g.append(sv[i][cls_idx])
+
+        sv_dict[f] = {'groups': g, 'shapley_values': sv_g}
+    del data
+
+    n=0
+    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f))
+
+    shap_values , lengths = [], []
+    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            print(f'{n/line_count*100:.1f}% is done.', end='\r')
+            n+=1
+            line = line.strip()
+            if not line:
+                continue
+
+            record = json.loads(line)
+            filename = record['filename']
+            # if filename!='v_ApplyEyeMakeup_g01_c01':
+            #     continue
+            g = record['groups']
+            groups = {}
+            for k in g:
+                if 'frames' in g[k]:
+                    f = g[k]['frames']
+                else: 
+                    f = []
+                groups[int(k)] = f           
+
+            if len(groups) == 1: continue 
+            
+            grps = sv_dict[filename]['groups']
+            shap = sv_dict[filename]['shapley_values']
+            # scale shap values
+            # shap = np.array(shap)
+            # shap = (shap-min(shap))/(max(shap)-min(shap)+1e-5)
+
+            for g_idx,g in enumerate(groups):
+                l = len(groups[g])+1
+                s = shap[g_idx]
+                shap_values.append(s)
+                lengths.append(l)
 
 
-            pass
+        pass
+        # shap_values = np.array(shap_values)
+        # lengths = np.array(lengths)
+        # sort_idx = np.argsort(shap_values)
+        plt.scatter(shap_values, lengths, s=10)
+        plt.xlabel('Shapley value')
+        plt.ylabel('Entropy Change')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'entropy.png'), dpi=300, bbox_inches='tight')
+        plt.show()
+
 
 
 
 if __name__ == "__main__":
-    delete_groups()
+    grp_imp_vs_len()
