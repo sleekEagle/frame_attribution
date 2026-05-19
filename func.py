@@ -5,6 +5,7 @@ import numpy as np
 import torch.nn as nn
 from torchvision import models, transforms
 from sklearn.cluster import DBSCAN
+from scipy.stats import entropy
 
 '''
 input is a tensor
@@ -239,7 +240,7 @@ def get_margin(t, k=5):
     margin = top - others.mean()
     return margin
 
-def get_pred_stats(model, v, orig_pred=None, metric='margin'):
+def get_pred_stats(model, v, orig_pred=None, metric=['margin','entropy']):
     ret = {}
     with torch.no_grad():
         pred_l = model(v.unsqueeze(0))
@@ -256,20 +257,28 @@ def get_pred_stats(model, v, orig_pred=None, metric='margin'):
         return ret
     else:
         ret['orig_pred_val'] = max(orig_pred)
-        assert metric in ['js', 'change', 'margin'], 'metric must be either js, change, margin'
-        if metric=='js':
+
+        if 'js' in metric:
             js_distance = stable_JS(orig_pred.squeeze(), pred_p.squeeze())
             js_div = float(js_distance**2)
             ret['js_div'] = js_div
-        elif metric=='change':
+        if 'change' in metric:
             per_change = (ret['orig_pred_val'] - pred_logit)/ret['orig_pred_val']
             ret['per_change'] = per_change
-        elif metric=='margin':
-            orig_margin = get_margin(torch.tensor(orig_pred))
-            new_margin = get_margin(pred_l.squeeze())
-            ret['orig_margin'] = orig_margin.item()
-            ret['new_margin'] = new_margin.item()
-            ret['margin_change'] = ((orig_margin - new_margin)/orig_margin).item()
+        if 'margin' in metric:
+            for k in range(1,4):
+                orig_margin = get_margin(torch.tensor(orig_pred), k=k)
+                new_margin = get_margin(pred_l.squeeze(), k=k)
+                ret[f'orig_margin_{k}'] = orig_margin.item()
+                ret[f'new_margin_{k}'] = new_margin.item()
+                ret[f'margin_change_{k}'] = (new_margin-orig_margin).item()
+        if 'entropy' in metric:
+            o_pred_sm = F.softmax(torch.tensor(orig_pred), dim=0)
+            new_pred_sm = F.softmax(pred_l[0,:].cpu(), dim=0)
+            o_entr = entropy(o_pred_sm)
+            new_entr = entropy(new_pred_sm)
+            ret['entropy_change'] = float(o_entr - new_entr)
+
     return ret
 
 '''
