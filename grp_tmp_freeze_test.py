@@ -621,5 +621,92 @@ def replace_test():
     print(f'Entropy Increase - Worst Group: Mean={l_entr_mean:.4f}, Std={l_entr_std:.4f}')
 
 
+def delete_groups():
+    ucf101dm = func.UCF101_data_model()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = ucf101dm.model
+    model = model.to(device)
+    model.eval()
+
+    class_names = ucf101dm.inference_class_names
+    class_labels = {}
+    for k in class_names.keys():
+        cls_name = class_names[k]
+        class_labels[cls_name.lower()] = k
+
+    #construct SHAP value data dict
+    with open(IMP_PATH, 'r') as f:
+        data = [json.loads(line) for line in f]
+    
+    sv_dict = {}
+    for d in data:
+        f = d['filename']
+        cls_idx = class_labels[f.split('_')[1].lower()]
+        g = [int(k) for k in list(d['groups'].keys())]
+        sv = d['shapley_values'][0]
+
+        sv_g = []
+        for i in range(len(g)):
+            sv_g.append(sv[i][cls_idx])
+
+        sv_dict[f] = {'groups': g, 'shapley_values': sv_g}
+    del data
+
+    #read groups
+    n=0
+    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f))
+    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            print(f'{n/line_count*100:.1f}% is done.', end='\r')
+            n+=1
+            line = line.strip()
+            if not line:
+                continue
+
+            record = json.loads(line)
+            filename = record['filename']
+            # if filename!='v_ApplyEyeMakeup_g01_c01':
+            #     continue
+            p = ucf101dm.construct_vid_path_from_full(filename)
+            video = ucf101dm.load_jpg_ucf101(p, n=0).permute(1,0,2,3).to(device)
+            g = record['groups']
+            groups = {}
+            for k in g:
+                if 'frames' in g[k]:
+                    f = g[k]['frames']
+                else: 
+                    f = []
+                groups[int(k)] = f           
+
+            if len(groups) == 1: continue 
+
+            grp_dict = {}
+            grp_dict['filename'] = filename
+            grp_dict['original'] = groups
+
+            grps = sv_dict[filename]['groups']
+            shap = sv_dict[filename]['shapley_values']
+            sorted_idx = np.argsort(shap)
+            sorted_grps = np.array(grps)[sorted_idx]
+
+            orig_stat = func.get_pred_stats(model, video)
+
+            d = {}
+            for grp in sorted_grps:
+                mask = [True]*len(grps)
+                mask[grps.index(grp)] = False
+                grp_filled = func.past_fill_all(mask, groups)
+                grp_video = func.create_new_video(video, grp_filled)
+                grp_stat = func.get_pred_stats(model, grp_video)
+                
+
+
+
+
+            pass
+
+
+
 if __name__ == "__main__":
-    replace_test()
+    delete_groups()
