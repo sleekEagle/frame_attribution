@@ -278,6 +278,11 @@ def get_pred_stats(model, v, orig_pred=None, metric=['margin','entropy']):
             o_entr = entropy(o_pred_sm)
             new_entr = entropy(new_pred_sm)
             ret['entropy_change'] = float(o_entr - new_entr)
+    
+        orig_pred_cls = torch.argmax(torch.tensor(orig_pred),dim=0).item()
+        ret['correct'] = orig_pred_cls==pred_cls
+
+        pass
 
     return ret
 
