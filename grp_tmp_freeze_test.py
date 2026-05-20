@@ -683,15 +683,16 @@ def bin_and_average(x, y, bin_size):
     # Calculate average y for each bin
     bin_centers = []
     avg_y = []
+    std_y = []
     
     for i in range(1, len(bin_edges)):
         mask = bin_indices == i
         if np.any(mask):
             bin_centers.append((bin_edges[i-1] + bin_edges[i]) / 2)
             avg_y.append(np.mean(y[mask]))
+            std_y.append(np.std(y[mask]))
     
-    return np.array(bin_centers), np.array(avg_y)
-
+    return np.array(bin_centers), np.array(avg_y), np.array(std_y)
 
 
 
@@ -817,7 +818,7 @@ def replace_test():
 
 
 def delete_groups():
-    PLOT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\shap_vs_metrics'
+    PLOT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\shap_vs_metrics\raw_shapley\delete'
 
     ucf101dm = func.UCF101_data_model()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -900,41 +901,121 @@ def delete_groups():
                 grp_filled = func.past_fill_all(mask, groups)
                 grp_video = func.create_new_video(video, grp_filled)
                 grp_stat = func.get_pred_stats(model, grp_video, orig_stat['pred_logits'])
+                if not grp_stat['correct']: continue # we dont consider incorrecly classified samples
                 d_entr[shap[g_idx]] = grp_stat['entropy_change']
                 d_m1[shap[g_idx]] = grp_stat['margin_change_1']
                 d_m2[shap[g_idx]] = grp_stat['margin_change_2']
                 d_m3[shap[g_idx]] = grp_stat['margin_change_3']
 
+        
         entr_s, entr = [], []
         for k in d_entr:
             entr_s.append(k)
             entr.append(d_entr[k])
+        entr_s = np.array(entr_s)
+        # entr_s = (entr_s-min(entr_s))/(max(entr_s)-min(entr_s)+1e-5)
        
         m1_s, m1 = [], []
         for k in d_m1:
             m1_s.append(k)
             m1.append(d_m1[k])
+        m1_s = np.array(m1_s)
+        # m1_s = (m1_s-min(m1_s))/(max(m1_s)-min(m1_s)+1e-5)
         
         m2_s, m2 = [], []
         for k in d_m2:
             m2_s.append(k)
             m2.append(d_m2[k])
+        m2_s = np.array(m2_s)
+        # m2_s = (m2_s-min(m2_s))/(max(m2_s)-min(m2_s)+1e-5)
         
         m3_s, m3 = [], []
         for k in d_m3:
             m3_s.append(k)
             m3.append(d_m3[k])
+        m3_s = np.array(m3_s)
+        # m3_s = (m3_s-min(m3_s))/(max(m3_s)-min(m3_s)+1e-5)
 
-        plt.scatter(entr_s, entr, s=10)
+        bin_size = 0.2
+        x,y, y_std = bin_and_average(np.array(entr_s), np.array(entr), bin_size)
+        plt.errorbar(x, y, yerr=y_std, fmt='o-', capsize=3, capthick=2, 
+             elinewidth=1, marker='o', markersize=2, color='blue', ecolor='lightblue')
+        plt.xlabel('Shapley value')
+        plt.ylabel('Entropy Change')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'avg_entropy.png'), dpi=300, bbox_inches='tight')
+        plt.clf()
+        
+        x,y,y_std = bin_and_average(np.array(m1_s), np.array(m1), bin_size)
+        plt.errorbar(x, y, yerr=y_std, fmt='o-', capsize=3, capthick=2, 
+             elinewidth=1, marker='o', markersize=2, color='blue', ecolor='lightblue')
+        plt.xlabel('Shapley value')
+        plt.ylabel('Margin 1 Change')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'avg_margin1.png'), dpi=300, bbox_inches='tight')
+        plt.clf()
+        
+        x,y,y_std = bin_and_average(np.array(m2_s), np.array(m2), bin_size)
+        plt.errorbar(x, y, yerr=y_std, fmt='o-', capsize=3, capthick=2, 
+             elinewidth=1, marker='o', markersize=2, color='blue', ecolor='lightblue')
+        plt.xlabel('Shapley value')
+        plt.ylabel('Margin 2 Change')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'avg_margin2.png'), dpi=300, bbox_inches='tight')
+        plt.clf()
+        
+        x,y,y_std = bin_and_average(np.array(m3_s), np.array(m3), bin_size)
+        plt.errorbar(x, y, yerr=y_std, fmt='o-', capsize=3, capthick=2, 
+             elinewidth=1, marker='o', markersize=2, color='blue', ecolor='lightblue')
+        plt.xlabel('Shapley value')
+        plt.ylabel('Margin 3 Change')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'avg_margin3.png'), dpi=300, bbox_inches='tight')
+        plt.clf()
+
+        x,y = entr_s, entr
+        plt.scatter(x, y, s=5)
         plt.xlabel('Shapley value')
         plt.ylabel('Entropy Change')
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.savefig(os.path.join(PLOT_DIR, f'entropy.png'), dpi=300, bbox_inches='tight')
-        plt.show()
+        plt.clf()
+        
+        x,y = m1_s, m1
+        plt.scatter(x, y, s=5)
+        plt.xlabel('Shapley value')
+        plt.ylabel('Margin 1 Change')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'margin1.png'), dpi=300, bbox_inches='tight')
+        plt.clf()
+        
+        x,y = m2_s, m2
+        plt.scatter(x, y, s=5)
+        plt.xlabel('Shapley value')
+        plt.ylabel('Margin 2 Change')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'margin2.png'), dpi=300, bbox_inches='tight')
+        plt.clf()
+        
+        
+        x,y = m3_s, m3
+        plt.scatter(x, y, s=5)
+        plt.xlabel('Shapley value')
+        plt.ylabel('Margin 3 Change')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'margin3.png'), dpi=300, bbox_inches='tight')
+        plt.clf()
 
 def insert_groups():
-    PLOT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\shap_vs_metrics\insert'
+    PLOT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\shap_vs_metrics\raw_shapley\insert'
 
     ucf101dm = func.UCF101_data_model()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -1017,38 +1098,120 @@ def insert_groups():
                 grp_filled = func.past_fill_all(mask, groups)
                 grp_video = func.create_new_video(video, grp_filled)
                 grp_stat = func.get_pred_stats(model, grp_video, orig_stat['pred_logits'])
+                if not grp_stat['correct']: continue # we dont consider incorrecly classified samples
                 d_entr[shap[g_idx]] = grp_stat['entropy_change']
                 d_m1[shap[g_idx]] = grp_stat['margin_change_1']
                 d_m2[shap[g_idx]] = grp_stat['margin_change_2']
                 d_m3[shap[g_idx]] = grp_stat['margin_change_3']
 
+        
         entr_s, entr = [], []
         for k in d_entr:
             entr_s.append(k)
             entr.append(d_entr[k])
+        entr_s = np.array(entr_s)
+        # entr_s = (entr_s-min(entr_s))/(max(entr_s)-min(entr_s)+1e-5)
        
         m1_s, m1 = [], []
         for k in d_m1:
             m1_s.append(k)
             m1.append(d_m1[k])
+        m1_s = np.array(m1_s)
+        # m1_s = (m1_s-min(m1_s))/(max(m1_s)-min(m1_s)+1e-5)
         
         m2_s, m2 = [], []
         for k in d_m2:
             m2_s.append(k)
             m2.append(d_m2[k])
+        m2_s = np.array(m2_s)
+        # m2_s = (m2_s-min(m2_s))/(max(m2_s)-min(m2_s)+1e-5)
         
         m3_s, m3 = [], []
         for k in d_m3:
             m3_s.append(k)
             m3.append(d_m3[k])
+        m3_s = np.array(m3_s)
+        # m3_s = (m3_s-min(m3_s))/(max(m3_s)-min(m3_s)+1e-5)
 
-        plt.scatter(entr_s, entr, s=10)
+        
+        
+        bin_size = 1.0
+        x,y, y_std = bin_and_average(np.array(entr_s), np.array(entr), bin_size)
+        plt.errorbar(x, y, yerr=y_std, fmt='o-', capsize=3, capthick=2, 
+             elinewidth=1, marker='o', markersize=2, color='blue', ecolor='lightblue')
+        plt.xlabel('Shapley value')
+        plt.ylabel('Entropy Change')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'avg_entropy.png'), dpi=300, bbox_inches='tight')
+        plt.clf()
+        
+        x,y,y_std = bin_and_average(np.array(m1_s), np.array(m1), bin_size)
+        plt.errorbar(x, y, yerr=y_std, fmt='o-', capsize=3, capthick=2, 
+             elinewidth=1, marker='o', markersize=2, color='blue', ecolor='lightblue')
+        plt.xlabel('Shapley value')
+        plt.ylabel('Margin 1 Change')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'avg_margin1.png'), dpi=300, bbox_inches='tight')
+        plt.clf()
+        
+        x,y,y_std = bin_and_average(np.array(m2_s), np.array(m2), bin_size)
+        plt.errorbar(x, y, yerr=y_std, fmt='o-', capsize=3, capthick=2, 
+             elinewidth=1, marker='o', markersize=2, color='blue', ecolor='lightblue')
+        plt.xlabel('Shapley value')
+        plt.ylabel('Margin 2 Change')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'avg_margin2.png'), dpi=300, bbox_inches='tight')
+        plt.clf()
+        
+        x,y,y_std = bin_and_average(np.array(m3_s), np.array(m3), bin_size)
+        plt.errorbar(x, y, yerr=y_std, fmt='o-', capsize=3, capthick=2, 
+             elinewidth=1, marker='o', markersize=2, color='blue', ecolor='lightblue')
+        plt.xlabel('Shapley value')
+        plt.ylabel('Margin 3 Change')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'avg_margin3.png'), dpi=300, bbox_inches='tight')
+        plt.clf()
+
+        x,y = entr_s, entr
+        plt.scatter(x, y, s=5)
         plt.xlabel('Shapley value')
         plt.ylabel('Entropy Change')
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.savefig(os.path.join(PLOT_DIR, f'entropy.png'), dpi=300, bbox_inches='tight')
-        plt.show()
+        plt.clf()
+        
+        x,y = m1_s, m1
+        plt.scatter(x, y, s=5)
+        plt.xlabel('Shapley value')
+        plt.ylabel('Margin 1 Change')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'margin1.png'), dpi=300, bbox_inches='tight')
+        plt.clf()
+        
+        x,y = m2_s, m2
+        plt.scatter(x, y, s=5)
+        plt.xlabel('Shapley value')
+        plt.ylabel('Margin 2 Change')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'margin2.png'), dpi=300, bbox_inches='tight')
+        plt.clf()
+        
+        
+        x,y = m3_s, m3
+        plt.scatter(x, y, s=5)
+        plt.xlabel('Shapley value')
+        plt.ylabel('Margin 3 Change')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'margin3.png'), dpi=300, bbox_inches='tight')
+        plt.clf()
 
 def grp_imp_vs_len():
     PLOT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\shap_vs_metrics'
@@ -1132,6 +1295,64 @@ def grp_imp_vs_len():
 
 
 
+def test_shap_val_dist():
+    ucf101dm = func.UCF101_data_model()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = ucf101dm.model
+    model = model.to(device)
+    model.eval()
+
+    class_names = ucf101dm.inference_class_names
+    class_labels = {}
+    for k in class_names.keys():
+        cls_name = class_names[k]
+        class_labels[cls_name.lower()] = k
+
+    #construct SHAP value data dict
+    with open(IMP_PATH, 'r') as f:
+        data = [json.loads(line) for line in f]
+    
+    sv_dict = {}
+    for d in data:
+        f = d['filename']
+        cls_idx = class_labels[f.split('_')[1].lower()]
+        g = [int(k) for k in list(d['groups'].keys())]
+        sv = d['shapley_values'][0]
+
+        sv_g = []
+        for i in range(len(g)):
+            sv_g.append(sv[i][cls_idx])
+
+        sv_dict[f] = {'groups': g, 'shapley_values': sv_g}
+    del data
+
+    n=0
+    shap_list = []
+    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f))
+    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            print(f'{n/line_count*100:.1f}% is done.', end='\r')
+            n+=1
+            line = line.strip()
+            if not line:
+                continue
+
+            record = json.loads(line)
+            filename = record['filename']
+
+            grps = sv_dict[filename]['groups']
+            shap = sv_dict[filename]['shapley_values']
+            # scale shap values
+            # shap = np.array(shap)
+            # shap = (shap-min(shap))/(max(shap)-min(shap)+1e-5)
+            shap_list.extend(shap)
+
+    pass
+    shap_list = np.array(shap_list)
+    shap_list = (shap_list-min(shap_list))/(max(shap_list)-min(shap_list)+1e-5)
+    shap_list.min(),shap_list.max(),shap_list.mean(),shap_list.std()
+    plt.hist(shap_list)
 
 if __name__ == "__main__":
-    insert_groups()
+    delete_groups()
