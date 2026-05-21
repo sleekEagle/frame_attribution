@@ -851,10 +851,10 @@ def delete_groups():
     del data
 
     #read groups
-    d_entr = {}
-    d_m1 = {}
-    d_m2 = {}
-    d_m3 = {}
+    d_entr = {0:[],0.5:[],1:[]}
+    d_m1 = {0:[],0.5:[],1:[]}
+    d_m2 = {0:[],0.5:[],1:[]}
+    d_m3 = {0:[],0.5:[],1:[]}
 
     n=0
     with open(UCF_PATH, 'r', encoding='utf-8') as f:
@@ -894,18 +894,51 @@ def delete_groups():
             # shap = np.array(shap)
             # shap = (shap-min(shap))/(max(shap)-min(shap)+1e-5)
             orig_stat = func.get_pred_stats(model, video)
+            args = np.argsort(np.array(shap))
+            d_entr_, d_m1_, d_m2_, d_m3_, l_ = [],[],[],[],[]
+            mask = [True]*len(grps)
+            for i, idx in enumerate(args):
+                mask[idx] = False
+                # if i==0: d_idx=0
+                # elif i==len(args)-1: d_idx=1
+                # else: d_idx=0.5
 
-            for g_idx, g in enumerate(grps):
-                mask = [True]*len(grps)
-                mask[g_idx] = False
                 grp_filled = func.past_fill_all(mask, groups)
                 grp_video = func.create_new_video(video, grp_filled)
                 grp_stat = func.get_pred_stats(model, grp_video, orig_stat['pred_logits'])
-                if not grp_stat['correct']: continue # we dont consider incorrecly classified samples
-                d_entr[shap[g_idx]] = grp_stat['entropy_change']
-                d_m1[shap[g_idx]] = grp_stat['margin_change_1']
-                d_m2[shap[g_idx]] = grp_stat['margin_change_2']
-                d_m3[shap[g_idx]] = grp_stat['margin_change_3']
+
+                d_entr_.append(grp_stat['entropy_change'])
+                d_m1_.append(grp_stat['margin_change_1'])
+                d_m2_.append(grp_stat['margin_change_2'])
+                d_m3_.append(grp_stat['margin_change_3'])
+                l_.append(grp_stat['pred_logit'])
+
+
+
+            # for g_idx, g in enumerate(grps):
+            #     mask = [True]*len(grps)
+            #     mask[g_idx] = False
+            #     assert list(groups.keys()) == grps, "Groups dont match!"
+            #     grp_filled = func.past_fill_all(mask, groups)
+            #     grp_video = func.create_new_video(video, grp_filled)
+            #     grp_stat = func.get_pred_stats(model, grp_video, orig_stat['pred_logits'])
+            #     if not grp_stat['correct']: continue # we dont consider incorrecly classified samples
+            #     d_entr[shap[g_idx]] = grp_stat['entropy_change']
+            #     d_m1[shap[g_idx]] = grp_stat['margin_change_1']
+            #     d_m2[shap[g_idx]] = grp_stat['margin_change_2']
+            #     d_m3[shap[g_idx]] = grp_stat['margin_change_3']
+
+        
+        
+        print(f'Entropy \n low shap: {np.array(d_entr[0]).mean()} middle shap: {np.array(d_entr[0.5]).mean()} high shap: {np.array(d_entr[1]).mean()}')
+        print(f'Margin 1 Change \n low shap: {np.array(d_m1[0]).mean()} middle shap: {np.array(d_m1[0.5]).mean()} high shap: {np.array(d_m1[1]).mean()}')
+        print(f'Margin 2 Change \n low shap: {np.array(d_m2[0]).mean()} middle shap: {np.array(d_m2[0.5]).mean()} high shap: {np.array(d_m2[1]).mean()}')
+        print(f'Margin 3 Change \n low shap: {np.array(d_m3[0]).mean()} middle shap: {np.array(d_m3[0.5]).mean()} high shap: {np.array(d_m3[1]).mean()}')
+        
+        np.array(d_entr[1]).mean()
+
+        np.array(d_m3[0]).mean()
+        np.array(d_m3[1]).mean()
 
         
         entr_s, entr = [], []

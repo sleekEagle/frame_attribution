@@ -240,7 +240,7 @@ def get_margin(t, k=5):
     margin = top - others.mean()
     return margin
 
-def get_pred_stats(model, v, orig_pred=None, metric=['margin','entropy']):
+def get_pred_stats(model, v, orig_pred=None, metric=['margin','entropy', 'change']):
     ret = {}
     with torch.no_grad():
         pred_l = model(v.unsqueeze(0))
@@ -253,36 +253,39 @@ def get_pred_stats(model, v, orig_pred=None, metric=['margin','entropy']):
         ret['pred_prob'] = pred_p.squeeze().cpu().numpy().tolist()
         ret['pred_logit'] = pred_logit
         ret['pred_prob'] = pred_prob
+
+        if 'margin' in metric:
+            for k in range(1,6):
+                orig_margin = get_margin(pred_l[0,:], k=k)
+                ret[f'pred_margin_{k}'] = orig_margin.item()
+        if 'entropy' in metric:
+            o_entr = entropy(pred_p[0,:])
+            ret['pred_entropy'] = o_entr
+
     if orig_pred is None:
         return ret
     else:
         ret['orig_pred_val'] = max(orig_pred)
+        orig_pred_cls = torch.argmax(torch.tensor(orig_pred),dim=0).item()
 
         if 'js' in metric:
             js_distance = stable_JS(orig_pred.squeeze(), pred_p.squeeze())
             js_div = float(js_distance**2)
             ret['js_div'] = js_div
         if 'change' in metric:
-            per_change = (ret['orig_pred_val'] - pred_logit)/ret['orig_pred_val']
-            ret['per_change'] = per_change
+            ret['logit_change'] = ret['pred_logits'][orig_pred_cls] - orig_pred[orig_pred_cls]
         if 'margin' in metric:
-            for k in range(1,4):
+            for k in range(1,6):
                 orig_margin = get_margin(torch.tensor(orig_pred), k=k)
-                new_margin = get_margin(pred_l.squeeze(), k=k)
                 ret[f'orig_margin_{k}'] = orig_margin.item()
-                ret[f'new_margin_{k}'] = new_margin.item()
-                ret[f'margin_change_{k}'] = (new_margin-orig_margin).item()
+                ret[f'margin_change_{k}'] = (ret[f'pred_margin_{k}']-orig_margin).item()
         if 'entropy' in metric:
-            o_pred_sm = F.softmax(torch.tensor(orig_pred), dim=0)
-            new_pred_sm = F.softmax(pred_l[0,:].cpu(), dim=0)
-            o_entr = entropy(o_pred_sm)
-            new_entr = entropy(new_pred_sm)
-            ret['entropy_change'] = float(o_entr - new_entr)
-    
-        orig_pred_cls = torch.argmax(torch.tensor(orig_pred),dim=0).item()
+            orig_pred_sm = F.softmax(torch.tensor(orig_pred).cpu(), dim=0)
+            orig_entr = entropy(orig_pred_sm)
+            ret['orig_entropy'] = float(orig_entr)
+            ret['entropy_change'] = float(ret['orig_entropy'] - ret['pred_entropy'])
+        
         ret['correct'] = orig_pred_cls==pred_cls
-
-        pass
 
     return ret
 

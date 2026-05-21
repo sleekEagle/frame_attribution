@@ -18,21 +18,26 @@ def get_orig_logits(PATH):
                 continue
 
             record = json.loads(line)            
-            d[record['filename']] = record['original_logit']
+            d[record['filename']] = record['orig_logits']
     return d
 
 class EvalLogits:
-    def __init__(self, full_video, model, groups, ol, cls_idx, fill_type, show_mask=False):
+    def __init__(self, full_video, model, groups, orig_stat, cls_idx, fill_type, show_mask=False):
         self.full_video = full_video
         self.model = model
         self.groups = groups
-        self.ol = ol
+        self.orig_stat = orig_stat
         self.cls_idx = cls_idx
         self.show_mask = show_mask
         self.fill_type = fill_type
 
     def eval_remove(self, idx_order):
-        logits = [self.ol]
+        metrics = {
+            'entropy': [0],
+            'margin1': [0],
+            'margin2': [0],
+            'margin3': [0]
+        }
         mask = [1]*len(self.groups)
         if self.show_mask:
             print(mask)
@@ -41,6 +46,7 @@ class EvalLogits:
             if self.show_mask :
                 print(mask)
             if sum(mask) == 0:
+                metrics['entropy'].append(0)
                 logits.append(CONST.UCF_AVG_PRED[self.cls_idx].item())
                 continue
             if self.fill_type == 'past':
@@ -48,7 +54,8 @@ class EvalLogits:
             elif self.fill_type == 'future':
                 g = func.future_fill_all(mask, self.groups)
 
-            vid_g = func.create_grouped_video(self.full_video.permute(1,0,2,3), g)
+            vid_g = func.create_grouped_video(self.full_video, g)
+            stat = func.get_pred_stats(self.model, vid_g, self.orig_stat['pred_logits'])
             with torch.no_grad():
                 p = self.model(vid_g[None,:])
                 l = p[0,self.cls_idx].item()
@@ -76,7 +83,7 @@ class EvalLogits:
 
 def eval_UCF101():
     FILL_TYPE = 'past'
-    IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\exactSHAP_0.001.jsonl'
+    IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\exactSHAP_past_0.001.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
     OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\eval_{FILL_TYPE}_0.001.jsonl'
 
@@ -107,13 +114,13 @@ def eval_UCF101():
             ol = orig_logits[record['filename']]
 
             p = ucf101dm.construct_vid_path_from_full(record['filename'])
-            video = ucf101dm.load_jpg_ucf101(p, n=0)
-            p = model(video.permute(1,0,2,3)[None,:])
-            l = p[0,cls_idx]
+            video = ucf101dm.load_jpg_ucf101(p, n=0).permute(1,0,2,3)
+            orig_stat = func.get_pred_stats(model, video)
+            l = orig_stat['pred_logits'][cls_idx]
             sv = record['shapley_values'][0]
 
             # sanity checks
-            assert abs(ol-l.item()) < 1e-5, 'the prediction logit does not match the original prediction logit'
+            assert abs(ol[cls_idx]-l) < 1e-5, 'the prediction logit does not match the original prediction logit'
             # assert record['difference'] < 1e-2, 'The exactly shapley value difference is too large!'
             assert len(record['groups']) == len(sv) , 'Number of shapley values do not match!'
 
@@ -125,7 +132,7 @@ def eval_UCF101():
             for k in record['groups']:
                 groups[int(k)] = record['groups'][k]
 
-            el = EvalLogits(video, model, groups, ol, cls_idx, 'future')
+            el = EvalLogits(video, model, groups, orig_stat, cls_idx, 'future')
 
             results = {
                 'filename': record['filename'],
