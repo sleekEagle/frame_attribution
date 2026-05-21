@@ -23,25 +23,38 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
     _,T,_,_ = video.size()
 
     #get original pred
-    stat = func.get_pred_stats(model, video)
+    orig_stat = func.get_pred_stats(model, video)
 
     # we do not consider when the prediction is not correct
-    if stat['pred_cls'] != gt_idx:
+    if orig_stat['cls'] != gt_idx:
         return -1
 
-    def get_best_frame(video, idx1, idx2):
+    def get_best_frame(video, idx1, idx2, cls_idx):
         v_1_2 = replace_frame(video, idx1, idx2)
-        stat_1_2 = func.get_pred_stats(model, v_1_2, stat['pred_logits'])
+        stat_1_2 = func.get_pred_stats(model, v_1_2)
+        stat_1_2['correct'] = stat_1_2['cls']==cls_idx
+
         v_2_1 = replace_frame(video, idx2, idx1)
-        stat_2_1 = func.get_pred_stats(model, v_2_1, stat['pred_logits'])
-        change_list = [stat['margin_change'] for stat in [stat_1_2,stat_2_1]]
-        min_change = min(change_list)
-        min_idx = change_list.index(min_change)
-        v_ = [v_1_2, v_2_1][min_idx]
-        best_idx = [idx1, idx2][min_idx]
-        worst_idx = [idx1, idx2][1-min_idx]
-        best_stat = [stat_1_2,stat_2_1][min_idx]
-        return v_, best_stat, best_idx, worst_idx
+        stat_2_1 = func.get_pred_stats(model, v_2_1)
+        stat_2_1['correct'] = stat_2_1['cls']==cls_idx
+
+        ret = {}
+        if stat_1_2['correct'] and not stat_2_1['correct']:
+            ret['idx'] = idx1
+            ret['stat'] = stat_1_2
+        elif stat_2_1['correct'] and not stat_1_2['correct']:
+            ret['idx'] = idx2
+            ret['stat'] = stat_2_1
+        elif stat_2_1['correct'] and stat_1_2['correct']:
+            if stat_1_2['margin_5'] >= stat_2_1['margin_5']:
+                ret['idx'] = idx1
+                ret['stat'] = stat_1_2
+            elif stat_1_2['margin_5'] < stat_2_1['margin_5']:
+                ret['idx'] = idx2
+                ret['stat'] = stat_2_1
+        else: 
+            return -1
+        return ret
 
     def get_best_frame_list(video, idx1, idx1_list, idx2):
         idx1_list = idx1_list + [idx1]
@@ -59,7 +72,7 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
         return v_, best_stat, best_idx, worst_idx
 
     group_dict = {}
-    group_dict['original_logit'] = stat['pred_logit']
+    group_dict['original_logit'] = orig_stat['max_logit']
     i=0
     vid = video.clone()
     final_src_idx = i
@@ -72,8 +85,12 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
             # print(f'{i}, one frames cluster. not change to logits')
             break
         j=i+1
-        v_, best_stat, src_idx, dst_idx = get_best_frame(vid, i, j)
-        min_change = best_stat['margin_change']
+        best = get_best_frame(vid, i, j, orig_stat['cls'])
+        best_idx = best['idx']
+        best_stat = best['stat']
+        delta = func.get_stat_change(orig_stat, best_stat)
+
+        min_change = delta['margin_5_change']
         final_src_idx = i
         final_dst_idx = []
         grp_stat_list= [best_stat]
@@ -157,7 +174,7 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
 
 
 def group_frames_loader_UCF101(GRP_THRESHOLD = 1e-3):
-    out_path = os.path.join(r'C:\Users\lahir\Downloads\UCF101\analysis', f'groups_{GRP_THRESHOLD}.jsonl')
+    out_path = os.path.join(r'C:\Users\lahir\Downloads\UCF101\analysis', f'_groups_{GRP_THRESHOLD}.jsonl')
     #****************************************************************************
     # the model and the data loader
     #****************************************************************************
@@ -207,7 +224,7 @@ def group_frames_loader_UCF101(GRP_THRESHOLD = 1e-3):
             f.write(json.dumps(group_dict) + '\n')
 
 def group_frames_loader_SSV2(GRP_THRESHOLD = 1e-3):
-    out_path = os.path.join(r'C:\Users\lahir\Downloads\ssv2_analysis', f'groups_{GRP_THRESHOLD}.jsonl')
+    out_path = os.path.join(r'C:\Users\lahir\Downloads\ssv2_analysis', f'_groups_{GRP_THRESHOLD}.jsonl')
     if os.path.exists(out_path):
         os.remove(out_path)
 
@@ -244,4 +261,4 @@ def group_frames_loader_SSV2(GRP_THRESHOLD = 1e-3):
 
         
 if __name__ == '__main__':
-    group_frames_loader_SSV2(GRP_THRESHOLD=1e-2)
+    group_frames_loader_UCF101(GRP_THRESHOLD=1e-3)

@@ -233,16 +233,34 @@ def stable_JS(logits_p, logits_q):
 
     return js
 
-def get_margin(t, k=5):
-    top_all = torch.topk(t, k=k+1).values
-    top = top_all[0]
-    others = top_all[1:]
-    margin = top - others.mean()
+def get_margin(t, cls_idx=None, k=5):
+    if cls_idx is None:
+        top_all = torch.topk(t, k=k+1).values
+        top = top_all[0]
+        others = top_all[1:]
+        margin = top - others.mean()
+    else:
+        top = t[cls_idx]
+        top_idx = torch.topk(t, k=k+1).indices
+        other_idx = torch.tensor([t for t in top_idx if t!=cls_idx])
+        margin = top - t[other_idx].mean()
+        
     return margin
+
+# get the difference of metrics in stat dicts
+N_MARGINS = 6
+def get_stat_change(orig_stat, stat):
+    ret = {}
+    ret['max_logit_change'] = (orig_stat['max_logit'] - stat['max_logit'])/orig_stat['max_logit']
+    ret['entropy_change'] = (orig_stat['entropy'] - stat['entropy'])/orig_stat['entropy']
+    for k in range(1,N_MARGINS+1):
+        ret[f'margin_{k}_change'] = (orig_stat[f'margin_{k}'] - stat[f'margin_{k}'])/orig_stat[f'margin_{k}']
+    return ret
+    
 
 def get_pred_stats(model, v):
     ret = {}
-    with torch.no_grad():
+    with torch.no_grad(): 
         pred_l = model(v.unsqueeze(0))
         pred_p = F.softmax(pred_l,dim=1)
         pred_cls = torch.argmax(pred_l,dim=1).item()
@@ -254,10 +272,10 @@ def get_pred_stats(model, v):
         ret['max_logit'] = pred_logit
         ret['max_prob'] = pred_prob
 
-        for k in range(1,6):
+        for k in range(1,N_MARGINS+1):
             orig_margin = get_margin(pred_l[0,:], k=k)
             ret[f'margin_{k}'] = orig_margin.item()
-        o_entr = entropy(pred_p[0,:])
+        o_entr = float(entropy(pred_p[0,:]))
         ret['entropy'] = o_entr
     return ret
 
