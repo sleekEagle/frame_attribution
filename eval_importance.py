@@ -116,7 +116,7 @@ def eval_UCF101():
             p = ucf101dm.construct_vid_path_from_full(record['filename'])
             video = ucf101dm.load_jpg_ucf101(p, n=0).permute(1,0,2,3)
             orig_stat = func.get_pred_stats(model, video)
-            l = orig_stat['pred_logits'][cls_idx]
+            l = orig_stat['logits'][cls_idx]
             sv = record['shapley_values'][0]
 
             # sanity checks
