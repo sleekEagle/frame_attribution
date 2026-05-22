@@ -1431,6 +1431,7 @@ import re
 import os
 from PIL import Image
 from glob import glob
+import CONST
 
 def numericalSort(value):
     numbers = re.compile(r'(\d+)')
@@ -1465,7 +1466,7 @@ class UCF101_data_model:
         ])
 
         self.mask_dir = r'C:\Users\lahir\Downloads\UCF101\analysis\masks'
-        self.data_path = "C:\\Users\\lahir\\Downloads\\UCF101\\jpgs"
+        self.data_path = CONST.UCF_DATA_PATH
 
     def construct_vid_path(self, cls_name, g, c):
         dir = os.path.join(
