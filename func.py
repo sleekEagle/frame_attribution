@@ -1446,6 +1446,8 @@ class UCF101_data_model:
         with open(opt_path, "r") as f:
             model_opt = json.load(f)
         model_opt = Namespace(**model_opt)
+        model_opt.annotation_path
+        model_opt.annotation_path = os.path.join(os.getcwd(), model_opt.annotation_path)
 
         #create model
         self.model = generate_model(model_opt)
@@ -1466,7 +1468,7 @@ class UCF101_data_model:
         ])
 
         self.mask_dir = r'C:\Users\lahir\Downloads\UCF101\analysis\masks'
-        self.data_path = CONST.UCF_DATA_PATH
+        self.data_path = model_opt.video_path
 
     def construct_vid_path(self, cls_name, g, c):
         dir = os.path.join(
