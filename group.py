@@ -56,20 +56,33 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
             return -1
         return ret
 
-    def get_best_frame_list(video, idx1, idx1_list, idx2):
+    def get_best_frame_list(video, idx1, idx1_list, idx2, cls_idx):
         idx1_list = idx1_list + [idx1]
         v_1_2 = replace_frame(video, idx1, idx2)
-        stat_1_2 = func.get_pred_stats(model, v_1_2, stat['pred_logits'])
+        stat_1_2 = func.get_pred_stats(model, v_1_2)
+        stat_1_2['correct'] = stat_1_2['cls']==cls_idx
+
         v_2_1 = replace_frames(video, idx2, idx1_list)
-        stat_2_1 = func.get_pred_stats(model, v_2_1, stat['pred_logits'])
-        change_list = [stat['margin_change'] for stat in [stat_1_2,stat_2_1]]
-        min_change = min(change_list)
-        min_idx = change_list.index(min_change)
-        v_ = [v_1_2, v_2_1][min_idx]
-        best_idx = [idx1, idx2][min_idx]
-        worst_idx = [idx1, idx2][1-min_idx]
-        best_stat = [stat_1_2,stat_2_1][min_idx]
-        return v_, best_stat, best_idx, worst_idx
+        stat_2_1 = func.get_pred_stats(model, v_2_1)
+        stat_2_1['correct'] = stat_2_1['cls']==cls_idx
+
+        ret = {}
+        if stat_1_2['correct'] and not stat_2_1['correct']:
+            ret['idx'] = idx1
+            ret['stat'] = stat_1_2
+        elif stat_2_1['correct'] and not stat_1_2['correct']:
+            ret['idx'] = idx2
+            ret['stat'] = stat_2_1
+        elif stat_2_1['correct'] and stat_1_2['correct']:
+            if stat_1_2['margin_5'] >= stat_2_1['margin_5']:
+                ret['idx'] = idx1
+                ret['stat'] = stat_1_2
+            elif stat_1_2['margin_5'] < stat_2_1['margin_5']:
+                ret['idx'] = idx2
+                ret['stat'] = stat_2_1
+        else: 
+            return -1
+        return ret
 
     group_dict = {}
     group_dict['original_logit'] = orig_stat['max_logit']
@@ -86,16 +99,20 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
             break
         j=i+1
         best = get_best_frame(vid, i, j, orig_stat['cls'])
-        best_idx = best['idx']
-        best_stat = best['stat']
-        delta = func.get_stat_change(orig_stat, best_stat)
+        if best != -1:
+            src_idx = best['idx']
+            best_stat = best['stat']
+            delta = func.get_stat_change(orig_stat, best_stat)
+            min_change = delta['margin_5_change']
+        else:
+            min_change = 1000
+            best_stat = -1
 
-        min_change = delta['margin_5_change']
         final_src_idx = i
         final_dst_idx = []
         grp_stat_list= [best_stat]
 
-        dst_idxs = []
+        dst_idxs = [] 
         grp = False
         while min_change < GRP_THRESHOLD:
             grp = True
@@ -113,9 +130,15 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
                 break
 
             v_ = replace_frames(vid, src_idx, dst_idxs)
-            _, best_stat, src_idx, dst_idx = get_best_frame_list(v_, src_idx, dst_idxs, j)
-            min_change = best_stat['margin_change']
-            grp_stat_list.append(best_stat)
+            best = get_best_frame_list(v_, src_idx, dst_idxs, j, orig_stat['cls'])
+            if best != -1:
+                src_idx = best['idx']
+                best_stat = best['stat']
+                delta = func.get_stat_change(orig_stat, best_stat)
+                min_change = delta['margin_5_change']
+            else:
+                min_change = 1000
+                grp_stat_list.append(best_stat)
             # print(min_change)
 
         grp_values = [idx for idx in final_dst_idx if idx!=final_src_idx]
@@ -131,7 +154,6 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
             i=max(final_dst_idx)+1
         else:
             i+=1
-            best_prob = stat['pred_prob']
         
         d[final_src_idx] = {
             'frames': grp_values,
@@ -157,18 +179,16 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
         if 'frames' not in d_: continue
         dst_idx_list = d_['frames']
         v = replace_frames(v, src_idx, dst_idx_list)
-    s = func.get_pred_stats(model, v, stat['pred_logits'])
+    s = func.get_pred_stats(model, v)
+    delta = func.get_stat_change(orig_stat, s)
 
-    group_dict['all_group_logit'] = s['pred_logit']
-    group_dict['all_group_per_change'] = (stat['pred_logit'] - s['pred_logit'])/stat['pred_logit']
-    group_dict['grp_pred_cls'] = s['pred_cls']
+
+    group_dict['all_group_logit'] = s['max_logit']
+    group_dict['all_group_change'] = delta
+    group_dict['grp_pred_cls'] = s['cls']
     group_dict['gt_cls'] = gt_idx
-    group_dict['orig_logits'] = stat['pred_logits']
-    group_dict['orig_prob'] = stat['pred_prob']
-    group_dict['grp_logits'] = s['pred_logits']
-    group_dict['margin_change'] = s['margin_change']
-    group_dict['origin_margin'] = s['orig_margin']
-    group_dict['new_margin'] = s['new_margin']
+    group_dict['original_stat'] = orig_stat
+    group_dict['grp_stats'] = s
 
     return group_dict
 
