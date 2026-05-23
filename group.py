@@ -24,10 +24,11 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
 
     #get original pred
     orig_stat = func.get_pred_stats(model, video)
+    correct = True
 
-    # we do not consider when the prediction is not correct
+    # if the inference is wrong, use the predicted class as the GT
     if orig_stat['cls'] != gt_idx:
-        return -1
+        correct = False
 
     def get_best_frame(video, idx1, idx2, cls_idx):
         v_1_2 = replace_frame(video, idx1, idx2)
@@ -189,12 +190,13 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
     group_dict['gt_cls'] = gt_idx
     group_dict['original_stat'] = orig_stat
     group_dict['grp_stats'] = s
+    group_dict['correct'] = correct
 
     return group_dict
 
 
-def group_frames_loader_UCF101(GRP_THRESHOLD = 1e-3):
-    out_path = os.path.join(r'C:\Users\lahir\Downloads\UCF101\analysis', f'_groups_{GRP_THRESHOLD}.jsonl')
+def group_frames_loader_UCF101(out_dir, GRP_THRESHOLD = 1e-3):
+    out_path = os.path.join(out_dir, f'_groups_{GRP_THRESHOLD}.jsonl')
     #****************************************************************************
     # the model and the data loader
     #****************************************************************************
@@ -210,7 +212,7 @@ def group_frames_loader_UCF101(GRP_THRESHOLD = 1e-3):
     #****************************************************************************
 
     for idx, batch in enumerate(inference_loader):
-        print(f'{idx/len(inference_loader)*100:.0f} % is done.', end='\r')
+        print(f'{idx/len(inference_loader)*100:.2f} % is done.', end='\r')
         # if idx==40: break
         inputs, targets = batch
         cls = [class_labels[t[0].split('_')[1].lower()] for t in targets]
@@ -243,8 +245,8 @@ def group_frames_loader_UCF101(GRP_THRESHOLD = 1e-3):
         with open(out_path, 'a') as f:
             f.write(json.dumps(group_dict) + '\n')
 
-def group_frames_loader_SSV2(GRP_THRESHOLD = 1e-3):
-    out_path = os.path.join(r'C:\Users\lahir\Downloads\ssv2_analysis', f'_groups_{GRP_THRESHOLD}.jsonl')
+def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
+    out_path = os.path.join(out_dir, f'_groups_{GRP_THRESHOLD}.jsonl')
     if os.path.exists(out_path):
         os.remove(out_path)
 
@@ -258,7 +260,7 @@ def group_frames_loader_SSV2(GRP_THRESHOLD = 1e-3):
     #randomly select a subset
     idx = list(range(0,len(d_names)))
     random.shuffle(idx)
-    idx = idx[:4000]
+    idx = idx[:2000]
     d_names = [d_names[i] for i in idx]
     paths = [paths[i] for i in idx]
     n_files = len(paths)
@@ -281,4 +283,6 @@ def group_frames_loader_SSV2(GRP_THRESHOLD = 1e-3):
 
         
 if __name__ == '__main__':
-    group_frames_loader_UCF101(GRP_THRESHOLD=1e-3)
+    out_dir = r'C:\Users\lahir\Downloads\UCF101\analysis'
+    # out_dir = r'C:\Users\lahir\Downloads\ssv2_analysis'
+    group_frames_loader_UCF101(out_dir, GRP_THRESHOLD=1e-3)

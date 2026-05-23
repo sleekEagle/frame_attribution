@@ -1,6 +1,6 @@
 {
     "root_path": "/workspace/data",
-    "video_path": "C:\\Users\\lahir\\Downloads\\UCF101\\jpgs",
+    "video_path": "/kaggle/input/datasets/sleekeagle/ucf101/jpgs",
     "annotation_path": "dataloaders/ucf101/ucf101_01.json",
     "result_path": "/workspace/data/r3d_models/finetuning/ucf101/r3d50_K_fc",
     "dataset": "ucf101",
