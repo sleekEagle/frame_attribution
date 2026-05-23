@@ -72,7 +72,7 @@ def test():
     start_idx = 0
     mean_pred = torch.zeros(101)
     for idx, batch in enumerate(inference_loader):
-        print(f'{idx/len(inference_loader)*100:.0f} % is done.', end='\r')
+        print(f'{idx/len(inference_loader)*100:.2f} % is done.', end='\r')
         inputs, targets = batch
         cls = [class_labels[t[0].split('_')[1].lower()] for t in targets]
         with torch.inference_mode():
