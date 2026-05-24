@@ -260,6 +260,9 @@ def get_stat_change(orig_stat, stat):
 
 def get_pred_stats(model, v):
     ret = {}
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model.to(device)
+    v = v.to(device)
     with torch.no_grad(): 
         pred_l = model(v.unsqueeze(0))
         pred_p = F.softmax(pred_l,dim=1)
@@ -275,7 +278,7 @@ def get_pred_stats(model, v):
         for k in range(1,N_MARGINS+1):
             orig_margin = get_margin(pred_l[0,:], k=k)
             ret[f'margin_{k}'] = orig_margin.item()
-        o_entr = float(entropy(pred_p[0,:]))
+        o_entr = float(entropy(pred_p[0,:].cpu()))
         ret['entropy'] = o_entr
     return ret
 
