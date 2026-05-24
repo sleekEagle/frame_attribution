@@ -86,11 +86,10 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
         return ret
 
     group_dict = {}
-    group_dict['original_logit'] = orig_stat['max_logit']
-    i=0
     vid = video.clone()
+    i = 0
     final_src_idx = i
-    d= {}
+    d = {}
     while i<T:
 
         if i==T-1:
@@ -189,14 +188,14 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
     group_dict['grp_pred_cls'] = s['cls']
     group_dict['gt_cls'] = gt_idx
     group_dict['original_stat'] = orig_stat
-    group_dict['grp_stats'] = s
+    group_dict['all_grp_stats'] = s
     group_dict['correct'] = correct
 
     return group_dict
 
 
 def group_frames_loader_UCF101(out_dir, GRP_THRESHOLD = 1e-3):
-    out_path = os.path.join(out_dir, f'_groups_{GRP_THRESHOLD}.jsonl')
+    out_path = os.path.join(out_dir, f'groups_{GRP_THRESHOLD}.jsonl')
     #****************************************************************************
     # the model and the data loader
     #****************************************************************************
