@@ -295,9 +295,9 @@ def save_orig_features():
 
    
 def save_grp_features():
-
-    OUT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\features'
-    OUT_PATH = os.path.join(OUT_DIR, "grp_" + os.path.basename(UCF_PATH).split('_')[-1])
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.01.jsonl'
+    OUT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features'
+    OUT_PATH = os.path.join(OUT_DIR, "grp_" + os.path.basename(GRP_PATH).split('_')[-1])
     if os.path.exists(OUT_PATH):
         os.remove(OUT_PATH)
 
@@ -314,11 +314,11 @@ def save_grp_features():
         return hook
     handle = model.avgpool.register_forward_hook(get_activation('features'))
 
-    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
         line_count = sum(1 for _ in enumerate(f))    
 
     n = 0
-    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
         for line in f:
             print(f'{n/line_count*100:.0f}% is done', end='\r')
             line = line.strip()
@@ -437,4 +437,4 @@ def test():
 
 
 if __name__ == '__main__':
-    UCF101_metrics()
+    save_grp_features()
