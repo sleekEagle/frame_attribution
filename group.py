@@ -194,7 +194,16 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
     return group_dict
 
 
-def group_frames_loader_UCF101(out_dir, GRP_THRESHOLD = 1e-3):
+def group_frames_loader_UCF101(out_dir, resume_path, GRP_THRESHOLD = 1e-3):
+
+    if resume_path:
+        fnames = []
+        with open(resume_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                record = json.loads(line)
+                fnames.append(record['filename'])
+
     out_path = os.path.join(out_dir, f'groups_{GRP_THRESHOLD}.jsonl')
     #****************************************************************************
     # the model and the data loader
@@ -218,8 +227,12 @@ def group_frames_loader_UCF101(out_dir, GRP_THRESHOLD = 1e-3):
         video = inputs[0,:]
         gt_idx = class_labels[targets[0][0].split('_')[1].lower()]
         filename = targets[0][0]
+
         # if filename != 'v_Surfing_g04_c01':
         #     continue
+        if resume_path:
+            if filename in fnames: continue
+            
         group_dict = group_frames(model, video, gt_idx, GRP_THRESHOLD)
         if group_dict==-1:
             continue
@@ -243,6 +256,29 @@ def group_frames_loader_UCF101(out_dir, GRP_THRESHOLD = 1e-3):
         group_dict['filename'] = filename
         with open(out_path, 'a') as f:
             f.write(json.dumps(group_dict) + '\n')
+
+from torchvision import utils
+from PIL import Image
+
+def save_video(out_path, video):
+    os.makedirs(out_path, exist_ok=True)
+
+    # Save each frame
+    for frame_idx in range(video.shape[1]):
+        # Extract single frame: shape [3, 256, 256]
+        frame = video[:, frame_idx, :, :]
+        
+        # Convert to PIL Image (values assumed in [0, 1] or [0, 255])
+        # If values are in [0, 1], multiply by 255 first
+        frame = (frame - frame.min())/(frame.max()-frame.min())*255
+        if frame.max() <= 1.0:
+            frame = (frame * 255).byte()
+        else:
+            frame = frame.byte()
+        
+        # Convert to PIL and save
+        frame_pil = Image.fromarray(frame.permute(1, 2, 0).cpu().numpy())
+        frame_pil.save(f"{out_path}\\frame_{frame_idx:04d}.png")
 
 def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
     out_path = os.path.join(out_dir, f'_groups_{GRP_THRESHOLD}.jsonl')
@@ -284,6 +320,6 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
 
         
 if __name__ == '__main__':
-    out_dir = r'C:\Users\lahir\Downloads\ssv2_analysis'
+    out_dir = r'C:\Users\lahir\Downloads\UCF101\analysis\groups'
     # out_dir = r'C:\Users\lahir\Downloads\ssv2_analysis'
-    group_frames_loader_UCF101(out_dir, GRP_THRESHOLD=1e-3)
+    group_frames_loader_UCF101(out_dir, resume_path=r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl', GRP_THRESHOLD=1e-3)

@@ -10,7 +10,7 @@ from itertools import combinations
 import random
 from scipy.stats import entropy
 
-UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.0001.jsonl'
+UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
 
 '''
 *************************************************************************************
@@ -190,15 +190,12 @@ def video_similarity_hist(video, groups, MAX_COMBS=5):
 def UCF101_metrics():
     path = UCF_PATH
     n_g = 0
-    entr_increase = 0
-    KMAX = 3
-    margin_dict = {k: 0 for k in range(1, KMAX+1)}
+    entr_change = 0
+    logit_change = 0
+    N_MARGINS = 6
+    margin_dict = {k: 0 for k in range(1, N_MARGINS+1)}
     n = 0
     in_sim, out_sim = 0, 0
-
-    #data loader
-    ucf101dm = func.UCF101_data_model()
-
     with open(path, 'r', encoding='utf-8') as f:
         line_count = sum(1 for _ in enumerate(f))    
 
@@ -209,20 +206,22 @@ def UCF101_metrics():
             if not line:
                 continue
             record = json.loads(line)
+            if not record['correct']: continue
+
             n_g += len(record['groups'].keys())
 
-            for k in range(1,KMAX+1):
-                margin_o = func.get_margin(torch.tensor(record['orig_logits']),k=k)
-                margin_g = func.get_margin(torch.tensor(record['grp_logits']),k=k)
-                margin_dict[k] += margin_g - margin_o
+            for k in range(1,N_MARGINS+1):
+                margin_dict[k] += record['all_group_change'][f'margin_{k}_change']
 
             #calc entropy difference
-            o_prob = F.softmax(torch.tensor(record['orig_logits']),dim=0)
-            o_entr = entropy(o_prob, base=2)
-            g_prob = F.softmax(torch.tensor(record['grp_logits']),dim=0)
-            g_entr = entropy(g_prob, base=2)
-            entr_increase_ = o_entr - g_entr
-            entr_increase += entr_increase_
+            # o_prob = F.softmax(torch.tensor(record['original_stat']['logits']),dim=0)
+            # o_entr = entropy(o_prob)
+            # g_prob = F.softmax(torch.tensor(record['all_grp_stats']['logits']),dim=0)
+            # g_entr = entropy(g_prob)
+            # entr_change_ = (o_entr - g_entr)/o_entr
+            entr_change += record['all_group_change']['entropy_change']
+            logit_change += record['all_group_change']['max_logit_change']
+
 
             #inter and intra group similarities
             # filename = ucf101dm.construct_vid_path_from_full(record['filename'])
@@ -237,14 +236,15 @@ def UCF101_metrics():
 
             n += 1
         
-        margin_dict = {k: float(margin_dict[k]/n) for k in range(1, KMAX+1)}
-        entr_increase /= n
+        margin_dict = {k: float(margin_dict[k]/n) for k in range(1, N_MARGINS+1)}
+        entr_change /= n
         n_g /= n
-        out_sim /= n
-        in_sim /= n
-        print(f'average number of groups: {n_g} \naverage margin change: {margin_dict} \naverage entropy increase: {entr_increase}')
+        logit_change /= n
+        # in_sim /= n
+        print(f'average number of groups: {n_g} \naverage margin change: {margin_dict} \naverage entropy change: {entr_change} \n Max logit change: {logit_change}')
+        print(f'n = {n}, total = {line_count}')
         # print(f'inter-group similarity: {out_sim}')
-        print(f'intra-group similarity: {in_sim}')
+        # print(f'intra-group similarity: {in_sim}')
 
     
 def save_orig_features():
@@ -437,4 +437,4 @@ def test():
 
 
 if __name__ == '__main__':
-    cluster_features()
+    UCF101_metrics()
