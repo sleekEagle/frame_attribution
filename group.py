@@ -305,7 +305,8 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
         assert d in class_names, f'{d} is not in the list of dirs'
 
     for idx, p in enumerate(paths):
-        print(f'{idx/n_files :.2f} % is done.', end='\r')
+        # print(f'{idx} of {n_files} is done.')
+        print(f'{idx/n_files*100:.2f} is done')
         # if not str(p) == 'C:\\Users\\lahir\\Downloads\\s2s_test\\Hitting something with something\\1337.webm':
         #     continue
         video = model.video_from_path(p)['pixel_values_videos'][0,:].permute(1,0,2,3)
@@ -323,3 +324,5 @@ if __name__ == '__main__':
     out_dir = r'C:\Users\lahir\Downloads\ssv2_analysis'
     # group_frames_loader_UCF101(out_dir, resume_path=r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl', GRP_THRESHOLD=1e-3)
     group_frames_loader_SSV2(out_dir, GRP_THRESHOLD=1e-3)
+
+

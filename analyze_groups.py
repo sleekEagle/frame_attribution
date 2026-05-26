@@ -188,7 +188,8 @@ def video_similarity_hist(video, groups, MAX_COMBS=5):
 
 
 def UCF101_metrics():
-    path = UCF_PATH
+    path = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.01.jsonl'
+    threshold = os.path.basename(path).split('_')[1][:5]
     n_g = 0
     entr_change = 0
     logit_change = 0
@@ -206,7 +207,7 @@ def UCF101_metrics():
             if not line:
                 continue
             record = json.loads(line)
-            if not record['correct']: continue
+            if record['correct']: continue
 
             n_g += len(record['groups'].keys())
 
@@ -241,6 +242,7 @@ def UCF101_metrics():
         n_g /= n
         logit_change /= n
         # in_sim /= n
+        print(f'Threshold = {threshold}')
         print(f'average number of groups: {n_g} \naverage margin change: {margin_dict} \naverage entropy change: {entr_change} \n Max logit change: {logit_change}')
         print(f'n = {n}, total = {line_count}')
         # print(f'inter-group similarity: {out_sim}')
@@ -436,4 +438,4 @@ def test():
 
 
 if __name__ == '__main__':
-    save_orig_features()
+    UCF101_metrics()
