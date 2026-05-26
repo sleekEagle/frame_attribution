@@ -294,7 +294,7 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
     #randomly select a subset
     idx = list(range(0,len(d_names)))
     random.shuffle(idx)
-    idx = idx[:2000]
+    idx = idx[:1000]
     d_names = [d_names[i] for i in idx]
     paths = [paths[i] for i in idx]
     n_files = len(paths)
