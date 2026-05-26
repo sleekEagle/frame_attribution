@@ -249,10 +249,9 @@ def UCF101_metrics():
     
 def save_orig_features():
 
-    OUT_DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\features'
-    OUT_PATH_ORIG = os.path.join(OUT_DIR, "orig_" + os.path.basename(UCF_PATH).split('_')[-1])
-    if os.path.exists(OUT_PATH_ORIG):
-        os.remove(OUT_PATH_ORIG)
+    OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features\orig.jsonl'
+    if os.path.exists(OUT_PATH):
+        os.remove(OUT_PATH)
 
     ucf101dm = func.UCF101_data_model()
     model = ucf101dm.model
@@ -288,11 +287,11 @@ def save_orig_features():
             d['filename'] = filename
             d['feat'] = features[0,:,0,0,0].tolist()
 
-            with open(OUT_PATH_ORIG, 'a') as f:
+            with open(OUT_PATH, 'a') as f:
                 f.write(json.dumps(d) + '\n')
 
             n+=1
-
+ 
    
 def save_grp_features():
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.01.jsonl'
@@ -358,7 +357,7 @@ from sklearn.preprocessing import StandardScaler
 
 def cluster_features():
 
-    DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\features'
+    DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features'
     GRP_PATH = os.path.join(DIR, "grp_" + os.path.basename(UCF_PATH).split('_')[-1])
     ORIG_PATH = os.path.join(DIR, "orig.jsonl")
     scaler = StandardScaler()
@@ -437,4 +436,4 @@ def test():
 
 
 if __name__ == '__main__':
-    save_grp_features()
+    save_orig_features()

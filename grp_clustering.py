@@ -7,19 +7,16 @@ import os
 import json
 import random
 
-UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
-PLOT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\grp_clustering'
-
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.special import kl_div, rel_entr
 from scipy.special import softmax
 
 def cluster_features():
-
-    DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\features'
-    thre = os.path.basename(UCF_PATH).split('_')[1][:-6]
-    GRP_PATH = os.path.join(DIR, f'grp_{thre}.jsonl')
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features\grp_0.01.jsonl'
+    PLOT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features\plots'
+    DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features'
+    thre = os.path.basename(GRP_PATH).split('_')[1][:-6]
     ORIG_PATH = os.path.join(DIR, "orig.jsonl")
     scaler = StandardScaler()
 
@@ -65,7 +62,6 @@ def cluster_features():
     
     orig_pca = features_2d[:len(orig_feat)]
     grp_pca = features_2d[len(grp_feat):]
-
 
 
     plt.figure(figsize=(10, 8))
@@ -232,6 +228,28 @@ def cluster_frozen():
     pass
 
 
+# plot grouped feature distribution difference
+# import matplotlib.pyplot as plt
+# thr = [0.0001, 0.0005, 0.001, 0.005, 0.01]
+# l2 = [8.446063041687012, 8.493795394897461, 8.548871994018555, 8.792335510253906, 9.067133903503418]
+# kl = [0.029468843713402748, 0.029719814658164978, 0.030001485720276833, 0.031332600861787796, 0.03286220505833626]
+
+# plt.plot(thr, l2, marker='o', markersize=4)
+# plt.xlabel('Threshold')
+# plt.ylabel('L2')
+# plt.grid(True, alpha=0.3)
+# plt.savefig(os.path.join(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features\plots\L2.png'), dpi=300, bbox_inches='tight')
+
+
+# plt.plot(thr, kl, marker='o', markersize=4)
+# plt.xlabel('Threshold')
+# plt.ylabel('KL-Div')
+# plt.grid(True, alpha=0.3)
+# plt.savefig(os.path.join(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features\plots\KL.png'), dpi=300, bbox_inches='tight')
+
+
+pass
+
 
 if __name__ == '__main__':
-    cluster_frozen()
+    cluster_features()
