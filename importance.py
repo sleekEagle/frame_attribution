@@ -9,7 +9,7 @@ import CONST
 
 ucf101dm = func.UCF101_data_model()
 model = ucf101dm.model
-UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
+UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
 
 def get_video():
     with open(UCF_PATH, 'r', encoding='utf-8') as f:
