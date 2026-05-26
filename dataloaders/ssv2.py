@@ -1,7 +1,8 @@
 from pathlib import Path
+import CONST
 
 def get_ssv2_paths():
-    path = Path(r'C:\Users\lahir\Downloads\s2s_test')
+    path = Path(CONST.SSV2_PATH)
     dirs = [p.name for p in path.iterdir() if p.is_dir()]
     dirs = [p for p in path.iterdir() if p.is_dir()]
     n_files = len([p for p in path.rglob("*") if p.is_file()])

@@ -22,3 +22,4 @@ UCF_AVG_PRED = torch.tensor([-4.4024e-01, -4.0674e-02,  7.1152e-01, -3.1609e-01,
         -5.6957e-02,  2.5863e-01, -9.5546e-01,  7.0229e-01,  5.4221e-01,
          2.4085e-01])
 UCF_INP_SHAPE = (3, 16, 112, 112)
+SSV2_PATH = r'C:\Users\lahir\Downloads\s2s_test'

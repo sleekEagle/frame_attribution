@@ -232,7 +232,7 @@ def group_frames_loader_UCF101(out_dir, resume_path, GRP_THRESHOLD = 1e-3):
         #     continue
         if resume_path:
             if filename in fnames: continue
-            
+
         group_dict = group_frames(model, video, gt_idx, GRP_THRESHOLD)
         if group_dict==-1:
             continue
@@ -291,11 +291,10 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
 
     d_names, paths = ssv2.get_ssv2_paths()
     
-
     #randomly select a subset
     idx = list(range(0,len(d_names)))
     random.shuffle(idx)
-    # idx = idx[:2000]
+    idx = idx[:2000]
     d_names = [d_names[i] for i in idx]
     paths = [paths[i] for i in idx]
     n_files = len(paths)
@@ -307,8 +306,8 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
 
     for idx, p in enumerate(paths):
         print(f'{idx/n_files :.2f} % is done.', end='\r')
-        if not str(p) == 'C:\\Users\\lahir\\Downloads\\s2s_test\\Hitting something with something\\1337.webm':
-            continue
+        # if not str(p) == 'C:\\Users\\lahir\\Downloads\\s2s_test\\Hitting something with something\\1337.webm':
+        #     continue
         video = model.video_from_path(p)['pixel_values_videos'][0,:].permute(1,0,2,3)
         gt_idx = model.label2id[d_names[idx]]
         group_dict = group_frames(model, video, gt_idx, GRP_THRESHOLD)
@@ -320,6 +319,7 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
 
         
 if __name__ == '__main__':
-    out_dir = r'C:\Users\lahir\Downloads\UCF101\analysis\groups'
-    # out_dir = r'C:\Users\lahir\Downloads\ssv2_analysis'
-    group_frames_loader_UCF101(out_dir, resume_path=r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl', GRP_THRESHOLD=1e-3)
+    # out_dir = r'C:\Users\lahir\Downloads\UCF101\analysis\groups'
+    out_dir = r'C:\Users\lahir\Downloads\ssv2_analysis'
+    # group_frames_loader_UCF101(out_dir, resume_path=r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl', GRP_THRESHOLD=1e-3)
+    group_frames_loader_SSV2(out_dir, GRP_THRESHOLD=1e-3)
