@@ -6,15 +6,11 @@ from models.ssv2 import VJEPA2
 from dataloaders import ssv2
 import random
 
-def replace_frame(video, src_idx, dst_idx):
-    new_video = video.clone()
-    new_video[:,dst_idx,:,:] = new_video[:,src_idx,:,:]
-    return new_video
-
 def replace_frames(video, src_idx, dst_idx_list):
-    for dst in dst_idx_list:
-        video = replace_frame(video, src_idx, dst)
-    return video
+    new_video = video.clone()
+    src_frame = video[:,src_idx,:]
+    new_video[:, dst_idx_list, :, :] = src_frame.unsqueeze(1).expand(-1, len(dst_idx_list), -1, -1)
+    return new_video
 
 '''
 video : 3,T,H,W
@@ -31,8 +27,8 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
         correct = False
 
     def get_best_frame(video, idx1, idx2, cls_idx):
-        v_1_2 = replace_frame(video, idx1, idx2)
-        v_2_1 = replace_frame(video, idx2, idx1)
+        v_1_2 = replace_frames(video, idx1, [idx2])
+        v_2_1 = replace_frames(video, idx2, [idx1])
         batch = [v_1_2, v_2_1]
         stat_1_2, stat_2_1 = func.get_pred_stats_batch(model, batch)
 
@@ -59,7 +55,7 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
 
     def get_best_frame_list(video, idx1, idx1_list, idx2, cls_idx):
         idx1_list = idx1_list + [idx1]
-        v_1_2 = replace_frame(video, idx1, idx2)
+        v_1_2 = replace_frames(video, idx1, [idx2])
         v_2_1 = replace_frames(video, idx2, idx1_list)
 
         batch = [v_1_2, v_2_1]
