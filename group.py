@@ -32,11 +32,11 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
 
     def get_best_frame(video, idx1, idx2, cls_idx):
         v_1_2 = replace_frame(video, idx1, idx2)
-        stat_1_2 = func.get_pred_stats(model, v_1_2)
-        stat_1_2['correct'] = stat_1_2['cls']==cls_idx
-
         v_2_1 = replace_frame(video, idx2, idx1)
-        stat_2_1 = func.get_pred_stats(model, v_2_1)
+        batch = [v_1_2, v_2_1]
+        stat_1_2, stat_2_1 = func.get_pred_stats_batch(model, batch)
+
+        stat_1_2['correct'] = stat_1_2['cls']==cls_idx
         stat_2_1['correct'] = stat_2_1['cls']==cls_idx
 
         ret = {}
@@ -281,9 +281,6 @@ def save_video(out_path, video):
         frame_pil.save(f"{out_path}\\frame_{frame_idx:04d}.png")
 
 
-import concurrent.futures
-from tqdm import tqdm
-
 def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
     out_path = os.path.join(out_dir, f'_groups_{GRP_THRESHOLD}.jsonl')
     if os.path.exists(out_path):
@@ -303,56 +300,24 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
     paths = [paths[i] for i in idx]
     n_files = len(paths)
 
-    args_list = [(p,i) for i, p in enumerate(paths)]
-
     
     #make sure all the class names are present in the list of dirs
     for d in d_names:
         assert d in class_names, f'{d} is not in the list of dirs'
 
-
-    # with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:  # Fewer threads for GPU
-    #     results = list(tqdm(executor.map(process_path, paths), 
-    #                        total=len(paths), 
-    #                        desc="Processing videos"))
-
-    def process_path(args):
-        path, i = args
-        video = model.video_from_path(path)['pixel_values_videos'][0,:].permute(1,0,2,3)
-        gt_idx = model.label2id[d_names[i]]
+    for idx, p in enumerate(paths):
+        # print(f'{idx} of {n_files} is done.')
+        print(f'{idx/n_files*100:.2f} is done',end='\r')
+        # if not str(p) == 'C:\\Users\\lahir\\Downloads\\s2s_test\\Hitting something with something\\1337.webm':
+        #     continue
+        video = model.video_from_path(p)['pixel_values_videos'][0,:].permute(1,0,2,3)
+        gt_idx = model.label2id[d_names[idx]]
         group_dict = group_frames(model, video, gt_idx, GRP_THRESHOLD)
-        group_dict['filename'] = str(path)
+        if group_dict==-1:
+            continue
+        group_dict['filename'] = str(p)
         with open(out_path, 'a') as f:
             f.write(json.dumps(group_dict) + '\n')
-        return 1
-    
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        futures = [executor.submit(process_path, args) for args in args_list]
-        # results = list(executor.map(process_path, args))
-        results = []
-        for future in tqdm(concurrent.futures.as_completed(futures), 
-                          total=len(futures), 
-                          desc="Processing videos"):
-            try:
-                result = future.result()
-                results.append(result)
-            except Exception as e:
-                print(f"Error: {e}")
-                results.append(None)
-
-    # for idx, p in enumerate(paths):
-    #     # print(f'{idx} of {n_files} is done.')
-    #     print(f'{idx/n_files*100:.2f} is done',end='\r')
-    #     # if not str(p) == 'C:\\Users\\lahir\\Downloads\\s2s_test\\Hitting something with something\\1337.webm':
-    #     #     continue
-    #     video = model.video_from_path(p)['pixel_values_videos'][0,:].permute(1,0,2,3)
-    #     gt_idx = model.label2id[d_names[idx]]
-    #     group_dict = group_frames(model, video, gt_idx, GRP_THRESHOLD)
-    #     if group_dict==-1:
-    #         continue
-    #     group_dict['filename'] = str(p)
-    #     with open(out_path, 'a') as f:
-    #         f.write(json.dumps(group_dict) + '\n')
 
         
 if __name__ == '__main__':

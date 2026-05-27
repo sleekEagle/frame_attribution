@@ -247,6 +247,21 @@ def get_margin(t, cls_idx=None, k=5):
         
     return margin
 
+def get_margin_batch(t, cls_idx=None, k=5):
+    if cls_idx is None:
+        top_all = torch.topk(t, k=k+1).values
+        top = top_all[:,0]
+        others = top_all[:,1:]
+        margin = top - others.mean(dim=1)
+    else:
+        pass
+        top = t[cls_idx]
+        top_idx = torch.topk(t, k=k+1).indices
+        other_idx = torch.tensor([t for t in top_idx if t!=cls_idx])
+        margin = top - t[other_idx].mean()
+        
+    return margin
+
 # get the difference of metrics in stat dicts
 N_MARGINS = 6
 def get_stat_change(orig_stat, stat):
@@ -281,6 +296,41 @@ def get_pred_stats(model, v):
         o_entr = float(entropy(pred_p[0,:].cpu()))
         ret['entropy'] = o_entr
     return ret
+
+def get_pred_stats_batch(model, v):
+    batch_len = len(v)
+    v = torch.stack(v)
+    ret = {}
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model.to(device)
+    v = v.to(device)
+    with torch.no_grad(): 
+        pred_l = model(v)
+        pred_p = F.softmax(pred_l,dim=1)
+        pred_cls = torch.argmax(pred_l,dim=1)
+        pred_logit = pred_l.gather(dim=1, index=pred_cls.unsqueeze(1)).squeeze(1)
+        pred_prob = pred_p.gather(dim=1, index=pred_cls.unsqueeze(1)).squeeze(1)
+
+        ret['cls'] = pred_cls
+        ret['logits'] = pred_l
+        ret['prob'] = pred_p
+        ret['max_logit'] = pred_logit
+        ret['max_prob'] = pred_prob
+
+        for k in range(1,N_MARGINS+1):
+            orig_margin = get_margin_batch(pred_l, k=k)
+            ret[f'margin_{k}'] = orig_margin
+        o_entr = -torch.sum(pred_p * torch.log(pred_p + 1e-10), dim=-1) 
+        # o_entr = float(entropy(pred_p[1,:].cpu()))
+        ret['entropy'] = o_entr
+
+    res = []
+    for i in range(batch_len):
+        dict_ = {}
+        for k in ret:
+            dict_[k] = ret[k][i]
+        res.append(dict_)
+    return res
 
 # def get_pred_stats(model, v, orig_pred=None, metric=['margin','entropy', 'change']):
 #     ret = {}
