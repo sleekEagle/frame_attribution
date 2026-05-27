@@ -352,6 +352,98 @@ def save_grp_features():
             n+=1
 
 
+def freeze_grp_feat(model, video, groups, FILL, device):
+
+    # register hook to get features
+    activation = {}
+    def get_activation(name):
+        """Hook function to capture layer output"""
+        def hook(model, input, output):
+            activation[name] = output.detach()
+        return hook
+    handle = model.avgpool.register_forward_hook(get_activation('features'))
+
+    # remove a randomly choosen group
+    sel_idx = random.sample(list(range(len(groups.keys()))),1)[0]
+    mask = [True]*len(groups.keys())
+    mask[sel_idx] = False
+
+    if FILL=='past':
+        groups_filled = func.past_fill_all(mask, groups)
+        vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
+        model(vid_g[None,:])
+        feat = activation['features'][0,:,0,0,0]
+    elif FILL=='future':
+        groups_filled = func.future_fill_all(mask, groups)
+        vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
+        model(vid_g[None,:])
+        feat = activation['features'][0,:,0,0,0]
+    elif FILL=='late_sum':
+        groups_filled = func.past_fill_all(mask, groups)
+        vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
+        model(vid_g[None,:])
+        feat_past = activation['features'][0,:,0,0,0]
+
+        groups_filled = func.future_fill_all(mask, groups)
+        vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
+        model(vid_g[None,:])
+        feat_future = activation['features'][0,:,0,0,0]
+
+        feat = (feat_past+feat_future)*0.5
+    elif FILL=='hybrid_mid':
+        groups_filled = func.hybrid_mid_fill_all(mask, groups)
+    elif FILL=='hybrid_random':
+        pass
+    
+    return feat
+
+def tmp_freeze_grps_UCF101():
+    import torch
+    import func
+    FILL = 'hybrid_mid'
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    f = f'{FILL}.jsonl'
+    OUT_PATH = os.path.join(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing',f)
+    if os.path.exists(OUT_PATH):
+        os.remove(OUT_PATH)
+    
+    ucf101dm = func.UCF101_data_model()
+    model = ucf101dm.model
+    model.eval()
+    model.to(device)
+
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f)) 
+    
+    n = 0
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            print(f'{n/line_count*100:.0f}% is done', end='\r')
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            g = record['groups']
+            groups = {}
+            for k in g:
+                if 'frames' not in g[k]:
+                    groups[int(k)] = []
+                else:
+                    groups[int(k)] = g[k]['frames']
+            p = ucf101dm.construct_vid_path_from_full(record['filename'])
+            video = ucf101dm.load_jpg_ucf101(p, n=0)
+            
+            feat = freeze_grp_feat(model, video, groups, FILL, device)
+            
+            d = {}
+            d['filename'] = record['filename']
+            d['feat'] = feat.tolist()
+
+            with open(OUT_PATH, 'a') as f:
+                f.write(json.dumps(d) + '\n')
+
+            n+=1
 
 if __name__ == '__main__':
-    UCF101_metrics()
+    tmp_freeze_grps_UCF101()

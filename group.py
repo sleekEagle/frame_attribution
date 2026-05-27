@@ -306,7 +306,7 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
 
     for idx, p in enumerate(paths):
         # print(f'{idx} of {n_files} is done.')
-        print(f'{idx/n_files*100:.2f} is done')
+        print(f'{idx/n_files*100:.2f} is done',end='\r')
         # if not str(p) == 'C:\\Users\\lahir\\Downloads\\s2s_test\\Hitting something with something\\1337.webm':
         #     continue
         video = model.video_from_path(p)['pixel_values_videos'][0,:].permute(1,0,2,3)

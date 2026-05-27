@@ -154,7 +154,6 @@ def grp_freeze():
                 groups[int(k)] = f
             
             # increase sizes of all groups one by one
-           
 
             if len(groups) == 1: continue 
 
@@ -1325,8 +1324,6 @@ def grp_imp_vs_len():
         plt.tight_layout()
         plt.savefig(os.path.join(PLOT_DIR, f'grpLength.png'), dpi=300, bbox_inches='tight')
         plt.show()
-
-
 
 def test_shap_val_dist():
     ucf101dm = func.UCF101_data_model()

@@ -624,6 +624,31 @@ def temporal_freeze(idx_list, len_array=16):
     return clusters
 
 
+"""
+break the list into two sub lists. 
+Divide into equal length lists if the length is even.
+If the length is odd, randommly choose the dividing point from the two possible options
+"""
+def break_list(items):
+    n = len(items)
+    
+    if n == 0:
+        return None  # or raise ValueError("Cannot select from empty list")
+    
+    if n % 2 == 0:
+        pass
+
+    if n % 2 == 1:
+        r = random.choice([0,1])
+        mid = n // 2 + r
+    else:
+        mid = n //2
+
+    past = items[:mid]
+    future = items[mid:]
+
+    return past, future
+    
 '''
     modifies the group dict inplace
     use:     key_to_fill = 1
@@ -650,6 +675,27 @@ def _past_fill(fill_key, mask, groups):
     first_true_key = l[0]
     groups[first_true_key].extend(list(set(groups[fill_key]+[fill_key])))
     groups.pop(fill_key)
+
+def _hybrid_mid_fill(fill_key, mask, groups):
+    ord_keys_rev = sorted(mask.keys(),reverse=True)
+    past_grp = [ok for ok in ord_keys_rev if (ok<fill_key and mask[ok])]
+    ord_keys = sorted(mask.keys(),reverse=False)
+    future_grp = [ok for ok in ord_keys if (ok>fill_key and mask[ok])]
+
+    if len(past_grp)>0 and len(future_grp)>0:
+        frames = groups[fill_key] + [fill_key]
+        frames.sort()
+        to_past, to_future = break_list(frames)
+        groups[past_grp[0]].extend(to_past)
+        groups[future_grp[0]].extend(to_future)
+        groups.pop(fill_key)
+
+    elif len(past_grp)>0:
+        _past_fill(fill_key, mask, groups)
+    elif len(future_grp)>0:
+        _future_fill(fill_key, mask, groups)
+    else:
+        return -1
 
 
 '''
@@ -683,6 +729,9 @@ If there are no such frames, it is filled from the future. If there are no such 
 mask: e.g: [0,0,1] : keep the last group. remove the rest
 '''
 def past_fill_all(mask, groups):
+    # groups_ = {1:[0,2], 5:[3,4,6,7], 8:[], 10:[9,11,12], 14:[13,15]}
+    # mask = [False, False, True, True, True]
+
     ord_keys = sorted(list(groups.keys()))
     m = {}
     for i,k in enumerate(ord_keys):
@@ -696,7 +745,36 @@ def past_fill_all(mask, groups):
             ret = _past_fill(k, m, groups)
             if ret ==-1:
                 _future_fill(k, m, groups)
+
     return groups
+
+
+def hybrid_mid_fill_all(mask, groups):
+    mask = [True,True,True,False,True]
+    groups = {1:[0,2], 4:[3,5,6], 7:[], 10:[8,9,11,12],13:[14,15]}
+
+    ord_keys = sorted(list(groups.keys()))
+    m = {}
+    for i,k in enumerate(ord_keys):
+        m[int(k)] = bool(mask[i])
+    groups = deep_copy_dict(groups)
+
+    # handle edge cases
+    if not m[ord_keys[0]]:
+        _future_fill(ord_keys[0], m, groups)
+    if not m[ord_keys[-1]]:
+        _past_fill(ord_keys[-1], m, groups)
+
+    for k in ord_keys[1:-1]:
+        if not m[k]:
+            _hybrid_mid_fill(k, m, groups)
+            
+            
+
+    
+    
+
+    pass
 
 
 '''
