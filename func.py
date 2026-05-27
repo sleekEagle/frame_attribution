@@ -750,8 +750,8 @@ def past_fill_all(mask, groups):
 
 
 def hybrid_mid_fill_all(mask, groups):
-    mask = [True,True,True,False,True]
-    groups = {1:[0,2], 4:[3,5,6], 7:[], 10:[8,9,11,12],13:[14,15]}
+    # mask = [False,True,False,True,False]
+    # groups = {1:[0,2], 4:[3,5,6], 7:[], 10:[8,9,11,12],13:[14,15]}
 
     ord_keys = sorted(list(groups.keys()))
     m = {}
@@ -768,13 +768,8 @@ def hybrid_mid_fill_all(mask, groups):
     for k in ord_keys[1:-1]:
         if not m[k]:
             _hybrid_mid_fill(k, m, groups)
-            
-            
-
     
-    
-
-    pass
+    return groups
 
 
 '''

@@ -392,6 +392,9 @@ def freeze_grp_feat(model, video, groups, FILL, device):
         feat = (feat_past+feat_future)*0.5
     elif FILL=='hybrid_mid':
         groups_filled = func.hybrid_mid_fill_all(mask, groups)
+        vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
+        model(vid_g[None,:])
+        feat = activation['features'][0,:,0,0,0]
     elif FILL=='hybrid_random':
         pass
     
