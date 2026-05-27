@@ -328,7 +328,7 @@ def get_pred_stats_batch(model, v):
     for i in range(batch_len):
         dict_ = {}
         for k in ret:
-            dict_[k] = ret[k][i]
+            dict_[k] = ret[k][i].cpu().numpy().tolist()
         res.append(dict_)
     return res
 

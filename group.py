@@ -60,11 +60,12 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
     def get_best_frame_list(video, idx1, idx1_list, idx2, cls_idx):
         idx1_list = idx1_list + [idx1]
         v_1_2 = replace_frame(video, idx1, idx2)
-        stat_1_2 = func.get_pred_stats(model, v_1_2)
-        stat_1_2['correct'] = stat_1_2['cls']==cls_idx
-
         v_2_1 = replace_frames(video, idx2, idx1_list)
-        stat_2_1 = func.get_pred_stats(model, v_2_1)
+
+        batch = [v_1_2, v_2_1]
+        stat_1_2, stat_2_1 = func.get_pred_stats_batch(model, batch)
+
+        stat_1_2['correct'] = stat_1_2['cls']==cls_idx
         stat_2_1['correct'] = stat_2_1['cls']==cls_idx
 
         ret = {}
