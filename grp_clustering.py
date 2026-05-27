@@ -83,12 +83,14 @@ def cluster_features():
 
 def cluster_frozen():
     import pandas as pd
-    df = pd.DataFrame(columns=['filename', 'orig', 'future', 'past', 'comb'])
+    df = pd.DataFrame(columns=['filename', 'orig', 'future', 'past', 'late_sum', 'hybrid_mid','hybrid_random'])
 
-    ORIG_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\features\orig.jsonl'
-    FUTURE_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\features\tmp_freeze\future.jsonl'
-    PAST_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\features\tmp_freeze\past.jsonl'
-    COMB_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\features\tmp_freeze\comb.jsonl'
+    ORIG_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features\orig.jsonl'
+    FUTURE_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\future.jsonl'
+    PAST_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\past.jsonl'
+    LATE_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\late_sum.jsonl'
+    MID_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\hybrid_mid.jsonl'
+    RAND_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\hybrid_random.jsonl'
 
     #read original features
     def get_data(path):
@@ -101,7 +103,9 @@ def cluster_frozen():
     d_orig = get_data(ORIG_PATH)
     d_future = get_data(FUTURE_PATH)
     d_past = get_data(PAST_PATH)
-    d_comb = get_data(COMB_PATH)
+    d_late = get_data(LATE_PATH)
+    d_mid = get_data(MID_PATH)
+    d_random = get_data(RAND_PATH)
 
     rows_list = []
     for k in d_orig:
@@ -109,14 +113,16 @@ def cluster_frozen():
                'orig': np.array(d_orig[k]), 
                'future': np.array(d_future[k]), 
                'past': np.array(d_past[k]), 
-               'comb': np.array(d_comb[k])}
+               'late': np.array(d_late[k]),
+               'mid': np.array(d_mid[k]),
+               'random': np.array(d_random[k])}
         rows_list.append(row)
     df = pd.concat([df, pd.DataFrame(rows_list)], ignore_index=True)
 
     o = np.stack(df['orig'].values)  # Shape: (n_rows, 128)
     f = np.stack(df['future'].values)  # Shape: (n_rows, 128)
     p = np.stack(df['past'].values) 
-    c = np.stack(df['comb'].values) 
+    c = np.stack(df['late'].values) 
 
     # Calculate L2 distances for all rows at once
     df['diff_future'] = np.linalg.norm(o - f, axis=1)
@@ -163,9 +169,5 @@ def cluster_frozen():
 # plt.grid(True, alpha=0.3)
 # plt.savefig(os.path.join(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features\plots\KL.png'), dpi=300, bbox_inches='tight')
 
-
-pass
-
-
 if __name__ == '__main__':
-    cluster_features()
+    cluster_frozen()
