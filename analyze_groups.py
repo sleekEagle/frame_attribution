@@ -376,10 +376,11 @@ def freeze_grp_feat(model, video, groups, FILL, device):
         groups_filled = func.hybrid_fill_all(mask, groups, 'middle')
     elif FILL=='hybrid_random':
         groups_filled = func.hybrid_fill_all(mask, groups, 'random')
-    vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
-    model(vid_g[None,:])
-    feat = activation['features'][0,:,0,0,0]
-    if FILL=='late_sum':
+    if FILL!='late_sum':
+        vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
+        model(vid_g[None,:])
+        feat = activation['features'][0,:,0,0,0]
+    else:
         groups_filled = func.past_fill_all(mask, groups)
         vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
         model(vid_g[None,:])
@@ -421,6 +422,8 @@ def tmp_freeze_grps_UCF101(FILL):
             if not line:
                 continue
             record = json.loads(line)
+            n+=1
+            # if not record['filename']=='v_ApplyEyeMakeup_g01_c01':continue
             g = record['groups']
             groups = {}
             for k in g:
@@ -440,11 +443,5 @@ def tmp_freeze_grps_UCF101(FILL):
             with open(OUT_PATH, 'a') as f:
                 f.write(json.dumps(d) + '\n')
 
-            n+=1
-
 if __name__ == '__main__':
-    tmp_freeze_grps_UCF101('past')
-    tmp_freeze_grps_UCF101('future')
-    tmp_freeze_grps_UCF101('hybrid_mid')
-    tmp_freeze_grps_UCF101('hybrid_random')
     tmp_freeze_grps_UCF101('late_sum')
