@@ -629,7 +629,7 @@ break the list into two sub lists.
 Divide into equal length lists if the length is even.
 If the length is odd, randommly choose the dividing point from the two possible options
 """
-def break_list(items):
+def break_list_middle(items):
     n = len(items)
     
     if n == 0:
@@ -647,6 +647,13 @@ def break_list(items):
     past = items[:mid]
     future = items[mid:]
 
+    return past, future
+
+def break_list_random(items):
+    n = len(items)
+    idx = random.randint(0, n) 
+    past = items[:idx]
+    future = items[idx:]
     return past, future
     
 '''
@@ -676,7 +683,7 @@ def _past_fill(fill_key, mask, groups):
     groups[first_true_key].extend(list(set(groups[fill_key]+[fill_key])))
     groups.pop(fill_key)
 
-def _hybrid_mid_fill(fill_key, mask, groups):
+def _hybrid_mid_fill(fill_key, mask, groups, method):
     ord_keys_rev = sorted(mask.keys(),reverse=True)
     past_grp = [ok for ok in ord_keys_rev if (ok<fill_key and mask[ok])]
     ord_keys = sorted(mask.keys(),reverse=False)
@@ -685,7 +692,11 @@ def _hybrid_mid_fill(fill_key, mask, groups):
     if len(past_grp)>0 and len(future_grp)>0:
         frames = groups[fill_key] + [fill_key]
         frames.sort()
-        to_past, to_future = break_list(frames)
+        if method == 'middle':
+            to_past, to_future = break_list_middle(frames)
+        elif method == 'random':
+            to_past, to_future = break_list_random(frames)
+
         groups[past_grp[0]].extend(to_past)
         groups[future_grp[0]].extend(to_future)
         groups.pop(fill_key)
@@ -749,7 +760,7 @@ def past_fill_all(mask, groups):
     return groups
 
 
-def hybrid_mid_fill_all(mask, groups):
+def hybrid_fill_all(mask, groups, method):
     # mask = [False,True,False,True,False]
     # groups = {1:[0,2], 4:[3,5,6], 7:[], 10:[8,9,11,12],13:[14,15]}
 
@@ -767,7 +778,7 @@ def hybrid_mid_fill_all(mask, groups):
 
     for k in ord_keys[1:-1]:
         if not m[k]:
-            _hybrid_mid_fill(k, m, groups)
+            _hybrid_mid_fill(k, m, groups, method)
     
     return groups
 

@@ -370,15 +370,16 @@ def freeze_grp_feat(model, video, groups, FILL, device):
 
     if FILL=='past':
         groups_filled = func.past_fill_all(mask, groups)
-        vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
-        model(vid_g[None,:])
-        feat = activation['features'][0,:,0,0,0]
     elif FILL=='future':
         groups_filled = func.future_fill_all(mask, groups)
-        vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
-        model(vid_g[None,:])
-        feat = activation['features'][0,:,0,0,0]
-    elif FILL=='late_sum':
+    elif FILL=='hybrid_mid':
+        groups_filled = func.hybrid_fill_all(mask, groups, 'mid')
+    elif FILL=='hybrid_random':
+        groups_filled = func.hybrid_fill_all(mask, groups, 'random')
+    vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
+    model(vid_g[None,:])
+    feat = activation['features'][0,:,0,0,0]
+    if FILL=='late_sum':
         groups_filled = func.past_fill_all(mask, groups)
         vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
         model(vid_g[None,:])
@@ -390,20 +391,13 @@ def freeze_grp_feat(model, video, groups, FILL, device):
         feat_future = activation['features'][0,:,0,0,0]
 
         feat = (feat_past+feat_future)*0.5
-    elif FILL=='hybrid_mid':
-        groups_filled = func.hybrid_mid_fill_all(mask, groups)
-        vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
-        model(vid_g[None,:])
-        feat = activation['features'][0,:,0,0,0]
-    elif FILL=='hybrid_random':
-        pass
+
     
     return feat
 
-def tmp_freeze_grps_UCF101():
+def tmp_freeze_grps_UCF101(FILL):
     import torch
     import func
-    FILL = 'hybrid_mid'
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     device = "cuda" if torch.cuda.is_available() else "cpu"
     f = f'{FILL}.jsonl'
@@ -449,4 +443,8 @@ def tmp_freeze_grps_UCF101():
             n+=1
 
 if __name__ == '__main__':
-    tmp_freeze_grps_UCF101()
+    tmp_freeze_grps_UCF101('past')
+    tmp_freeze_grps_UCF101('future')
+    tmp_freeze_grps_UCF101('hybrid_mid')
+    tmp_freeze_grps_UCF101('hybrid_random')
+    tmp_freeze_grps_UCF101('late_sum')
