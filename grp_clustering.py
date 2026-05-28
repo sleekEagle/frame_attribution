@@ -92,6 +92,8 @@ def cluster_frozen():
     MID_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\hybrid_mid.jsonl'
     RAND_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\hybrid_random.jsonl'
 
+    PLOT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\plots'
+
     #read original features
     def get_data(path):
         d = {}
@@ -119,35 +121,93 @@ def cluster_frozen():
         rows_list.append(row)
     df = pd.concat([df, pd.DataFrame(rows_list)], ignore_index=True)
 
-    o = np.stack(df['orig'].values)  # Shape: (n_rows, 128)
-    f = np.stack(df['future'].values)  # Shape: (n_rows, 128)
-    p = np.stack(df['past'].values) 
-    c = np.stack(df['late'].values) 
+    original = np.stack(df['orig'].values)  # Shape: (n_rows, 128)
+    future = np.stack(df['future'].values)  # Shape: (n_rows, 128)
+    past = np.stack(df['past'].values) 
+    late = np.stack(df['late'].values) 
+    mid = np.stack(df['mid'].values) 
+    random = np.stack(df['random'].values) 
 
     # Calculate L2 distances for all rows at once
-    df['diff_future'] = np.linalg.norm(o - f, axis=1)
-    df['diff_past'] = np.linalg.norm(o - p, axis=1)
-    df['diff_comb'] = np.linalg.norm(o - c, axis=1)
+    df['diff_future'] = np.linalg.norm(original - future, axis=1)
+    df['diff_past'] = np.linalg.norm(original - past, axis=1)
+    df['diff_late'] = np.linalg.norm(original - late, axis=1)
+    df['diff_mid'] = np.linalg.norm(original - mid, axis=1)
+    df['diff_random'] = np.linalg.norm(original - random, axis=1)
 
-    probs_orig = softmax(o, axis=1)  
-    probs_f = softmax(f, axis=1) 
-    probs_p = softmax(p, axis=1)
-    probs_c = softmax(c, axis=1)
+    probs_o = softmax(original, axis=1)  
+    probs_f = softmax(future, axis=1) 
+    probs_p = softmax(past, axis=1)
+    probs_l = softmax(late, axis=1)
+    probs_m = softmax(mid, axis=1)
+    probs_r = softmax(random, axis=1)
 
     epsilon = 1e-10
-    probs_orig = np.clip(probs_orig, epsilon, 1.0)
+    probs_orig = np.clip(probs_o, epsilon, 1.0)
     probs_f = np.clip(probs_f, epsilon, 1.0)
     probs_p = np.clip(probs_p, epsilon, 1.0)
-    probs_c = np.clip(probs_c, epsilon, 1.0)
+    probs_l = np.clip(probs_l, epsilon, 1.0)
+    probs_m = np.clip(probs_m, epsilon, 1.0)
+    probs_r = np.clip(probs_r, epsilon, 1.0)
+
     kl_f = np.sum(rel_entr(probs_orig, probs_f), axis=1)
     kl_p = np.sum(rel_entr(probs_orig, probs_p), axis=1)
-    kl_c = np.sum(rel_entr(probs_orig, probs_c), axis=1)
+    kl_l = np.sum(rel_entr(probs_orig, probs_l), axis=1)
+    kl_m = np.sum(rel_entr(probs_orig, probs_m), axis=1)
+    kl_r = np.sum(rel_entr(probs_orig, probs_r), axis=1)
     
-    df['entr_future'] = kl_f
-    df['entr_past'] = kl_p
-    df['entr_comb'] = kl_c
+    df['kl_future'] = kl_f
+    df['kl_past'] = kl_p
+    df['kl_late'] = kl_l
+    df['kl_mid'] = kl_m
+    df['kl_random'] = kl_r
+
+    
+    def get_PCA(o,f):
+        all_features = np.vstack([o, f])    
+        pca = PCA(n_components=2)
+        features_2d = pca.fit_transform(all_features)
+        orig_pca = features_2d[:len(o)]
+        f_pca = features_2d[len(f):]
+
+        return orig_pca, f_pca
+    
+    
+
+    PCA_metrics = {}
+    for freeze_method in ['future','past','late','mid','random']:
+        f = locals()[freeze_method]
+        orig_pca, f_pca = get_PCA(original, f)
+
+        plt.figure(figsize=(10, 8))
+        plt.scatter(orig_pca[:, 0], orig_pca[:, 1], 
+                    c='blue', label='Original', alpha=0.6, s=10, linewidth=0)
+        plt.scatter(f_pca[:, 0], f_pca[:, 1], 
+                    c='red', label=freeze_method, alpha=0.6, s=10, linewidth=0)
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.savefig(os.path.join(PLOT_PATH, f'{freeze_method}.png'), dpi=300, bbox_inches='tight')
+        plt.show()
+    
+
 
     pass
+
+    print(df['kl_future'].mean())
+    print(df['kl_past'].mean())
+    print(df['kl_late'].mean())
+    print(df['kl_mid'].mean())
+    print(df['kl_random'].mean())
+
+    print(df['diff_future'].mean())
+    print(df['diff_past'].mean())
+    print(df['diff_late'].mean())
+    print(df['diff_mid'].mean())
+    print(df['diff_random'].mean())
+
+    # plot the clusters
+
+
 
 
 # plot grouped feature distribution difference
