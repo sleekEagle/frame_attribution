@@ -129,11 +129,11 @@ def cluster_frozen():
     random = np.stack(df['random'].values) 
 
     # Calculate L2 distances for all rows at once
-    df['diff_future'] = np.linalg.norm(original - future, axis=1)
-    df['diff_past'] = np.linalg.norm(original - past, axis=1)
-    df['diff_late'] = np.linalg.norm(original - late, axis=1)
-    df['diff_mid'] = np.linalg.norm(original - mid, axis=1)
-    df['diff_random'] = np.linalg.norm(original - random, axis=1)
+    df['diff_future'] = np.sum((original - future)**2,axis=1)**0.5
+    df['diff_past'] = np.sum((original - past)**2,axis=1)**0.5
+    df['diff_late'] = np.sum((original - late)**2,axis=1)**0.5
+    df['diff_mid'] = np.sum((original - mid)**2,axis=1)**0.5
+    df['diff_random'] = np.sum((original - random)**2,axis=1)**0.5
 
     probs_o = softmax(original, axis=1)  
     probs_f = softmax(future, axis=1) 
@@ -178,6 +178,12 @@ def cluster_frozen():
     for freeze_method in ['future','past','late','mid','random']:
         f = locals()[freeze_method]
         orig_pca, f_pca = get_PCA(original, f)
+
+        dist = np.sum((orig_pca - f_pca)**2,axis=1)**0.5
+        probs_o = np.clip(softmax(orig_pca, axis=1) , epsilon, 1.0)
+        probs_f = np.clip(softmax(f_pca, axis=1) , epsilon, 1.0)
+        kl = np.sum(rel_entr(probs_o, probs_f), axis=1)
+        PCA_metrics[freeze_method] = {'L2': float(dist.mean()), 'kl':float(kl.mean())}
 
         plt.figure(figsize=(10, 8))
         plt.scatter(orig_pca[:, 0], orig_pca[:, 1], 
