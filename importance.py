@@ -128,9 +128,6 @@ class CalcSHAP:
     def explain(self, video, groups, check=False):
         self.n_masks = 0
         self.groups = groups
-        print(type(video))
-        print(video)
-        print(groups)
         self.video = func.create_grouped_video(video.permute(1,0,2,3), groups).permute(1,0,2,3).to(self.device)
         NUM_GROUPS = len(groups)
         background = np.zeros((1, NUM_GROUPS))
@@ -200,22 +197,19 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD):
         line_count = sum(1 for _ in enumerate(f))
     with open(GRP_PATH, 'r', encoding='utf-8') as f:
         for line in f:
-            # print(f'{n/line_count*100:.1f}% is done.', end='\r')
+            print(f'{n/line_count*100:.1f}% is done.', end='\r')
             n+=1
 
-            if n<1376: continue
             line = line.strip()
             if not line:
                 continue
 
             record = json.loads(line)
             filename = record['filename']
-            # if filename!='v_HandStandPushups_g01_c01':
-            #     continue
+            if filename!='v_HandStandPushups_g01_c01':
+                continue
             p = ucf101dm.construct_vid_path_from_full(filename)
-            print(filename)
             video = ucf101dm.load_jpg_ucf101(p, n=0)
-            print(video)
             g = record['groups']
             groups = {}
             for k in g:
@@ -237,9 +231,6 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD):
 
             with open(out_path, 'a') as f:
                 f.write(json.dumps(d) + '\n')
-
-            pass
-
 
 if __name__ == "__main__":
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'

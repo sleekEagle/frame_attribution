@@ -340,9 +340,10 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
 
         
 if __name__ == '__main__':
+    sample_paths_ssv2()
     # out_dir = r'C:\Users\lahir\Downloads\UCF101\analysis\groups'
-    out_dir = r'C:\Users\lahir\Downloads\ssv2_analysis'
+    # out_dir = r'C:\Users\lahir\Downloads\ssv2_analysis'
     # group_frames_loader_UCF101(out_dir, resume_path=r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl', GRP_THRESHOLD=1e-3)
-    group_frames_loader_SSV2(out_dir, GRP_THRESHOLD=1e-3)
+    # group_frames_loader_SSV2(out_dir, GRP_THRESHOLD=1e-3)
     # sample_paths_ssv2()
 

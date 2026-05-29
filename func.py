@@ -1600,6 +1600,11 @@ class UCF101_data_model:
                 setattr(model_opt, str(attribute), Path(getattr(model_opt, str(attribute))))
         self.inference_loader, self.inference_class_names = get_inference_utils(model_opt)
         self.class_labels_map = {v.lower(): k for k, v in self.inference_class_names.items()}
+        cls_dirs = []
+        for k in self.inference_class_names:
+            cls_dirs.append(self.inference_class_names[k])
+        self.cls_dirs = cls_dirs
+
         self.transform = self.inference_loader.dataset.spatial_transform
         self.mask_transforms = Compose([
             self.transform.transforms[0],  # Resize
@@ -1619,7 +1624,8 @@ class UCF101_data_model:
     def construct_vid_path_from_full(self, path):
         g = path.split('_')[2][1:]
         c = path.split('_')[3][1:]
-        cls_name = path.split('_')[1]
+        cls_name_ = path.split('_')[1]
+        cls_name = [d for d in self.cls_dirs if d.lower()==cls_name_.lower()][0]
         path = self.construct_vid_path(cls_name, g, c)
         return path
 
@@ -1640,14 +1646,10 @@ class UCF101_data_model:
         return torch.stack(video)
     
     def load_jpg_ucf101(self, path, n=0):
-        print(path)
 
         path = sorted(glob(path + "/*"), key=numericalSort)
 
         target_path = path[n * 16 : (n + 1) * 16]
-
-        print(path)
-        print(target_path)
 
         if len(target_path) < 16:
             print("not enough images exist")
