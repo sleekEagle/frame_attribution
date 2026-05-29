@@ -199,13 +199,15 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD):
         for line in f:
             print(f'{n/line_count*100:.1f}% is done.', end='\r')
             n+=1
+
+            if n<1376: continue
             line = line.strip()
             if not line:
                 continue
 
             record = json.loads(line)
             filename = record['filename']
-            # if filename!='v_ApplyEyeMakeup_g01_c01':
+            # if filename!='v_HandStandPushups_g01_c01':
             #     continue
             p = ucf101dm.construct_vid_path_from_full(filename)
             print(filename)
