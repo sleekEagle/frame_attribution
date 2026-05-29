@@ -48,7 +48,6 @@ class CalcSHAP:
         # self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # self.model = self.model.to(self.device) 
         self.model.eval()
-        self.BACKGROUND = "PAST"
         self.avg_pred = CONST.UCF_AVG_PRED
         self.n_masks = 0
         self.difference = 0
@@ -149,7 +148,7 @@ class CalcSHAP:
         if check:
             sv = shap_values.values[0,:]
             bv = shap_values.base_values[0,:]
-            p  = model(self.video.permute(1,0,2,3)[None,:])[0,:].detach().numpy()
+            p  = self.model(self.video.permute(1,0,2,3)[None,:])[0,:].detach().numpy()
             sv = np.sum(sv,axis=0)
             difference = abs(p - bv - sv).mean()
             
