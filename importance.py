@@ -9,28 +9,27 @@ import CONST
 
 ucf101dm = func.UCF101_data_model()
 model = ucf101dm.model
-UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
 
-def get_video():
-    with open(UCF_PATH, 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
+# def get_video():
+#     with open(UCF_PATH, 'r', encoding='utf-8') as f:
+#         for line in f:
+#             line = line.strip()
+#             if not line:
+#                 continue
 
-            record = json.loads(line)
-            filename = record['filename']
-            p = ucf101dm.construct_vid_path_from_full(filename)
-            video = ucf101dm.load_jpg_ucf101(p, n=0)
-            g = record['groups']
-            groups = {}
-            for k in g:
-                if 'frames' in g[k]:
-                    f = g[k]['frames']
-                else: 
-                    f = []
-                groups[int(k)] = f
-            return video, groups
+#             record = json.loads(line)
+#             filename = record['filename']
+#             p = ucf101dm.construct_vid_path_from_full(filename)
+#             video = ucf101dm.load_jpg_ucf101(p, n=0)
+#             g = record['groups']
+#             groups = {}
+#             for k in g:
+#                 if 'frames' in g[k]:
+#                     f = g[k]['frames']
+#                 else: 
+#                     f = []
+#                 groups[int(k)] = f
+#             return video, groups
 
 
 def batch_pred(model, t):
@@ -82,16 +81,32 @@ class CalcSHAP:
             for i in nzidx:
                 masked = self.video.clone()
                 if self.fill_method=='future':
-                    g = func.future_fill_all(mask[i], self.groups)
+                    g = [func.future_fill_all(mask[i], self.groups)]
                 elif self.fill_method=='past':
-                    g = func.past_fill_all(mask[i], self.groups)
-                vid_g = func.create_grouped_video(masked.permute(1,0,2,3), g)
-                vid_g = vid_g.permute(1,0,2,3)[None,:]
-                vid_t = torch.concat([vid_t,vid_g])
+                    g = [func.past_fill_all(mask[i], self.groups)]
+                elif self.fill_method=='mid':
+                    g = [func.hybrid_fill_all(mask[i], self.groups, 'mid')]
+                elif self.fill_method=='random':
+                    g = [func.hybrid_fill_all(mask[i], self.groups, 'random')]
+                elif self.fill_method=='late':
+                    g = [func.past_fill_all(mask[i], self.groups),
+                         func.future_fill_all(mask[i], self.groups)]
+
+                for g_ in g:
+                    vid_g = func.create_grouped_video(masked.permute(1,0,2,3), g_)
+                    vid_g = vid_g.permute(1,0,2,3)[None,:]
+                    vid_t = torch.concat([vid_t,vid_g])
+
             with torch.no_grad():
                 vid_t = vid_t.to('cuda')
                 p = self.model(vid_t.permute(0,2,1,3,4))
                 nz_pred = torch.concat([nz_pred,p],dim=0)
+
+        if self.fill_method=='late':
+            idxs = torch.linspace(0, nz_pred.size(0)-1, nz_pred.size(0), dtype=torch.int)
+            even_idx = idxs[::2]
+            odd_idx = idxs[1:][::2]
+            nz_pred = (nz_pred[even_idx] + nz_pred[odd_idx])*0.5
         
         preds = torch.zeros(len(mask), nz_pred.size(1))
         for idx,i in enumerate(non_zero_idx):
@@ -147,7 +162,7 @@ class CalcSHAP:
         return shap_values
     
 
-def calc_shap():
+def calc_shap_UCF101(GRP_PATH, OUT_PATH):
     #****************************************************************************
     # the model and the data loader
     #****************************************************************************
@@ -171,19 +186,19 @@ def calc_shap():
     #*************************************************************************
     # initialize shap model 
     #*************************************************************************
-    FILL_METHOD = 'future'
+    FILL_METHOD = 'late'
     ex = CalcSHAP(model, fill_method=FILL_METHOD)
 
     #construct the out path for logging
-    f = 'exactSHAP_'+ FILL_METHOD + '_' + Path(UCF_PATH).stem.split('_')[-1]+'.jsonl'
-    d = os.path.dirname(UCF_PATH)
-    out_path = os.path.join(d,f)
+    f = 'exactSHAP_'+ FILL_METHOD + '_' + Path(GRP_PATH).stem.split('_')[-1]+'.jsonl'
+    # d = os.path.dirname(GRP_PATH)
+    out_path = os.path.join(OUT_PATH,f)
 
     #read groups
     n=0
-    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
         line_count = sum(1 for _ in enumerate(f))
-    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
         for line in f:
             print(f'{n/line_count*100:.1f}% is done.', end='\r')
             n+=1
@@ -223,4 +238,6 @@ def calc_shap():
 
 
 if __name__ == "__main__":
-    calc_shap()
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\importance'
+    calc_shap_UCF101(GRP_PATH, OUT_PATH)
