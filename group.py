@@ -317,7 +317,6 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
 
     model = VJEPA2()
     model.eval()
-    class_names = list(model.label2id.keys())
 
     cls_list, path_list = ssv2.get_sampled_paths()
     n_files = len(path_list)
