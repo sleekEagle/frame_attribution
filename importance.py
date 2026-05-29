@@ -45,7 +45,7 @@ class CalcSHAP:
     def __init__(self, model, fill_method):
         self.model = model.to('cuda')
         self.fill_method = fill_method
-        # self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # self.model = self.model.to(self.device) 
         self.model.eval()
         self.avg_pred = CONST.UCF_AVG_PRED
@@ -76,7 +76,7 @@ class CalcSHAP:
         nz_pred = torch.empty(0).to('cuda')
         for nzidx in batches:
             #predict for non zero masks
-            vid_t = torch.empty(0)
+            vid_t = torch.empty(0).to(self.device)
             for i in nzidx:
                 masked = self.video.clone()
                 if self.fill_method=='future':
@@ -97,7 +97,6 @@ class CalcSHAP:
                     vid_t = torch.concat([vid_t,vid_g])
 
             with torch.no_grad():
-                vid_t = vid_t.to('cuda')
                 p = self.model(vid_t.permute(0,2,1,3,4))
                 nz_pred = torch.concat([nz_pred,p],dim=0)
 
@@ -129,7 +128,7 @@ class CalcSHAP:
     def explain(self, video, groups, check=False):
         self.n_masks = 0
         self.groups = groups
-        self.video = func.create_grouped_video(video.permute(1,0,2,3), groups).permute(1,0,2,3)
+        self.video = func.create_grouped_video(video.permute(1,0,2,3), groups).permute(1,0,2,3).to(self.device)
         NUM_GROUPS = len(groups)
         background = np.zeros((1, NUM_GROUPS))
 
@@ -148,7 +147,7 @@ class CalcSHAP:
         if check:
             sv = shap_values.values[0,:]
             bv = shap_values.base_values[0,:]
-            p  = self.model(self.video.permute(1,0,2,3)[None,:])[0,:].detach().numpy()
+            p  = self.model(self.video.permute(1,0,2,3)[None,:])[0,:].cpu().detach().numpy()
             sv = np.sum(sv,axis=0)
             difference = abs(p - bv - sv).mean()
             
@@ -238,5 +237,5 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD):
 if __name__ == "__main__":
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\importance'
-    FILL_METHOD = 'late'
+    FILL_METHOD = 'past'
     calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD)
