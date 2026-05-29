@@ -256,6 +256,7 @@ def group_frames_loader_UCF101(out_dir, resume_path, GRP_THRESHOLD = 1e-3):
 
 from torchvision import utils
 from PIL import Image
+from pathlib import Path
 
 def save_video(out_path, video):
     os.makedirs(out_path, exist_ok=True)
@@ -303,12 +304,15 @@ def sample_paths_ssv2(N_SAMPLES=6):
     for d in sel_d:
         assert d in class_names, f'{d} is not in the list of dirs'
 
-    with open('dataloaders/ssv2_paths.txt', 'a') as f:
+    out_path = 'dataloaders/ssv2_paths.txt'
+    if os.path.exists(out_path):
+        os.remove(out_path)
+    with open(out_path, 'a') as f:
             for p in sel_paths:
                 dir = os.path.basename(os.path.dirname(p))
                 file = os.path.basename(p)
-                str = os.path.join(dir,file)
-                f.write(str + '\n')
+                s = dir + '/' + file
+                f.write(s + '\n')
 
 def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
     out_path = os.path.join(out_dir, f'groups_{GRP_THRESHOLD}.jsonl')
@@ -340,4 +344,5 @@ if __name__ == '__main__':
     out_dir = r'C:\Users\lahir\Downloads\ssv2_analysis'
     # group_frames_loader_UCF101(out_dir, resume_path=r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl', GRP_THRESHOLD=1e-3)
     group_frames_loader_SSV2(out_dir, GRP_THRESHOLD=1e-3)
+    # sample_paths_ssv2()
 

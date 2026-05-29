@@ -23,8 +23,8 @@ def get_sampled_paths():
     cls_list, path_list = [], []
     with open('dataloaders/ssv2_paths.txt', 'r') as f:
         for line in f:
-            full = Path(line.strip())
-            cls = os.path.dirname(full)
+            full = Path(line.strip()).as_posix()
+            cls = str(Path(full).parent)
             full = os.path.join(path, full)
             cls_list.append(cls)
             path_list.append(full)
