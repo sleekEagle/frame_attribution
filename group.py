@@ -311,7 +311,7 @@ def sample_paths_ssv2(N_SAMPLES=6):
                 f.write(str + '\n')
 
 def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
-    out_path = os.path.join(out_dir, f'_groups_{GRP_THRESHOLD}.jsonl')
+    out_path = os.path.join(out_dir, f'groups_{GRP_THRESHOLD}.jsonl')
     if os.path.exists(out_path):
         os.remove(out_path)
 
