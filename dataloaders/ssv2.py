@@ -1,5 +1,6 @@
 from pathlib import Path
 import CONST
+import os
 
 def get_ssv2_paths():
     path = Path(CONST.SSV2_PATH)
@@ -16,3 +17,20 @@ def get_ssv2_paths():
         paths.extend(files)
 
     return d_names, paths
+
+def get_sampled_paths():
+    path = Path(CONST.SSV2_PATH)
+    cls_list, path_list = [], []
+    with open('dataloaders/ssv2_paths.txt', 'r') as f:
+        for line in f:
+            full = line.strip()
+            cls = os.path.dirname(full)
+            full = os.path.join(path, full)
+            cls_list.append(cls)
+            path_list.append(full)
+    return cls_list, path_list
+
+
+
+
+

@@ -318,16 +318,16 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
     model = VJEPA2()
     model.eval()
     class_names = list(model.label2id.keys())
-    
-    n_files = len(sel_paths)
 
-    for idx, p in enumerate(sel_paths):
+    cls_list, path_list = ssv2.get_sampled_paths()
+    n_files = len(path_list)
+    for idx, p in enumerate(path_list):
         # print(f'{idx} of {n_files} is done.')
         print(f'{idx/n_files*100:.2f} is done',end='\r')
         # if not str(p) == 'C:\\Users\\lahir\\Downloads\\s2s_test\\Hitting something with something\\1337.webm':
         #     continue
         video = model.video_from_path(p)['pixel_values_videos'][0,:].permute(1,0,2,3)
-        gt_idx = model.label2id[d_names[idx]]
+        gt_idx = model.label2id[cls_list[idx]]
         group_dict = group_frames(model, video, gt_idx, GRP_THRESHOLD)
         if group_dict==-1:
             continue
@@ -338,9 +338,7 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
         
 if __name__ == '__main__':
     # out_dir = r'C:\Users\lahir\Downloads\UCF101\analysis\groups'
-    # out_dir = r'C:\Users\lahir\Downloads\ssv2_analysis'
+    out_dir = r'C:\Users\lahir\Downloads\ssv2_analysis'
     # group_frames_loader_UCF101(out_dir, resume_path=r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl', GRP_THRESHOLD=1e-3)
-    # group_frames_loader_SSV2(out_dir, GRP_THRESHOLD=1e-3)
-    sample_paths_ssv2()
-
+    group_frames_loader_SSV2(out_dir, GRP_THRESHOLD=1e-3)
 
