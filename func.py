@@ -1615,21 +1615,21 @@ class UCF101_data_model:
         self.mask_dir = r'C:\Users\lahir\Downloads\UCF101\analysis\masks'
         self.data_path = model_opt.video_path
 
-    def construct_vid_path(self, cls_name, g, c):
-        dir = os.path.join(
-            self.data_path , cls_name, "v_{}_g{}_c{}".format(cls_name, str(g).zfill(2), str(c).zfill(2))
-        )
+    def construct_vid_path(self, cls_name, vid_name):
+        # dir = os.path.join(
+        #     self.data_path , cls_name, "v_{}_g{}_c{}".format(cls_name, str(g).zfill(2), str(c).zfill(2))
+        # )
+        dir = os.path.join(self.data_path , cls_name, vid_name)
         return dir
     
     def construct_vid_path_from_full(self, path):
-        print(path)
-        g = path.split('_')[2][1:]
-        c = path.split('_')[3][1:]
+        # print(path)
+        # g = path.split('_')[2][1:]
+        # c = path.split('_')[3][1:]
         cls_name_ = path.split('_')[1]
         cls_name = [d for d in self.cls_dirs if d.lower()==cls_name_.lower()][0]
-        path = self.construct_vid_path(cls_name, g, c)
-        print(path)
-        return path
+        full_path = self.construct_vid_path(cls_name, path)
+        return full_path
 
     def load_jpg_ucf101_param(self, l, g, c, n):
         name = self.inference_class_names[l]
