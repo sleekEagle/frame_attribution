@@ -206,8 +206,7 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD):
 
             record = json.loads(line)
             filename = record['filename']
-            if filename!='v_HandStandPushups_g01_c01':
-                continue
+
             p = ucf101dm.construct_vid_path_from_full(filename)
             video = ucf101dm.load_jpg_ucf101(p, n=0)
             g = record['groups']
