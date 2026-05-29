@@ -1640,6 +1640,7 @@ class UCF101_data_model:
         return torch.stack(video)
     
     def load_jpg_ucf101(self, path, n=0):
+        print(path)
 
         path = sorted(glob(path + "/*"), key=numericalSort)
 
