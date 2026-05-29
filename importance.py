@@ -7,8 +7,8 @@ import os
 from pathlib import Path
 import CONST
 
-ucf101dm = func.UCF101_data_model()
-model = ucf101dm.model
+# ucf101dm = func.UCF101_data_model()
+# model = ucf101dm.model
 
 # def get_video():
 #     with open(UCF_PATH, 'r', encoding='utf-8') as f:
@@ -162,7 +162,7 @@ class CalcSHAP:
         return shap_values
     
 
-def calc_shap_UCF101(GRP_PATH, OUT_PATH):
+def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD):
     #****************************************************************************
     # the model and the data loader
     #****************************************************************************
@@ -186,7 +186,6 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH):
     #*************************************************************************
     # initialize shap model 
     #*************************************************************************
-    FILL_METHOD = 'late'
     ex = CalcSHAP(model, fill_method=FILL_METHOD)
 
     #construct the out path for logging
@@ -240,4 +239,5 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH):
 if __name__ == "__main__":
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\importance'
-    calc_shap_UCF101(GRP_PATH, OUT_PATH)
+    FILL_METHOD = 'late'
+    calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD)
