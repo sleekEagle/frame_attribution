@@ -200,7 +200,7 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD):
         line_count = sum(1 for _ in enumerate(f))
     with open(GRP_PATH, 'r', encoding='utf-8') as f:
         for line in f:
-            print(f'{n/line_count*100:.1f}% is done.', end='\r')
+            # print(f'{n/line_count*100:.1f}% is done.', end='\r')
             n+=1
 
             if n<1376: continue
@@ -215,6 +215,7 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD):
             p = ucf101dm.construct_vid_path_from_full(filename)
             print(filename)
             video = ucf101dm.load_jpg_ucf101(p, n=0)
+            print(video)
             g = record['groups']
             groups = {}
             for k in g:
