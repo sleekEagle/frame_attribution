@@ -573,12 +573,15 @@ def create_new_video(video, groups, ordered_keys=None):
     return new_video
 
 #video: 3, t , h , w
+# groups = {15: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]}
+# video = torch.zeros(3,16,112,112)
 def create_grouped_video(video, groups):
     new_video = video.clone()
     for k in groups.keys():
         for f in groups[k]:
             new_video[:,f,:] = video[:,k,:]
     return new_video
+# create_grouped_video(video, groups)
 
 def replace_frame(video, ordered_keys, frame_cluster_idxs, key, img):
     new_video = video.clone()
