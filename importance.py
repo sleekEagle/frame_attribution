@@ -128,7 +128,8 @@ class CalcSHAP:
     def explain(self, video, groups, check=False):
         self.n_masks = 0
         self.groups = groups
-        print(video.shape)
+        print(type(video))
+        print(video)
         print(groups)
         self.video = func.create_grouped_video(video.permute(1,0,2,3), groups).permute(1,0,2,3).to(self.device)
         NUM_GROUPS = len(groups)
