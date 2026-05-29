@@ -1642,8 +1642,13 @@ class UCF101_data_model:
     def load_jpg_ucf101(self, path, n=0):
 
         path = sorted(glob(path + "/*"), key=numericalSort)
+        print(path)
+        print(f'n: {n}')
 
         target_path = path[n * 16 : (n + 1) * 16]
+        print(target_path)
+        print(len(target_path))
+        
         if len(target_path) < 16:
             print("not exist")
             return False
