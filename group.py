@@ -277,6 +277,38 @@ def save_video(out_path, video):
         frame_pil = Image.fromarray(frame.permute(1, 2, 0).cpu().numpy())
         frame_pil.save(f"{out_path}\\frame_{frame_idx:04d}.png")
 
+def sample_paths_ssv2(N_SAMPLES=6):
+    model = VJEPA2()
+    model.eval()
+    class_names = list(model.label2id.keys())
+
+    d_names, paths = ssv2.get_ssv2_paths()
+
+    # uniformly select and equal number of samples from a class
+    unique_d = list(set(d_names))
+    sel_d, sel_paths = [], []
+    for d in unique_d:
+        idxs = [i for i,s in enumerate(d_names) if s==d]
+        random.shuffle(idxs)
+        sel_idxs = idxs[:N_SAMPLES]
+        sel_d.extend([d]*N_SAMPLES)
+        sel_paths.extend([paths[i] for i in sel_idxs])
+
+    # sanity check
+    for i in range(len(sel_paths)):
+        p = sel_paths[i]
+        assert os.path.basename(os.path.dirname(p))==sel_d[i]
+        
+    #make sure all the class names are present in the list of dirs
+    for d in sel_d:
+        assert d in class_names, f'{d} is not in the list of dirs'
+
+    with open('dataloaders/ssv2_paths.txt', 'a') as f:
+            for p in sel_paths:
+                dir = os.path.basename(os.path.dirname(p))
+                file = os.path.basename(p)
+                str = os.path.join(dir,file)
+                f.write(str + '\n')
 
 def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
     out_path = os.path.join(out_dir, f'_groups_{GRP_THRESHOLD}.jsonl')
@@ -286,23 +318,10 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
     model = VJEPA2()
     model.eval()
     class_names = list(model.label2id.keys())
-
-    d_names, paths = ssv2.get_ssv2_paths()
     
-    #randomly select a subset
-    idx = list(range(0,len(d_names)))
-    random.shuffle(idx)
-    idx = idx[:1000]
-    d_names = [d_names[i] for i in idx]
-    paths = [paths[i] for i in idx]
-    n_files = len(paths)
+    n_files = len(sel_paths)
 
-    
-    #make sure all the class names are present in the list of dirs
-    for d in d_names:
-        assert d in class_names, f'{d} is not in the list of dirs'
-
-    for idx, p in enumerate(paths):
+    for idx, p in enumerate(sel_paths):
         # print(f'{idx} of {n_files} is done.')
         print(f'{idx/n_files*100:.2f} is done',end='\r')
         # if not str(p) == 'C:\\Users\\lahir\\Downloads\\s2s_test\\Hitting something with something\\1337.webm':
@@ -319,8 +338,9 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
         
 if __name__ == '__main__':
     # out_dir = r'C:\Users\lahir\Downloads\UCF101\analysis\groups'
-    out_dir = r'C:\Users\lahir\Downloads\ssv2_analysis'
+    # out_dir = r'C:\Users\lahir\Downloads\ssv2_analysis'
     # group_frames_loader_UCF101(out_dir, resume_path=r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl', GRP_THRESHOLD=1e-3)
-    group_frames_loader_SSV2(out_dir, GRP_THRESHOLD=1e-3)
+    # group_frames_loader_SSV2(out_dir, GRP_THRESHOLD=1e-3)
+    sample_paths_ssv2()
 
 
