@@ -83,8 +83,8 @@ class CalcSHAP:
                     g = [func.future_fill_all(mask[i], self.groups)]
                 elif self.fill_method=='past':
                     g = [func.past_fill_all(mask[i], self.groups)]
-                elif self.fill_method=='mid':
-                    g = [func.hybrid_fill_all(mask[i], self.groups, 'mid')]
+                elif self.fill_method=='middle':
+                    g = [func.hybrid_fill_all(mask[i], self.groups, 'middle')]
                 elif self.fill_method=='random':
                     g = [func.hybrid_fill_all(mask[i], self.groups, 'random')]
                 elif self.fill_method=='late':
@@ -234,5 +234,5 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD):
 if __name__ == "__main__":
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\importance'
-    FILL_METHOD = 'past'
+    FILL_METHOD = 'middle'
     calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD)
