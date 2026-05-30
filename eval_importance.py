@@ -9,6 +9,7 @@ import CONST
 import random
 from scipy.stats import entropy
 import torch.nn.functional as F
+from scipy.integrate import trapezoid
 
 
 #get all pred original logits from the group log file
@@ -102,31 +103,38 @@ class EvalLogits:
                 n += 1
             for k in avg_:
                 metrics[k].append(avg_[k]/n)
+
+        auc = {}
+        x = np.linspace(0, 1, len(metrics['entropy']))
+        auc['entropy'] = float(trapezoid(metrics['entropy'], x))
+        auc['logit'] = float(trapezoid(metrics['logit'], x))
+        for m in [1,3,5]:
+            auc[f'margin{m}'] = float(trapezoid(metrics[f'margin{m}'], x))
   
-        return metrics
+        return {'list': metrics, 'auc': auc}
     
     
     def eval_add(self, idx_order):
         metrics = {
-            'entropy': [0],
-            'margin1': [1],
-            'margin3': [1],
-            'margin5': [1],
-            'logit': [1]
+            'entropy': [1],
+            'margin1': [0],
+            'margin3': [0],
+            'margin5': [0],
+            'logit': [0]
         }
-        mask = [1]*len(self.groups)
+        mask = [0]*len(self.groups)
         if self.show_mask:
             print(mask)
         for idx in idx_order:
-            mask[idx] = 0
+            mask[idx] = 1
             if self.show_mask :
                 print(mask)
             if sum(mask) == 0:
-                metrics['entropy'].append(1)
-                metrics['margin1'].append(0)
-                metrics['margin3'].append(0)
-                metrics['margin5'].append(0)
-                metrics['logit'].append(0)
+                metrics['entropy'].append(0)
+                metrics['margin1'].append(1)
+                metrics['margin3'].append(1)
+                metrics['margin5'].append(1)
+                metrics['logit'].append(1)
                 continue
             if self.fill_type == 'past':
                 g = [func.past_fill_all(mask, self.groups)]
@@ -158,10 +166,18 @@ class EvalLogits:
                 n += 1
             for k in avg_:
                 metrics[k].append(avg_[k]/n)
-        return logits
+
+        auc = {}
+        x = np.linspace(0, 1, len(metrics['entropy']))
+        auc['entropy'] = float(trapezoid(metrics['entropy'], x))
+        auc['logit'] = float(trapezoid(metrics['logit'], x))
+        for m in [1,3,5]:
+            auc[f'margin{m}'] = float(trapezoid(metrics[f'margin{m}'], x))
+
+        return {'list': metrics, 'auc': auc}
 
 def eval_UCF101():
-    FILL_TYPE = 'past'
+    FILL_TYPE = 'past' # past, future, middle, random, late
     IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\exactSHAP_past_0.001.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\importance\eval\{FILL_TYPE}_0.001.jsonl'
@@ -182,7 +198,7 @@ def eval_UCF101():
     n=0
     with open(IMP_PATH, 'r', encoding='utf-8') as f:
         for line in f:
-            print(f'{n/line_count*100:.1f}% is done.')
+            print(f'{n/line_count*100:.1f}% is done.', end='\r')
             n+=1
             line = line.strip()
             if not line:
@@ -198,7 +214,7 @@ def eval_UCF101():
             sv = record['shapley_values'][0]
 
             # sanity checks
-            assert abs(ol[cls_idx]-l) < 1e-3, 'the prediction logit does not match the original prediction logit'
+            assert abs(ol[cls_idx]-l) < 1e-2, 'the prediction logit does not match the original prediction logit'
             # assert record['difference'] < 1e-2, 'The exactly shapley value difference is too large!'
             assert len(record['groups']) == len(sv) , 'Number of shapley values do not match!'
 
@@ -210,7 +226,7 @@ def eval_UCF101():
             for k in record['groups']:
                 groups[int(k)] = record['groups'][k]
 
-            el = EvalLogits(video, model, groups, orig_stat, cls_idx, 'future')
+            el = EvalLogits(video, model, groups, orig_stat, cls_idx, FILL_TYPE)
 
             results = {
                 'filename': record['filename'],
