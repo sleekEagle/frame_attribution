@@ -76,7 +76,7 @@ class EvalLogits:
                 g = [func.past_fill_all(mask, self.groups)]
             elif self.fill_type == 'future':
                 g = [func.future_fill_all(mask, self.groups)]
-            elif self.fill_type == 'mid':
+            elif self.fill_type == 'middle':
                 g = [func.hybrid_fill_all(mask, self.groups, 'middle')]
             elif self.fill_type=='random':
                 g = [func.hybrid_fill_all(mask, self.groups, 'random')]
@@ -107,21 +107,57 @@ class EvalLogits:
     
     
     def eval_add(self, idx_order):
-        logits = []
-        mask = [0]*len(self.groups)
+        metrics = {
+            'entropy': [0],
+            'margin1': [1],
+            'margin3': [1],
+            'margin5': [1],
+            'logit': [1]
+        }
+        mask = [1]*len(self.groups)
         if self.show_mask:
             print(mask)
-        logits.append(CONST.UCF_AVG_PRED[self.cls_idx].item())
         for idx in idx_order:
-            mask[idx] = 1
-            if self.show_mask:
+            mask[idx] = 0
+            if self.show_mask :
                 print(mask)
-            g = func.past_fill_all(mask, self.groups)
-            vid_g = func.create_grouped_video(self.full_video, g)
-            with torch.no_grad():
-                p = self.model(vid_g[None,:])
-                l = p[0,self.cls_idx].item()
-                logits.append(l)
+            if sum(mask) == 0:
+                metrics['entropy'].append(1)
+                metrics['margin1'].append(0)
+                metrics['margin3'].append(0)
+                metrics['margin5'].append(0)
+                metrics['logit'].append(0)
+                continue
+            if self.fill_type == 'past':
+                g = [func.past_fill_all(mask, self.groups)]
+            elif self.fill_type == 'future':
+                g = [func.future_fill_all(mask, self.groups)]
+            elif self.fill_type == 'middle':
+                g = [func.hybrid_fill_all(mask, self.groups, 'middle')]
+            elif self.fill_type=='random':
+                g = [func.hybrid_fill_all(mask, self.groups, 'random')]
+            elif self.fill_type=='late':
+                g = [func.past_fill_all(mask, self.groups),
+                         func.future_fill_all(mask, self.groups)]
+
+            avg_ = {
+                'entropy' : 0,
+                'logit': 0,
+                'margin1': 0,
+                'margin3': 0,
+                'margin5': 0,
+            }
+            n = 0
+            for g_ in g:
+                vid_g = func.create_grouped_video(self.full_video, g_)
+                stat = func.get_pred_stats(self.model, vid_g)
+                avg_['entropy'] += (stat['entropy'] - self.all_metrics['entropy'])/(self.none_metrics['entropy'] - self.all_metrics['entropy'])
+                avg_['logit'] += (stat['logits'][self.cls_idx] - self.none_metrics['logit'])/(self.all_metrics['logit'] - self.none_metrics['logit'])
+                for m in [1,3,5]:
+                    avg_[f'margin{m}'] += (stat[f'margin_{m}'] - self.none_metrics[f'margin_{m}'])/(self.all_metrics[f'margin_{m}'] - self.none_metrics[f'margin_{m}'])
+                n += 1
+            for k in avg_:
+                metrics[k].append(avg_[k]/n)
         return logits
 
 def eval_UCF101():
@@ -174,7 +210,7 @@ def eval_UCF101():
             for k in record['groups']:
                 groups[int(k)] = record['groups'][k]
 
-            el = EvalLogits(video, model, groups, orig_stat, cls_idx, 'late')
+            el = EvalLogits(video, model, groups, orig_stat, cls_idx, 'future')
 
             results = {
                 'filename': record['filename'],
