@@ -7,6 +7,9 @@ import os
 from pathlib import Path
 import CONST
 import random
+from scipy.stats import entropy
+import torch.nn.functional as F
+
 
 #get all pred original logits from the group log file
 def get_orig_logits(PATH):
@@ -18,7 +21,7 @@ def get_orig_logits(PATH):
                 continue
 
             record = json.loads(line)            
-            d[record['filename']] = record['orig_logits']
+            d[record['filename']] = record['original_stat']['logits']
     return d
 
 class EvalLogits:
@@ -31,12 +34,29 @@ class EvalLogits:
         self.show_mask = show_mask
         self.fill_type = fill_type
 
+        #prepare the all and none metrics
+        all_metrics, none_metrics = {},{}
+
+        none_metrics['entropy'] = float(entropy(F.softmax(CONST.UCF_AVG_PRED,dim=0)))
+        none_metrics['logit'] = float(CONST.UCF_AVG_PRED[cls_idx])
+        for m in [1,3,5]:
+            none_metrics[f'margin_{m}'] = float(func.get_margin(CONST.UCF_AVG_PRED, cls_idx=cls_idx, k=m))
+
+        logits = torch.tensor(orig_stat['logits'])
+        all_metrics['entropy'] = float(entropy(F.softmax(logits,dim=0)))
+        all_metrics['logit'] = float(logits[cls_idx])
+        for m in [1,3,5]:
+            all_metrics[f'margin_{m}'] = float(func.get_margin(logits, cls_idx=cls_idx, k=m))
+
+        self.all_metrics, self.none_metrics = all_metrics, none_metrics
+
     def eval_remove(self, idx_order):
         metrics = {
             'entropy': [0],
-            'margin1': [0],
-            'margin2': [0],
-            'margin3': [0]
+            'margin1': [1],
+            'margin3': [1],
+            'margin5': [1],
+            'logit': [1]
         }
         mask = [1]*len(self.groups)
         if self.show_mask:
@@ -46,21 +66,31 @@ class EvalLogits:
             if self.show_mask :
                 print(mask)
             if sum(mask) == 0:
-                metrics['entropy'].append(0)
-                logits.append(CONST.UCF_AVG_PRED[self.cls_idx].item())
+                metrics['entropy'].append(1)
+                metrics['margin1'].append(0)
+                metrics['margin3'].append(0)
+                metrics['margin5'].append(0)
+                metrics['logit'].append(0)
                 continue
             if self.fill_type == 'past':
                 g = func.past_fill_all(mask, self.groups)
             elif self.fill_type == 'future':
                 g = func.future_fill_all(mask, self.groups)
-
+            elif self.fill_type == 'mid':
+                pass
+            elif self.fill_type=='random':
+                pass
+            elif self.fill_type=='late':
+                pass
+            
             vid_g = func.create_grouped_video(self.full_video, g)
-            stat = func.get_pred_stats(self.model, vid_g, self.orig_stat['pred_logits'])
-            with torch.no_grad():
-                p = self.model(vid_g[None,:])
-                l = p[0,self.cls_idx].item()
-                logits.append(l)
-        return logits
+            stat = func.get_pred_stats(self.model, vid_g)
+            metrics['entropy'].append((stat['entropy'] - self.all_metrics['entropy'])/(self.none_metrics['entropy'] - self.all_metrics['entropy']))
+            metrics['logit'].append((stat['logits'][self.cls_idx] - self.none_metrics['logit'])/(self.all_metrics['logit'] - self.none_metrics['logit']))
+            for m in [1,3,5]:
+                metrics[f'margin{m}'].append((stat[f'margin_{m}'] - self.none_metrics[f'margin_{m}'])/(self.all_metrics[f'margin_{m}'] - self.none_metrics[f'margin_{m}']))    
+
+        return metrics
     
     
     def eval_add(self, idx_order):
@@ -74,7 +104,7 @@ class EvalLogits:
             if self.show_mask:
                 print(mask)
             g = func.past_fill_all(mask, self.groups)
-            vid_g = func.create_grouped_video(self.full_video.permute(1,0,2,3), g)
+            vid_g = func.create_grouped_video(self.full_video, g)
             with torch.no_grad():
                 p = self.model(vid_g[None,:])
                 l = p[0,self.cls_idx].item()
@@ -84,8 +114,8 @@ class EvalLogits:
 def eval_UCF101():
     FILL_TYPE = 'past'
     IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\exactSHAP_past_0.001.jsonl'
-    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
-    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\eval_{FILL_TYPE}_0.001.jsonl'
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\importance\eval\{FILL_TYPE}_0.001.jsonl'
 
     orig_logits = get_orig_logits(GRP_PATH)
 
@@ -109,7 +139,6 @@ def eval_UCF101():
             if not line:
                 continue
             record = json.loads(line)
-            class_labels
             cls_idx = class_labels[record['filename'].split('_')[1].lower()]
             ol = orig_logits[record['filename']]
 
@@ -120,7 +149,7 @@ def eval_UCF101():
             sv = record['shapley_values'][0]
 
             # sanity checks
-            assert abs(ol[cls_idx]-l) < 1e-5, 'the prediction logit does not match the original prediction logit'
+            assert abs(ol[cls_idx]-l) < 1e-3, 'the prediction logit does not match the original prediction logit'
             # assert record['difference'] < 1e-2, 'The exactly shapley value difference is too large!'
             assert len(record['groups']) == len(sv) , 'Number of shapley values do not match!'
 

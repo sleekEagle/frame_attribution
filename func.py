@@ -291,7 +291,7 @@ def get_pred_stats(model, v):
         ret['max_prob'] = pred_prob
 
         for k in range(1,N_MARGINS+1):
-            orig_margin = get_margin(pred_l[0,:], k=k)
+            orig_margin = get_margin(pred_l[0,:], pred_cls, k=k)
             ret[f'margin_{k}'] = orig_margin.item()
         o_entr = float(entropy(pred_p[0,:].cpu()))
         ret['entropy'] = o_entr
