@@ -73,23 +73,36 @@ class EvalLogits:
                 metrics['logit'].append(0)
                 continue
             if self.fill_type == 'past':
-                g = func.past_fill_all(mask, self.groups)
+                g = [func.past_fill_all(mask, self.groups)]
             elif self.fill_type == 'future':
-                g = func.future_fill_all(mask, self.groups)
+                g = [func.future_fill_all(mask, self.groups)]
             elif self.fill_type == 'mid':
-                pass
+                g = [func.hybrid_fill_all(mask, self.groups, 'middle')]
             elif self.fill_type=='random':
-                pass
+                g = [func.hybrid_fill_all(mask, self.groups, 'random')]
             elif self.fill_type=='late':
-                pass
-            
-            vid_g = func.create_grouped_video(self.full_video, g)
-            stat = func.get_pred_stats(self.model, vid_g)
-            metrics['entropy'].append((stat['entropy'] - self.all_metrics['entropy'])/(self.none_metrics['entropy'] - self.all_metrics['entropy']))
-            metrics['logit'].append((stat['logits'][self.cls_idx] - self.none_metrics['logit'])/(self.all_metrics['logit'] - self.none_metrics['logit']))
-            for m in [1,3,5]:
-                metrics[f'margin{m}'].append((stat[f'margin_{m}'] - self.none_metrics[f'margin_{m}'])/(self.all_metrics[f'margin_{m}'] - self.none_metrics[f'margin_{m}']))    
+                g = [func.past_fill_all(mask, self.groups),
+                         func.future_fill_all(mask, self.groups)]
 
+            avg_ = {
+                'entropy' : 0,
+                'logit': 0,
+                'margin1': 0,
+                'margin3': 0,
+                'margin5': 0,
+            }
+            n = 0
+            for g_ in g:
+                vid_g = func.create_grouped_video(self.full_video, g_)
+                stat = func.get_pred_stats(self.model, vid_g)
+                avg_['entropy'] += (stat['entropy'] - self.all_metrics['entropy'])/(self.none_metrics['entropy'] - self.all_metrics['entropy'])
+                avg_['logit'] += (stat['logits'][self.cls_idx] - self.none_metrics['logit'])/(self.all_metrics['logit'] - self.none_metrics['logit'])
+                for m in [1,3,5]:
+                    avg_[f'margin{m}'] += (stat[f'margin_{m}'] - self.none_metrics[f'margin_{m}'])/(self.all_metrics[f'margin_{m}'] - self.none_metrics[f'margin_{m}'])
+                n += 1
+            for k in avg_:
+                metrics[k].append(avg_[k]/n)
+  
         return metrics
     
     
@@ -161,7 +174,7 @@ def eval_UCF101():
             for k in record['groups']:
                 groups[int(k)] = record['groups'][k]
 
-            el = EvalLogits(video, model, groups, orig_stat, cls_idx, 'future')
+            el = EvalLogits(video, model, groups, orig_stat, cls_idx, 'late')
 
             results = {
                 'filename': record['filename'],
