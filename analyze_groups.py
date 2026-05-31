@@ -396,6 +396,30 @@ def freeze_grp_feat(model, video, groups, FILL, device):
     
     return feat
 
+def zero_grp_feat(model, video, groups, device):
+
+    # register hook to get features
+    activation = {}
+    def get_activation(name):
+        """Hook function to capture layer output"""
+        def hook(model, input, output):
+            activation[name] = output.detach()
+        return hook
+    handle = model.avgpool.register_forward_hook(get_activation('features'))
+
+    # remove a randomly choosen group
+    sel_idx = random.sample(list(range(len(groups.keys()))),1)[0]
+    sel_key = list(groups.keys())[sel_idx]
+    zero_idx = [sel_key] + groups[sel_key] 
+
+    vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups).to(device)
+    for i in zero_idx:
+        vid_g[:,i,:] = 0
+    model(vid_g[None,:])
+    feat = activation['features'][0,:,0,0,0]
+        
+    return feat
+
 def tmp_freeze_grps_UCF101(FILL):
     import torch
     import func
@@ -434,7 +458,10 @@ def tmp_freeze_grps_UCF101(FILL):
             p = ucf101dm.construct_vid_path_from_full(record['filename'])
             video = ucf101dm.load_jpg_ucf101(p, n=0)
             
-            feat = freeze_grp_feat(model, video, groups, FILL, device)
+            if FILL=='zero':
+                feat = zero_grp_feat(model, video, groups, device)
+            else:
+                feat = freeze_grp_feat(model, video, groups, FILL, device)
             
             d = {}
             d['filename'] = record['filename']
@@ -444,4 +471,4 @@ def tmp_freeze_grps_UCF101(FILL):
                 f.write(json.dumps(d) + '\n')
 
 if __name__ == '__main__':
-    tmp_freeze_grps_UCF101('late_sum')
+    tmp_freeze_grps_UCF101('zero')

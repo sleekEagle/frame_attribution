@@ -83,7 +83,7 @@ def cluster_features():
 
 def cluster_frozen():
     import pandas as pd
-    df = pd.DataFrame(columns=['filename', 'orig', 'future', 'past', 'late_sum', 'hybrid_mid','hybrid_random'])
+    df = pd.DataFrame()
 
     ORIG_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features\orig.jsonl'
     FUTURE_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\future.jsonl'
@@ -91,6 +91,7 @@ def cluster_frozen():
     LATE_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\late_sum.jsonl'
     MID_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\hybrid_mid.jsonl'
     RAND_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\hybrid_random.jsonl'
+    ZERO_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\zero.jsonl'
 
     PLOT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\plots'
 
@@ -108,6 +109,7 @@ def cluster_frozen():
     d_late = get_data(LATE_PATH)
     d_mid = get_data(MID_PATH)
     d_random = get_data(RAND_PATH)
+    d_zero = get_data(ZERO_PATH)
 
     rows_list = []
     for k in d_orig:
@@ -117,7 +119,8 @@ def cluster_frozen():
                'past': np.array(d_past[k]), 
                'late': np.array(d_late[k]),
                'mid': np.array(d_mid[k]),
-               'random': np.array(d_random[k])}
+               'random': np.array(d_random[k]),
+               'zero': np.array(d_zero[k])}
         rows_list.append(row)
     df = pd.concat([df, pd.DataFrame(rows_list)], ignore_index=True)
 
@@ -127,6 +130,7 @@ def cluster_frozen():
     late = np.stack(df['late'].values) 
     mid = np.stack(df['mid'].values) 
     random = np.stack(df['random'].values) 
+    zero = np.stack(df['zero'].values)
 
     # Calculate L2 distances for all rows at once
     df['diff_future'] = np.sum((original - future)**2,axis=1)**0.5
@@ -134,6 +138,7 @@ def cluster_frozen():
     df['diff_late'] = np.sum((original - late)**2,axis=1)**0.5
     df['diff_mid'] = np.sum((original - mid)**2,axis=1)**0.5
     df['diff_random'] = np.sum((original - random)**2,axis=1)**0.5
+    df['diff_zero'] = np.sum((original - zero)**2,axis=1)**0.5
 
     probs_o = softmax(original, axis=1)  
     probs_f = softmax(future, axis=1) 
@@ -141,6 +146,7 @@ def cluster_frozen():
     probs_l = softmax(late, axis=1)
     probs_m = softmax(mid, axis=1)
     probs_r = softmax(random, axis=1)
+    probs_z = softmax(zero, axis=1)
 
     epsilon = 1e-10
     probs_orig = np.clip(probs_o, epsilon, 1.0)
@@ -149,20 +155,22 @@ def cluster_frozen():
     probs_l = np.clip(probs_l, epsilon, 1.0)
     probs_m = np.clip(probs_m, epsilon, 1.0)
     probs_r = np.clip(probs_r, epsilon, 1.0)
+    probs_z = np.clip(probs_z, epsilon, 1.0)
 
     kl_f = np.sum(rel_entr(probs_orig, probs_f), axis=1)
     kl_p = np.sum(rel_entr(probs_orig, probs_p), axis=1)
     kl_l = np.sum(rel_entr(probs_orig, probs_l), axis=1)
     kl_m = np.sum(rel_entr(probs_orig, probs_m), axis=1)
     kl_r = np.sum(rel_entr(probs_orig, probs_r), axis=1)
+    kl_z = np.sum(rel_entr(probs_orig, probs_z), axis=1)
     
     df['kl_future'] = kl_f
     df['kl_past'] = kl_p
     df['kl_late'] = kl_l
     df['kl_mid'] = kl_m
     df['kl_random'] = kl_r
+    df['kl_zero'] = kl_z
 
-    
     def get_PCA(o,f):
         all_features = np.vstack([o, f])    
         pca = PCA(n_components=2)
@@ -175,7 +183,7 @@ def cluster_frozen():
     
 
     PCA_metrics = {}
-    for freeze_method in ['future','past','late','mid','random']:
+    for freeze_method in ['future','past','late','mid','random', 'zero']:
         f = locals()[freeze_method]
         orig_pca, f_pca = get_PCA(original, f)
 
@@ -196,24 +204,19 @@ def cluster_frozen():
         plt.show()
     
 
-
-    pass
-
     print(df['kl_future'].mean())
     print(df['kl_past'].mean())
     print(df['kl_late'].mean())
     print(df['kl_mid'].mean())
     print(df['kl_random'].mean())
+    print(df['kl_zero'].mean())
 
     print(df['diff_future'].mean())
     print(df['diff_past'].mean())
     print(df['diff_late'].mean())
     print(df['diff_mid'].mean())
     print(df['diff_random'].mean())
-
-    # plot the clusters
-
-
+    print(df['diff_zero'].mean())
 
 
 # plot grouped feature distribution difference
