@@ -11,7 +11,8 @@ from scipy.stats import entropy
 import torch.nn.functional as F
 from scipy.integrate import trapezoid
 import math
-
+import pandas as pd
+from functools import reduce
 
 #get all pred original logits from the group log file
 def get_orig_logits(PATH):
@@ -314,8 +315,77 @@ def avg_stat_ucf():
             print(s)
 
 
-def importance_correlation():
-    pass
+'''
+correlations:
+
+sv_middle_sv_past : 0.8921225773572666
+sv_middle_sv_future : 0.8916806869270159
+sv_middle_sv_late : 0.9249672775266151
+sv_middle_sv_random : 0.9618467998371354
+sv_past_sv_future : 0.8462951064300263
+sv_past_sv_late : 0.956112907844077
+sv_past_sv_random : 0.9125461436584569
+sv_future_sv_late : 0.955814231520257
+sv_future_sv_random : 0.9130876412734605
+sv_late_sv_random : 0.9489035762684004
+
+'''
+def importance_correlation(GRP_PATH, IMP_PATH):
+    grp_stats = get_orig_logits(GRP_PATH)
+    imp_files = [file for file in os.listdir(IMP_PATH) if file.startswith('exact') and file.endswith('jsonl')]
+
+    def get_sv(imp_file):
+        file = os.path.join(IMP_PATH, imp_file)
+        with open(file, 'r', encoding='utf-8') as f:
+            data = []
+            for line in f:
+                line = line.strip()
+                d_ = json.loads(line)
+                filename = d_['filename']
+                cls = grp_stats[filename]['stats']['cls']
+                sv = [sv[cls] for sv in d_['shapley_values'][0]]
+                if len(sv)==1: continue
+                data.append({'filename': filename, f'sv_{imp_file.split('_')[1]}': [sv[cls] for sv in d_['shapley_values'][0]]})
+        df = pd.DataFrame(data)
+        return df
+    
+    
+    df_list = [get_sv(f) for f in imp_files]
+    combined_df = reduce(lambda left, right: pd.merge(left, right, on='filename'), df_list)
+
+    # calculate correlations
+    list_columns = list(set(list(combined_df.columns))- {'filename'})
+    summary_data = []
+    for i in range(len(list_columns)):
+        for j in range(i+1, len(list_columns)):
+            col1 = list_columns[i]
+            col2 = list_columns[j]
+            
+            correlations = []
+            for idx in range(len(combined_df)):
+                list1 = combined_df[col1].iloc[idx]
+                list2 = combined_df[col2].iloc[idx]
+                corr = np.corrcoef(list1, list2)[0, 1]
+                correlations.append(corr)
+
+            # np.where(np.isnan(correlations))[0]
+            # combined_df.iloc[6]
+            
+            summary_data.append({
+                'column_pair': f'{col1}_{col2}',
+                'mean_correlation': np.mean(correlations),
+                'std_correlation': np.std(correlations),
+                'min_correlation': np.min(correlations),
+                'max_correlation': np.max(correlations),
+                'correlations_list': correlations
+            })
+
+    # print the mean correlations
+    for sum in summary_data:
+        name = sum['column_pair']
+        corr = str(sum['mean_correlation'])
+        print(f'{name} : {corr}')   
+    
 
 if __name__ == "__main__":
-    importance_correlation()
+    importance_correlation(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl' ,r'C:\Users\lahir\Downloads\UCF101\analysis\shap')
