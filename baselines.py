@@ -1,19 +1,17 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from captum.attr import GuidedGradCam, IntegratedGradients, GuidedGradCam, FeatureAblation
+from captum.attr import GuidedGradCam, IntegratedGradients, FeatureAblation, Occlusion
 from CONST import UCF_INP_SHAPE
 import func
 import json
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np
+from pathlib import Path
 
 torch.manual_seed(123)
 np.random.seed(123)
-
-UCF_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_0.001.jsonl'
-OUT_DICT = r'C:\Users\lahir\Downloads\UCF101\analysis\baselines'
 
 
 def show_overlay(video, attribution, alpha=0.5):
@@ -76,6 +74,8 @@ class Baseline():
             self.interpr = GuidedGradCam(self.model, self.model.layer4)
         elif method == 'feat_abl':
             self.interpr = FeatureAblation(self.model)
+        elif method == 'occlusion':
+            self.interpr = Occlusion(self.model)
         self.method = method
 
     
@@ -86,20 +86,22 @@ class Baseline():
             attributions = self.interpr.attribute(input.to('cuda')[None,:], target=target)
         elif self.method == 'feat_abl': # takes too much time
             attributions = self.interpr.attribute(input.to('cuda')[None,:], target=target)
+        elif self.method == 'occlusion':
+            h,w = input.size(2),input.size(3)
+            attributions = self.interpr.attribute(input[None,:].to('cuda'), target=target, sliding_window_shapes=(1,1,h,w))
         # show_overlay(input, attributions[0,:].detach().cpu())
+        # get frame wise attributions
         attributions = torch.mean(attributions, dim=(1,3,4))[0,:]
         #normalize attributions
-        attributions = (attributions - torch.min(attributions)) / (torch.max(attributions)-torch.min(attributions) + 1e-8)
+        # attributions = (attributions - torch.min(attributions)) / (torch.max(attributions)-torch.min(attributions) + 1e-8)
 
         return attributions.detach().cpu()
 
-from pathlib import Path
 
-def calc_imp():
+def calc_imp_UCF(GRP_PATH, OUT_PATH, INTERPR_METHOD='IG'):
     #create outout file
-    INTERPR_METHOD = 'IG'
-    thr = Path(UCF_PATH).stem.split('_')[-1]
-    OUT_PATH = rf'{OUT_DICT}\{thr}_{INTERPR_METHOD}.jsonl'
+    thr = Path(GRP_PATH).stem.split('_')[-1]
+    OUT_PATH = rf'{OUT_PATH}\{thr}_{INTERPR_METHOD}.jsonl'
 
     #****************************************************************************
     # the model and the data loader
@@ -115,9 +117,9 @@ def calc_imp():
         class_labels[cls_name.lower()] = k
 
     n=0
-    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
         line_count = sum(1 for _ in enumerate(f))
-    with open(UCF_PATH, 'r', encoding='utf-8') as f:
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
         for line in f:
             print(f'{n/line_count*100:.1f}% is done.', end='\r')
             n+=1
@@ -128,14 +130,39 @@ def calc_imp():
             record = json.loads(line)
             filename = record['filename']
             p = ucf101dm.construct_vid_path_from_full(filename)
+            g = record['groups']
+            groups = {}
+            for k in g:
+                if 'frames' in g[k]:
+                    f = g[k]['frames']
+                else: 
+                    f = []
+                groups[int(k)] = f
+            
             video = ucf101dm.load_jpg_ucf101(p, n=0)
-            attr = baseline.frame_attribute(video.permute(1,0,2,3), target=class_labels[filename.split('_')[1].lower()])
+            video_g = func.create_grouped_video(video.permute(1,0,2,3), groups) # create grouped video
+            pred_cls = record['grp_pred_cls']
+            attr = baseline.frame_attribute(video_g, target=pred_cls)
+
+            # per-group attributions
+            grp_attr = {}
+            s = 0
+            for k in groups:
+                f_idx = [k] + groups[k]
+                m = float(attr[f_idx].mean())
+                grp_attr[k] = m
+                s += m
+            for k in groups:
+                grp_attr[k]/=s
 
             d={}
             d['filename'] = filename
-            d['attribution'] = attr.tolist()
+            d['attribution'] = grp_attr
+            d['correct'] = record['correct']
             with open(OUT_PATH, 'a') as f:
                 f.write(json.dumps(d) + '\n')
 
 if __name__ == "__main__":
-    calc_imp()
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\baselines'
+    calc_imp_UCF(GRP_PATH, OUT_PATH, INTERPR_METHOD='occlusion')
