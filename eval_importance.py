@@ -24,7 +24,7 @@ def get_orig_logits(PATH):
                 continue
 
             record = json.loads(line)            
-            d[record['filename']] = {'stats': record['all_grp_stats'], 'correct': record['correct']}
+            d[record['filename']] = {'stats': record['all_grp_stats'], 'correct': record['correct'], 'groups': record['groups']}
     return d
 
 class EvalLogits:
@@ -194,11 +194,11 @@ class EvalLogits:
 
         return {'list': metrics, 'auc': auc}
 
-def eval_UCF101():
-    FILL_TYPE = 'past' # past, future, middle, random, late
-    IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\exactSHAP_past_0.001.jsonl'
+def eval_UCF101(FILL_TYPE, IMP_FILL_TYPE):
+    # FILL_TYPE = 'past' # past, future, middle, random, late
+    IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\exactSHAP_{IMP_FILL_TYPE}_0.001.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\importance\eval\{FILL_TYPE}_0.001.jsonl'
+    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\{IMP_FILL_TYPE}_{FILL_TYPE}_0.001.jsonl'
 
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.0001.jsonl'
     grp_stats = get_orig_logits(GRP_PATH)
@@ -271,8 +271,83 @@ def eval_UCF101():
             with open(OUT_PATH, 'a') as f:
                 f.write(json.dumps(results) + '\n')
 
+
+def eval_UCF101_baseline(TYPE='IG'):
+    # FILL_TYPE = 'past' # past, future, middle, random, late
+    FILL_TYPE = 'late'
+    IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\baselines\0.001_{TYPE}.jsonl'
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\{TYPE}_0.001.jsonl'
+
+    # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.0001.jsonl'
+    grp_stats = get_orig_logits(GRP_PATH)
+
+    # idx = np.argmax(np.array(grp_data['v_BlowDryHair_g01_c02']['data']))
+    # grp_data['v_BlowDryHair_g01_c02']['data'][idx]
+
+    ucf101dm = func.UCF101_data_model()
+    model = ucf101dm.model
+    class_names = ucf101dm.inference_class_names
+    class_labels = {}
+    for k in class_names.keys():
+        cls_name = class_names[k]
+        class_labels[cls_name.lower()] = k
+
+    with open(IMP_PATH, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f))
+
+    n=0
+    with open(IMP_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            print(f'{n/line_count*100:.1f}% is done.', end='\r')
+            n+=1
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            imp = record['attribution']
+            filename = record['filename']
+
+            # let groups have integer keys
+            groups = {}
+            imp_values = []
+            for k in grp_stats[filename]['groups']:
+                if 'frames' in grp_stats[filename]['groups'][k]:
+                    groups[int(k)] = grp_stats[filename]['groups'][k]['frames']
+                else:
+                    groups[int(k)] = grp_stats[filename]['groups'][k]
+                    
+                imp_values.append(imp[k])
+            asc_idx = [int(i) for i in np.argsort(imp_values)]
+
+            cls_idx = class_labels[filename.split('_')[1].lower()]
+            orig_stat = grp_stats[filename]
+
+            p = ucf101dm.construct_vid_path_from_full(filename)
+            video = ucf101dm.load_jpg_ucf101(p, n=0).permute(1,0,2,3)
+
+            el = EvalLogits(video, model, groups, orig_stat, cls_idx, FILL_TYPE)
+
+            results = {
+                'filename': record['filename'],
+                'rmv_asc': el.eval_remove(asc_idx),
+                'rmv_dec': el.eval_remove(asc_idx[::-1]),
+                'rmv_rand': el.eval_remove(random.sample(asc_idx, len(asc_idx))),
+                'rmv_lr': el.eval_remove(sorted(asc_idx)),
+                'rmv_rl': el.eval_remove(sorted(asc_idx)[::-1]),
+                'add_asc': el.eval_add(asc_idx),
+                'add_dec': el.eval_add(asc_idx[::-1]),
+                'add_rand': el.eval_add(random.sample(asc_idx, len(asc_idx))),
+                'add_lr': el.eval_add(sorted(asc_idx)),
+                'add_rl': el.eval_add(sorted(asc_idx)[::-1])
+            }
+
+            with open(OUT_PATH, 'a') as f:
+                f.write(json.dumps(results) + '\n')
+
+
 def avg_stat_ucf():
-    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\importance\eval\past_0.001.jsonl'
+    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\late_late_0.001.jsonl'
     metrics = {
         'entropy':0,
         'logit':0,
@@ -388,4 +463,7 @@ def importance_correlation(GRP_PATH, IMP_PATH):
     
 
 if __name__ == "__main__":
-    importance_correlation(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl' ,r'C:\Users\lahir\Downloads\UCF101\analysis\shap')
+    # importance_correlation(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl' ,r'C:\Users\lahir\Downloads\UCF101\analysis\shap')
+    # eval_UCF101(FILL_TYPE='late', IMP_FILL_TYPE='late')
+    # avg_stat_ucf()
+    eval_UCF101_baseline('IG')
