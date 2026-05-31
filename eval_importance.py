@@ -313,5 +313,9 @@ def avg_stat_ucf():
             s = f'{k} : {d[k][m]}'
             print(s)
 
+
+def importance_correlation():
+    pass
+
 if __name__ == "__main__":
-    avg_stat_ucf()
+    importance_correlation()
