@@ -97,11 +97,13 @@ class Baseline():
 
         return attributions.detach().cpu()
 
+import os
 
 def calc_imp_UCF(GRP_PATH, OUT_PATH, INTERPR_METHOD='IG'):
     #create outout file
     thr = Path(GRP_PATH).stem.split('_')[-1]
-    OUT_PATH = rf'{OUT_PATH}\{thr}_{INTERPR_METHOD}.jsonl'
+    filename = f'{thr}_{INTERPR_METHOD}.jsonl'
+    OUT_PATH = os.path.join(OUT_PATH, filename)
 
     #****************************************************************************
     # the model and the data loader
