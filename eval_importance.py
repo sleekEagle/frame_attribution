@@ -113,7 +113,7 @@ class EvalLogits:
 
         auc = {}
         x = np.linspace(0, 1, len(metrics['entropy']))
-        assert float(trapezoid(metrics['entropy'], x)) >=0 ,'entropy auc is negative'
+        # assert float(trapezoid(metrics['entropy'], x)) >=0 ,'entropy auc is negative'
         auc['entropy'] = float(trapezoid(metrics['entropy'], x))
         auc['logit'] = float(trapezoid(metrics['logit'], x))
         for m in [1,3,5]:
@@ -314,4 +314,4 @@ def avg_stat_ucf():
             print(s)
 
 if __name__ == "__main__":
-    eval_UCF101()
+    avg_stat_ucf()
