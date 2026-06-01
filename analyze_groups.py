@@ -1,6 +1,8 @@
 import os
 from glob import glob
 from xml.sax.handler import all_features
+
+from matplotlib import path
 import func
 import json
 import numpy as np
@@ -141,6 +143,47 @@ def UCF101_metrics():
         print(f'n = {n}, total = {line_count}')
         # print(f'inter-group similarity: {out_sim}')
         # print(f'intra-group similarity: {in_sim}')
+
+def ssv2_metrics():
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.001.jsonl'
+    threshold = os.path.basename(GRP_PATH).split('_')[1][:5]
+    n_g = 0
+    entr_change = 0
+    logit_change = 0
+    N_MARGINS = 6
+    margin_dict = {k: 0 for k in range(1, N_MARGINS+1)}
+    n = 0
+    in_sim, out_sim = 0, 0
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f))    
+
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            print(f'{n/line_count*100:.0f}% is done', end='\r')
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            if record['correct']: continue
+
+            n_g += len(record['groups'].keys())
+
+            for k in range(1,N_MARGINS+1):
+                margin_dict[k] += record['all_group_change'][f'margin_{k}_change']
+
+            entr_change += record['all_group_change']['entropy_change']
+            logit_change += record['all_group_change']['max_logit_change']
+
+            n += 1
+        
+        margin_dict = {k: float(margin_dict[k]/n) for k in range(1, N_MARGINS+1)}
+        entr_change /= n
+        n_g /= n
+        logit_change /= n
+
+        print(f'Threshold = {threshold}')
+        print(f'average number of groups: {n_g} \naverage margin change: {margin_dict} \naverage entropy change: {entr_change} \n Max logit change: {logit_change}')
+        print(f'n = {n}, total = {line_count}')
 
     
 def save_orig_features_UCF():
@@ -417,4 +460,4 @@ def tmp_freeze_grps_UCF101(FILL):
 
 if __name__ == '__main__':
     # tmp_freeze_grps_UCF101('zero')
-    save_orig_features_ssv2()
+    ssv2_metrics()
