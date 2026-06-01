@@ -144,13 +144,14 @@ def UCF101_metrics():
         # print(f'inter-group similarity: {out_sim}')
         # print(f'intra-group similarity: {in_sim}')
 
-def ssv2_metrics():
-    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.001.jsonl'
-    threshold = os.path.basename(GRP_PATH).split('_')[1][:5]
+def calc_metrics():
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.01.jsonl'
+    threshold = os.path.basename(GRP_PATH).split('_')[1][:-6]
     n_g = 0
     entr_change = 0
     logit_change = 0
     N_MARGINS = 6
+    grp_pred_correct = 0
     margin_dict = {k: 0 for k in range(1, N_MARGINS+1)}
     n = 0
     in_sim, out_sim = 0, 0
@@ -164,7 +165,13 @@ def ssv2_metrics():
             if not line:
                 continue
             record = json.loads(line)
-            if record['correct']: continue
+
+            grp_pred_cls = record['grp_pred_cls']
+            gt_cls = record['gt_cls']
+            if grp_pred_cls==gt_cls:
+                grp_pred_correct+=1
+
+            if not record['correct']: continue
 
             n_g += len(record['groups'].keys())
 
@@ -183,6 +190,7 @@ def ssv2_metrics():
 
         print(f'Threshold = {threshold}')
         print(f'average number of groups: {n_g} \naverage margin change: {margin_dict} \naverage entropy change: {entr_change} \n Max logit change: {logit_change}')
+        print(f'group prediction accuracy: {grp_pred_correct/n:.2%}')
         print(f'n = {n}, total = {line_count}')
 
     
@@ -460,4 +468,4 @@ def tmp_freeze_grps_UCF101(FILL):
 
 if __name__ == '__main__':
     # tmp_freeze_grps_UCF101('zero')
-    ssv2_metrics()
+    calc_metrics()
