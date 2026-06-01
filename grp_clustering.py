@@ -85,31 +85,40 @@ def cluster_frozen():
     import pandas as pd
     df = pd.DataFrame()
 
-    ORIG_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features\orig.jsonl'
-    FUTURE_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\future.jsonl'
-    PAST_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\past.jsonl'
-    LATE_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\late_sum.jsonl'
-    MID_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\hybrid_mid.jsonl'
-    RAND_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\hybrid_random.jsonl'
-    ZERO_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\zero.jsonl'
+    ORIG_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\features\orig.jsonl'
+    FUTURE_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\freezing\future.jsonl'
+    PAST_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\freezing\past.jsonl'
+    LATE_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\freezing\late_sum.jsonl'
+    MID_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\freezing\hybrid_mid.jsonl'
+    RAND_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\freezing\hybrid_random.jsonl'
+    ZERO_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\freezing\zero.jsonl'
 
-    PLOT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\plots'
+    PLOT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\freezing\plots'
 
     #read original features
+    def get_data_ssv2(path):
+        d = {}
+        with open(path, 'r') as f:
+            for line in f:
+                k = json.loads(line)['filename']
+                k = '/'.join(k.split('/')[-2:])
+                d[k] = json.loads(line)['feat']
+        return d
+    
     def get_data(path):
         d = {}
         with open(path, 'r') as f:
             for line in f:
                 d[json.loads(line)['filename']] = json.loads(line)['feat']
         return d
-    
+        
     d_orig = get_data(ORIG_PATH)
-    d_future = get_data(FUTURE_PATH)
-    d_past = get_data(PAST_PATH)
-    d_late = get_data(LATE_PATH)
-    d_mid = get_data(MID_PATH)
-    d_random = get_data(RAND_PATH)
-    d_zero = get_data(ZERO_PATH)
+    d_future = get_data_ssv2(FUTURE_PATH)
+    d_past = get_data_ssv2(PAST_PATH)
+    d_late = get_data_ssv2(LATE_PATH)
+    d_mid = get_data_ssv2(MID_PATH)
+    d_random = get_data_ssv2(RAND_PATH)
+    d_zero = get_data_ssv2(ZERO_PATH)
 
     rows_list = []
     for k in d_orig:
@@ -132,13 +141,7 @@ def cluster_frozen():
     random = np.stack(df['random'].values) 
     zero = np.stack(df['zero'].values)
 
-    # Calculate L2 distances for all rows at once
-    df['diff_future'] = np.sum((original - future)**2,axis=1)**0.5
-    df['diff_past'] = np.sum((original - past)**2,axis=1)**0.5
-    df['diff_late'] = np.sum((original - late)**2,axis=1)**0.5
-    df['diff_mid'] = np.sum((original - mid)**2,axis=1)**0.5
-    df['diff_random'] = np.sum((original - random)**2,axis=1)**0.5
-    df['diff_zero'] = np.sum((original - zero)**2,axis=1)**0.5
+
 
     probs_o = softmax(original, axis=1)  
     probs_f = softmax(future, axis=1) 
@@ -147,6 +150,15 @@ def cluster_frozen():
     probs_m = softmax(mid, axis=1)
     probs_r = softmax(random, axis=1)
     probs_z = softmax(zero, axis=1)
+
+    # Calculate L2 distances for all rows at once
+    # we should get L2 after softmax because we cannot rely on the absolute scale of the raw logits
+    df['diff_future'] = np.sum((probs_o - probs_f)**2,axis=1)**0.5
+    df['diff_past'] = np.sum((probs_o - probs_p)**2,axis=1)**0.5
+    df['diff_late'] = np.sum((probs_o - probs_l)**2,axis=1)**0.5
+    df['diff_mid'] = np.sum((probs_o - probs_m)**2,axis=1)**0.5
+    df['diff_random'] = np.sum((probs_o - probs_r)**2,axis=1)**0.5
+    df['diff_zero'] = np.sum((probs_o - probs_z)**2,axis=1)**0.5
 
     epsilon = 1e-10
     probs_orig = np.clip(probs_o, epsilon, 1.0)
@@ -198,8 +210,8 @@ def cluster_frozen():
         PCA_metrics[freeze_method] = {'L2': float(dist.mean()), 'kl':float(kl.mean())}
 
         plt.figure(figsize=(10, 8))
-        plt.xlim(-15, 15)
-        plt.ylim(-10, 15)
+        # plt.xlim(-15, 15)
+        # plt.ylim(-10, 15)
         plt.scatter(orig_pca[:, 0], orig_pca[:, 1], 
                     c='blue', label='Original', alpha=0.6, s=10, linewidth=0)
         plt.scatter(f_pca[:, 0], f_pca[:, 1], 
@@ -245,4 +257,4 @@ def cluster_frozen():
 # plt.savefig(os.path.join(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features\plots\KL.png'), dpi=300, bbox_inches='tight')
 
 if __name__ == '__main__':
-    cluster_features()
+    cluster_frozen()
