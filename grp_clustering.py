@@ -13,9 +13,9 @@ from scipy.special import kl_div, rel_entr
 from scipy.special import softmax
 
 def cluster_features():
-    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features\grp_0.01.jsonl'
-    PLOT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features\plots'
-    DIR = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features'
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\features\grp_0.0005.jsonl'
+    PLOT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\features\plots'
+    DIR = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\features'
     thre = os.path.basename(GRP_PATH).split('_')[1][:-6]
     ORIG_PATH = os.path.join(DIR, "orig.jsonl")
     scaler = StandardScaler()
@@ -245,4 +245,4 @@ def cluster_frozen():
 # plt.savefig(os.path.join(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features\plots\KL.png'), dpi=300, bbox_inches='tight')
 
 if __name__ == '__main__':
-    cluster_frozen()
+    cluster_features()

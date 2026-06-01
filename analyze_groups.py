@@ -166,12 +166,13 @@ def calc_metrics():
                 continue
             record = json.loads(line)
 
-            grp_pred_cls = record['grp_pred_cls']
-            gt_cls = record['gt_cls']
-            if grp_pred_cls==gt_cls:
-                grp_pred_correct+=1
+            # if not record['correct']: continue
 
-            if not record['correct']: continue
+            grp_pred_cls = record['grp_pred_cls']
+            pred_cls = record['original_stat']['cls']
+            if grp_pred_cls==pred_cls:
+                grp_pred_correct+=1
+            else: continue
 
             n_g += len(record['groups'].keys())
 
@@ -251,7 +252,7 @@ def save_orig_features_ssv2():
     class_names = list(model.label2id.keys())
 
     # register hook to get features
-    activation = {}
+    activation = {} 
     def get_activation(name):
         """Hook function to capture layer output"""
         def hook(model, input, output):
@@ -288,8 +289,6 @@ def save_orig_features_ssv2():
 
             with open(OUT_PATH, 'a') as f:
                 f.write(json.dumps(d) + '\n')
-
- 
    
 def save_grp_features_UCF():
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.01.jsonl'
@@ -346,6 +345,66 @@ def save_grp_features_UCF():
                 f.write(json.dumps(d) + '\n')
 
             n+=1
+
+def save_group_features_ssv2(thre):
+
+    GRP_PATH = rf'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_{thre}.jsonl'
+    OUT_DIR = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\features'
+    OUT_PATH = os.path.join(OUT_DIR, "grp_" + os.path.basename(GRP_PATH).split('_')[-1])
+    if os.path.exists(OUT_PATH):
+        os.remove(OUT_PATH)
+
+    model = VJEPA2()
+    model.eval()
+    class_names = list(model.label2id.keys())
+
+    # register hook to get features
+    activation = {}
+    def get_activation(name):
+        """Hook function to capture layer output"""
+        def hook(model, input, output):
+            activation[name] = output.detach()
+        return hook
+    handle = model.model.pooler.self_attention_layers[2].mlp.fc2.register_forward_hook(get_activation('features'))
+
+    data_dir = Path(CONST.SSV2_PATH)
+
+    line_count = 0
+    
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f))   
+
+    n=0
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            print(f'{n/line_count*100:.0f}% is done', end='\r')
+            n+=1
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            g = record['groups']
+            filename = record['filename']
+            splt = filename.split('/')
+
+            vid = model.video_from_path(Path.joinpath(data_dir, splt[-2], splt[-1]))['pixel_values_videos'][0,:]
+            groups = {}
+            for k in g:
+                if 'frames' not in g[k]:
+                    groups[int(k)] = []
+                else:
+                    groups[int(k)] = g[k]['frames']
+
+            vid_g = func.create_grouped_video(vid.permute(1,0,2,3), groups)
+            model(vid_g[None,:])
+
+            features = activation['features']
+            d = {}
+            d['filename'] = splt[-2] + '/' + splt[-1]
+            d['feat'] = features.mean(dim=1)[0].tolist()
+
+            with open(OUT_PATH, 'a') as f:
+                f.write(json.dumps(d) + '\n')
 
 
 def freeze_grp_feat(model, video, groups, FILL, device):
@@ -468,4 +527,9 @@ def tmp_freeze_grps_UCF101(FILL):
 
 if __name__ == '__main__':
     # tmp_freeze_grps_UCF101('zero')
-    calc_metrics()
+    save_group_features_ssv2(0.0001)
+    save_group_features_ssv2(0.0005)
+    save_group_features_ssv2(0.001)
+    save_group_features_ssv2(0.005)
+    save_group_features_ssv2(0.01)
+    save_orig_features_ssv2()
