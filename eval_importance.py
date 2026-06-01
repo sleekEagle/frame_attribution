@@ -347,7 +347,7 @@ def eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH, TYPE='IG'):
 
 
 def avg_stat_ucf():
-    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\late_late_0.001.jsonl'
+    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\occlusion_0.001.jsonl'
     metrics = {
         'entropy':0,
         'logit':0,
@@ -465,9 +465,9 @@ def importance_correlation(GRP_PATH, IMP_PATH):
 if __name__ == "__main__":
     # importance_correlation(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl' ,r'C:\Users\lahir\Downloads\UCF101\analysis\shap')
     # eval_UCF101(FILL_TYPE='late', IMP_FILL_TYPE='late')
-    # avg_stat_ucf()
-    TYPE = 'IG'
-    IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\baselines\0.001_{TYPE}.jsonl'
-    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\{TYPE}_0.001.jsonl'
-    eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH, TYPE)
+    avg_stat_ucf()
+    # TYPE = 'IG'
+    # IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\baselines\0.001_{TYPE}.jsonl'
+    # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    # OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\{TYPE}_0.001.jsonl'
+    # eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH, TYPE)

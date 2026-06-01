@@ -180,12 +180,16 @@ def cluster_frozen():
 
         return orig_pca, f_pca
     
-    
+    def get_PCA_ind(o,f):
+        pca = PCA(n_components=2)
+        features_2d_o = pca.fit_transform(o)
+        features_2d_f = pca.fit_transform(f)
+        return features_2d_o, features_2d_f
 
     PCA_metrics = {}
     for freeze_method in ['future','past','late','mid','random', 'zero']:
         f = locals()[freeze_method]
-        orig_pca, f_pca = get_PCA(original, f)
+        orig_pca, f_pca = get_PCA_ind(original, f)
 
         dist = np.sum((orig_pca - f_pca)**2,axis=1)**0.5
         probs_o = np.clip(softmax(orig_pca, axis=1) , epsilon, 1.0)
@@ -194,6 +198,8 @@ def cluster_frozen():
         PCA_metrics[freeze_method] = {'L2': float(dist.mean()), 'kl':float(kl.mean())}
 
         plt.figure(figsize=(10, 8))
+        plt.xlim(-15, 15)
+        plt.ylim(-10, 15)
         plt.scatter(orig_pca[:, 0], orig_pca[:, 1], 
                     c='blue', label='Original', alpha=0.6, s=10, linewidth=0)
         plt.scatter(f_pca[:, 0], f_pca[:, 1], 
