@@ -416,7 +416,8 @@ def freeze_grp_feat(model, video, groups, FILL, device):
         def hook(model, input, output):
             activation[name] = output.detach()
         return hook
-    handle = model.avgpool.register_forward_hook(get_activation('features'))
+    # handle = model.avgpool.register_forward_hook(get_activation('features'))
+    handle = model.model.pooler.self_attention_layers[2].mlp.fc2.register_forward_hook(get_activation('features'))
 
     # remove a randomly choosen group
     sel_idx = random.sample(list(range(len(groups.keys()))),1)[0]
@@ -434,17 +435,17 @@ def freeze_grp_feat(model, video, groups, FILL, device):
     if FILL!='late_sum':
         vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
         model(vid_g[None,:])
-        feat = activation['features'][0,:,0,0,0]
+        feat = activation['features']
     else:
         groups_filled = func.past_fill_all(mask, groups)
         vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
         model(vid_g[None,:])
-        feat_past = activation['features'][0,:,0,0,0]
+        feat_past = activation['features']
 
         groups_filled = func.future_fill_all(mask, groups)
         vid_g = func.create_grouped_video(video.permute(1,0,2,3), groups_filled).to(device)
         model(vid_g[None,:])
-        feat_future = activation['features'][0,:,0,0,0]
+        feat_future = activation['features']
 
         feat = (feat_past+feat_future)*0.5
 
@@ -460,7 +461,8 @@ def zero_grp_feat(model, video, groups, device):
         def hook(model, input, output):
             activation[name] = output.detach()
         return hook
-    handle = model.avgpool.register_forward_hook(get_activation('features'))
+    # handle = model.avgpool.register_forward_hook(get_activation('features'))
+    handle = model.model.pooler.self_attention_layers[2].mlp.fc2.register_forward_hook(get_activation('features'))
 
     # remove a randomly choosen group
     sel_idx = random.sample(list(range(len(groups.keys()))),1)[0]
@@ -471,8 +473,7 @@ def zero_grp_feat(model, video, groups, device):
     for i in zero_idx:
         vid_g[:,i,:] = 0
     model(vid_g[None,:])
-    feat = activation['features'][0,:,0,0,0]
-        
+    feat = activation['features'] 
     return feat
 
 def tmp_freeze_grps_UCF101(FILL):
@@ -525,11 +526,95 @@ def tmp_freeze_grps_UCF101(FILL):
             with open(OUT_PATH, 'a') as f:
                 f.write(json.dumps(d) + '\n')
 
+
+def tmp_freeze_grps_SSV2(FILL):
+    import torch
+    import func
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    f = f'{FILL}.jsonl'
+    OUT_PATH = os.path.join(r'C:\Users\lahir\Downloads\ssv2_analysis\groups\freezing',f)
+    if os.path.exists(OUT_PATH):
+        os.remove(OUT_PATH)
+    
+    model = VJEPA2()
+    model.eval()
+    model.to(device)
+
+    data_dir = Path(CONST.SSV2_PATH)
+    line_count = 0
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f))  
+
+    n=0
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            print(f'{n/line_count*100:.0f}% is done', end='\r')
+            n+=1
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            g = record['groups']
+            filename = record['filename']
+            splt = filename.split('/')
+            groups = {}
+            for k in g:
+                if 'frames' not in g[k]:
+                    groups[int(k)] = []
+                else:
+                    groups[int(k)] = g[k]['frames']
+            vid = model.video_from_path(Path.joinpath(data_dir, splt[-2], splt[-1]))['pixel_values_videos'][0,:]
+            if FILL=='zero':
+                feat = zero_grp_feat(model, vid, groups, device)
+                feat = feat.mean(dim=1)[0]
+            else:
+                feat = freeze_grp_feat(model, vid, groups, FILL, device)
+                feat = feat.mean(dim=1)[0]
+            
+            d = {}
+            d['filename'] = record['filename']
+            d['feat'] = feat.tolist()
+
+            with open(OUT_PATH, 'a') as f:
+                f.write(json.dumps(d) + '\n')
+    
+    n = 0
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            print(f'{n/line_count*100:.0f}% is done', end='\r')
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            n+=1
+            # if not record['filename']=='v_ApplyEyeMakeup_g01_c01':continue
+            g = record['groups']
+            groups = {}
+            for k in g:
+                if 'frames' not in g[k]:
+                    groups[int(k)] = []
+                else:
+                    groups[int(k)] = g[k]['frames']
+            p = ucf101dm.construct_vid_path_from_full(record['filename'])
+            video = ucf101dm.load_jpg_ucf101(p, n=0)
+            
+            if FILL=='zero':
+                feat = zero_grp_feat(model, video, groups, device)
+            else:
+                feat = freeze_grp_feat(model, video, groups, FILL, device)
+            
+            d = {}
+            d['filename'] = record['filename']
+            d['feat'] = feat.tolist()
+
+            with open(OUT_PATH, 'a') as f:
+                f.write(json.dumps(d) + '\n')
+
 if __name__ == '__main__':
-    # tmp_freeze_grps_UCF101('zero')
-    save_group_features_ssv2(0.0001)
-    save_group_features_ssv2(0.0005)
-    save_group_features_ssv2(0.001)
-    save_group_features_ssv2(0.005)
-    save_group_features_ssv2(0.01)
-    save_orig_features_ssv2()
+    tmp_freeze_grps_SSV2('zero')
+    tmp_freeze_grps_SSV2('future')
+    tmp_freeze_grps_SSV2('past')
+    tmp_freeze_grps_SSV2('late_sum')
+    tmp_freeze_grps_SSV2('hybrid_mid')
+    tmp_freeze_grps_SSV2('hybrid_random')
