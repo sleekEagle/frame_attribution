@@ -578,41 +578,8 @@ def tmp_freeze_grps_SSV2(FILL):
 
             with open(OUT_PATH, 'a') as f:
                 f.write(json.dumps(d) + '\n')
-    
-    n = 0
-    with open(GRP_PATH, 'r', encoding='utf-8') as f:
-        for line in f:
-            print(f'{n/line_count*100:.0f}% is done', end='\r')
-            line = line.strip()
-            if not line:
-                continue
-            record = json.loads(line)
-            n+=1
-            # if not record['filename']=='v_ApplyEyeMakeup_g01_c01':continue
-            g = record['groups']
-            groups = {}
-            for k in g:
-                if 'frames' not in g[k]:
-                    groups[int(k)] = []
-                else:
-                    groups[int(k)] = g[k]['frames']
-            p = ucf101dm.construct_vid_path_from_full(record['filename'])
-            video = ucf101dm.load_jpg_ucf101(p, n=0)
-            
-            if FILL=='zero':
-                feat = zero_grp_feat(model, video, groups, device)
-            else:
-                feat = freeze_grp_feat(model, video, groups, FILL, device)
-            
-            d = {}
-            d['filename'] = record['filename']
-            d['feat'] = feat.tolist()
-
-            with open(OUT_PATH, 'a') as f:
-                f.write(json.dumps(d) + '\n')
 
 if __name__ == '__main__':
-    tmp_freeze_grps_SSV2('zero')
     tmp_freeze_grps_SSV2('future')
     tmp_freeze_grps_SSV2('past')
     tmp_freeze_grps_SSV2('late_sum')
