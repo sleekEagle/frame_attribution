@@ -24,7 +24,7 @@ def get_orig_logits(PATH):
                 continue
 
             record = json.loads(line)            
-            d[record['filename']] = {'stats': record['all_grp_stats'], 'correct': record['correct'], 'groups': record['groups']}
+            d[record['filename']] = record
     return d
 
 class EvalLogits:
@@ -347,7 +347,10 @@ def eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH, TYPE='IG'):
 
 
 def avg_stat_ucf():
-    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\occlusion_0.001.jsonl'
+    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\late_late_0.001.jsonl'
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    grp_stats = get_orig_logits(GRP_PATH)
+
     metrics = {
         'entropy':0,
         'logit':0,
@@ -373,6 +376,11 @@ def avg_stat_ucf():
             if not line:
                 continue
             d_ = json.loads(line)
+            
+            # Dont consider cases where grouping changes the prediction
+            if grp_stats[d_['filename']]['original_stat']['cls'] != grp_stats[d_['filename']]['grp_pred_cls']:
+                continue
+
             for k in set(d_.keys()) - {'filename'}:
                 for m in d_[k]['auc']:
                     d[k][m] += d_[k]['auc'][m]
@@ -388,6 +396,7 @@ def avg_stat_ucf():
         for k in d:
             s = f'{k} : {d[k][m]}'
             print(s)
+    print(f'n : {n}')
 
 
 '''
@@ -420,7 +429,8 @@ def importance_correlation(GRP_PATH, IMP_PATH):
                 cls = grp_stats[filename]['stats']['cls']
                 sv = [sv[cls] for sv in d_['shapley_values'][0]]
                 if len(sv)==1: continue
-                data.append({'filename': filename, f'sv_{imp_file.split('_')[1]}': [sv[cls] for sv in d_['shapley_values'][0]]})
+                imp = imp_file.split('_')[1]
+                data.append({'filename': filename, f'sv_{imp}': [sv[cls] for sv in d_['shapley_values'][0]]})
         df = pd.DataFrame(data)
         return df
     

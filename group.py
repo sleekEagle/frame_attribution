@@ -114,7 +114,7 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
         while min_change < GRP_THRESHOLD:
             grp = True
             j+=1
-            final_src_idx = src_idx
+            final_src_idx = src_idx 
             final_dst_idx = [idx for idx in list(range(i,j))]
 
             #logging
@@ -225,12 +225,28 @@ def group_frames_loader_UCF101(out_dir, resume_path, GRP_THRESHOLD = 1e-3):
         gt_idx = class_labels[targets[0][0].split('_')[1].lower()]
         filename = targets[0][0]
 
-        # if filename != 'v_Surfing_g04_c01':
-        #     continue
+        if filename != 'v_Archery_g01_c06':
+            continue
+
         if resume_path:
             if filename in fnames: continue
 
+        # GRP_THRESHOLD = -0.075
         group_dict = group_frames(model, video, gt_idx, GRP_THRESHOLD)
+        
+        # ****** adjust threshold for samples which are incorrectly classified after grouping. ******
+        # group_dict['original_stat'].pop('logits')
+        # group_dict['original_stat'].pop('prob')
+        # o_l = group_dict['original_stat']['max_logit']
+        # o_cls = group_dict['original_stat']['cls']
+
+        # g_l = group_dict['all_grp_stats']['logits'][o_cls]
+
+        # change = (o_l - g_l)/o_l
+        # n = len(group_dict['groups'].keys())
+        # print(f'thr = {GRP_THRESHOLD}, n = {n}, o_l = {o_l}, g_l = {g_l}, change = {change}')
+        #*************************************************************************
+
         if group_dict==-1:
             continue
 
@@ -255,6 +271,7 @@ def group_frames_loader_UCF101(out_dir, resume_path, GRP_THRESHOLD = 1e-3):
             f.write(json.dumps(group_dict) + '\n')
 
 from torchvision import utils
+
 from PIL import Image
 from pathlib import Path
 
@@ -351,8 +368,13 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
         
 if __name__ == '__main__':
     # sample_paths_ssv2()
-    # out_dir = r'C:\Users\lahir\Downloads\UCF101\analysis\groups'
+    out_dir = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_test'
     out_dir = r'C:\Users\lahir\Downloads\ssv2_analysis'
-    group_frames_loader_UCF101(out_dir, resume_path=r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl', GRP_THRESHOLD=1e-3)
+    # group_frames_loader_UCF101(out_dir, resume_path=r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl', GRP_THRESHOLD=1e-3)
     # group_frames_loader_SSV2(out_dir, GRP_THRESHOLD=1e-3)
+    group_frames_loader_UCF101(out_dir, resume_path=False, GRP_THRESHOLD=1e-8)
+
+
+    
+
 

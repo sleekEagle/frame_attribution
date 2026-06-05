@@ -85,15 +85,16 @@ def cluster_frozen():
     import pandas as pd
     df = pd.DataFrame()
 
-    ORIG_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\features\orig.jsonl'
-    FUTURE_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\freezing\future.jsonl'
-    PAST_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\freezing\past.jsonl'
-    LATE_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\freezing\late_sum.jsonl'
-    MID_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\freezing\hybrid_mid.jsonl'
-    RAND_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\freezing\hybrid_random.jsonl'
-    ZERO_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\freezing\zero.jsonl'
+    ORIG_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\features\orig.jsonl'
 
-    PLOT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\freezing\plots'
+    FUTURE_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\future.jsonl'
+    PAST_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\past.jsonl'
+    LATE_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\late_sum.jsonl'
+    MID_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\hybrid_mid.jsonl'
+    RAND_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\hybrid_random.jsonl'
+    ZERO_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\zero.jsonl'
+
+    PLOT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\freezing\plots'
 
     #read original features
     def get_data_ssv2(path):

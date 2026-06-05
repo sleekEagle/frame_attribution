@@ -1,7 +1,6 @@
 import os
 from glob import glob
 from xml.sax.handler import all_features
-
 from matplotlib import path
 import func
 import json
@@ -166,22 +165,29 @@ def calc_metrics():
                 continue
             record = json.loads(line)
 
-            # if not record['correct']: continue
-
             grp_pred_cls = record['grp_pred_cls']
             pred_cls = record['original_stat']['cls']
             if grp_pred_cls==pred_cls:
                 grp_pred_correct+=1
-            else: continue
+                for k in range(1,N_MARGINS+1):
+                    margin_dict[k] += record['all_group_change'][f'margin_{k}_change']
+                logit_change += record['all_group_change']['max_logit_change']
+
+            else: 
+                grp_logits = record['all_grp_stats']['logits']
+                orig_logits = record['original_stat']['logits']
+                for k in range(1,N_MARGINS+1):
+                    new_m = func.get_margin(torch.tensor(grp_logits), pred_cls, k=k)
+                    orig_m = func.get_margin(torch.tensor(orig_logits), pred_cls, k=k)
+                    m_change = (orig_m-new_m)/orig_m
+                    margin_dict[k] += m_change
+                grp_l = grp_logits[pred_cls]
+                orig_l = orig_logits[pred_cls]
+                logit_change += (orig_l - grp_l)/orig_l
 
             n_g += len(record['groups'].keys())
-
-            for k in range(1,N_MARGINS+1):
-                margin_dict[k] += record['all_group_change'][f'margin_{k}_change']
-
             entr_change += record['all_group_change']['entropy_change']
-            logit_change += record['all_group_change']['max_logit_change']
-
+            
             n += 1
         
         margin_dict = {k: float(margin_dict[k]/n) for k in range(1, N_MARGINS+1)}
@@ -580,8 +586,9 @@ def tmp_freeze_grps_SSV2(FILL):
                 f.write(json.dumps(d) + '\n')
 
 if __name__ == '__main__':
-    tmp_freeze_grps_SSV2('future')
-    tmp_freeze_grps_SSV2('past')
-    tmp_freeze_grps_SSV2('late_sum')
-    tmp_freeze_grps_SSV2('hybrid_mid')
-    tmp_freeze_grps_SSV2('hybrid_random')
+    # tmp_freeze_grps_SSV2('future')
+    # tmp_freeze_grps_SSV2('past')
+    # tmp_freeze_grps_SSV2('late_sum')
+    # tmp_freeze_grps_SSV2('hybrid_mid')
+    # tmp_freeze_grps_SSV2('hybrid_random')
+    calc_metrics()

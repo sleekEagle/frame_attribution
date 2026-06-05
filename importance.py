@@ -234,5 +234,5 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD):
 if __name__ == "__main__":
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\importance'
-    FILL_METHOD = 'middle'
+    FILL_METHOD = 'late'
     calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD)
