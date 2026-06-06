@@ -50,7 +50,8 @@ class CalcSHAP:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # self.model = self.model.to(self.device) 
         self.model.eval()
-        self.avg_pred = CONST.UCF_AVG_PRED
+        # self.avg_pred = CONST.UCF_AVG_PRED
+        self.avg_pred = CONST.SSV2_AVG_PRED
         self.n_masks = 0
         self.difference = 0
 
@@ -74,9 +75,10 @@ class CalcSHAP:
         # preds[0,:] = self.avg_pred
         # return preds.detach().cpu().numpy()
         
-        batches = chunk_list(non_zero_idx,32)
+        batches = chunk_list(non_zero_idx,8)
         nz_pred = torch.empty(0).to('cuda')
-        for nzidx in batches:
+        for i,nzidx in enumerate(batches):
+            # print(f'Processing sample {(i+1)/len(batches)*100:.2f} %')
             #predict for non zero masks
             vid_t = torch.empty(0).to(self.device)
             for i in nzidx:
@@ -241,6 +243,7 @@ def calc_shap_ssv2(GRP_PATH, OUT_PATH, FILL_METHOD):
 
     cls_list, path_list = ssv2.get_sampled_paths()
     n_files = len(path_list)
+    nice_names = [Path(p).parent.name + '/' + Path(p).name for p in path_list]
 
     #*************************************************************************
     # initialize shap model 
@@ -265,95 +268,15 @@ def calc_shap_ssv2(GRP_PATH, OUT_PATH, FILL_METHOD):
                 continue
 
             record = json.loads(line)
-            filename = record['filename']
             
+            # ignore if the grouping changed the prediction
+            if record['grp_pred_cls'] != record['original_stat']['cls']: continue
 
-    for idx, p in enumerate(path_list):
-        # print(f'{idx} of {n_files} is done.')
-        print(f'{idx/n_files*100:.2f} is done',end='\r')
-
-        video = model.video_from_path(p)['pixel_values_videos'][0,:].permute(1,0,2,3)
-        gt_idx = model.label2id[cls_list[idx]]
-
-        g = record['groups']
-        groups = {}
-        for k in g:
-            if 'frames' in g[k]:
-                f = g[k]['frames']
-            else: 
-                f = []
-            groups[int(k)] = f
-
-
-        group_dict = group_frames(model, video, gt_idx, GRP_THRESHOLD)
-        if group_dict==-1:
-            continue
-        group_dict['filename'] = str(p)
-        with open(out_path, 'a') as f:
-            f.write(json.dumps(group_dict) + '\n')
-    
-    #make sure all the class names are present in the list of dirs
-    for c in class_names:
-        assert c in d_names , f'{c} is not in the list of dirs'
-        pass
-
-    n_correct = 0
-    n_samples = 0
-
-    for idx, p in enumerate(paths):
-        if idx>0:
-            print(f'{idx/n_files*100:.2f} % is done. Running acc: {n_correct/n_samples*100:.2f} %', end='\r')
-        gt_idx = model.label2id[d_names[idx]]
-        with torch.no_grad():
-            pred_cls = model.predict_from_path(p)
-            if pred_cls==gt_idx:
-                n_correct += 1
-            else:
-                with open(r'C:\Users\lahir\Downloads\ssv2_analysis\ssv2_incorrect.txt', 'w') as file:
-                    file.write(str(p))
-        n_samples += 1
-    print(f'Accuracy = {n_correct/n_samples*100} \%')
-
-    #****************************************************************************
-    # the model and the data loader
-    #****************************************************************************
-    ucf101dm = func.UCF101_data_model()
-    model = ucf101dm.model
-    model = model.to('cuda')
-    # t=torch.zeros(8,3,16,112,12)
-    # t = t.to('cuda')
-    # model(t)
-
-
-    inference_loader = ucf101dm.inference_loader
-    inference_class_names = ucf101dm.inference_class_names
-    class_names = ucf101dm.inference_class_names
-    class_labels = {}
-    for k in class_names.keys():
-        cls_name = class_names[k]
-        class_labels[cls_name.lower()] = k
-    #****************************************************************************
-
-
-
-    #read groups
-    n=0
-    with open(GRP_PATH, 'r', encoding='utf-8') as f:
-        line_count = sum(1 for _ in enumerate(f))
-    with open(GRP_PATH, 'r', encoding='utf-8') as f:
-        for line in f:
-            print(f'{n/line_count*100:.1f}% is done.', end='\r')
-            n+=1
-
-            line = line.strip()
-            if not line:
-                continue
-
-            record = json.loads(line)
             filename = record['filename']
+            filename = filename.split('/')[-2] + '/' + filename.split('/')[-1]
+            idx = nice_names.index(filename)
+            p = path_list[idx]
 
-            p = ucf101dm.construct_vid_path_from_full(filename)
-            video = ucf101dm.load_jpg_ucf101(p, n=0)
             g = record['groups']
             groups = {}
             for k in g:
@@ -363,7 +286,8 @@ def calc_shap_ssv2(GRP_PATH, OUT_PATH, FILL_METHOD):
                     f = []
                 groups[int(k)] = f
 
-            shap_values = ex.explain(video, groups, check=True)
+            video = model.video_from_path(p)['pixel_values_videos'][0,:]
+            shap_values = ex.explain(video, groups, check=False)
 
             d = {}
             d['filename'] = filename
