@@ -144,7 +144,7 @@ def UCF101_metrics():
         # print(f'intra-group similarity: {in_sim}')
 
 def calc_metrics():
-    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.01.jsonl'
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_-0.1.jsonl'
     threshold = os.path.basename(GRP_PATH).split('_')[1][:-6]
     n_g = 0
     entr_change = 0
@@ -586,9 +586,9 @@ def tmp_freeze_grps_SSV2(FILL):
                 f.write(json.dumps(d) + '\n')
 
 if __name__ == '__main__':
-    # tmp_freeze_grps_SSV2('future')
-    # tmp_freeze_grps_SSV2('past')
-    # tmp_freeze_grps_SSV2('late_sum')
-    # tmp_freeze_grps_SSV2('hybrid_mid')
-    # tmp_freeze_grps_SSV2('hybrid_random')
-    calc_metrics()
+    tmp_freeze_grps_SSV2('future')
+    tmp_freeze_grps_SSV2('past')
+    tmp_freeze_grps_SSV2('late_sum')
+    tmp_freeze_grps_SSV2('hybrid_mid')
+    tmp_freeze_grps_SSV2('hybrid_random')
+    # calc_metrics()

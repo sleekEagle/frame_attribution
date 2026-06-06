@@ -347,7 +347,7 @@ def eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH, TYPE='IG'):
 
 
 def avg_stat_ucf():
-    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\late_late_0.001.jsonl'
+    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\IG_0.001.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     grp_stats = get_orig_logits(GRP_PATH)
 
@@ -377,7 +377,7 @@ def avg_stat_ucf():
                 continue
             d_ = json.loads(line)
             
-            # Dont consider cases where grouping changes the prediction
+            # Dont consider cases where grouping changes the model prediction
             if grp_stats[d_['filename']]['original_stat']['cls'] != grp_stats[d_['filename']]['grp_pred_cls']:
                 continue
 
