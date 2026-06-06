@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import CONST
 from dataloaders import ssv2
+import time
 
 # ucf101dm = func.UCF101_data_model()
 # model = ucf101dm.model
@@ -259,8 +260,12 @@ def calc_shap_ssv2(GRP_PATH, OUT_PATH, FILL_METHOD):
     with open(GRP_PATH, 'r', encoding='utf-8') as f:
         line_count = sum(1 for _ in enumerate(f))
     with open(GRP_PATH, 'r', encoding='utf-8') as f:
+        start_time = time.time()
         for line in f:
-            print(f'{n/line_count*100:.1f}% is done.', end='\r')
+            end_time = time.time()
+            elapsed = end_time - start_time
+
+            print(f'{n/line_count*100:.1f}% is done. Time passed: {elapsed:.2f}s', end='\r')
             n+=1
 
             line = line.strip()
