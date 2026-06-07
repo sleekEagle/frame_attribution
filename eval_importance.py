@@ -50,8 +50,8 @@ class EvalLogits:
         for m in [1,3,5]:
             none_metrics[f'margin_{m}'] = 0.0
 
-        logits = torch.tensor(orig_stat['stats']['logits'])
-        all_metrics['entropy'] = orig_stat['stats']['entropy']
+        logits = torch.tensor(orig_stat['logits'])
+        all_metrics['entropy'] = orig_stat['entropy']
         all_metrics['logit'] = float(logits[cls_idx])
         for m in [1,3,5]:
             all_metrics[f'margin_{m}'] = float(func.get_margin(logits, cls_idx=cls_idx, k=m))
@@ -196,9 +196,9 @@ class EvalLogits:
 
 def eval_UCF101(FILL_TYPE, IMP_FILL_TYPE):
     # FILL_TYPE = 'past' # past, future, middle, random, late
-    IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\exactSHAP_{IMP_FILL_TYPE}_0.001.jsonl'
+    IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap_test\kernel_9_{IMP_FILL_TYPE}_0.001.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\{IMP_FILL_TYPE}_{FILL_TYPE}_0.001.jsonl'
+    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap_test\kernel_9_{IMP_FILL_TYPE}_{FILL_TYPE}_0.001.jsonl'
 
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.0001.jsonl'
     grp_stats = get_orig_logits(GRP_PATH)
@@ -228,7 +228,7 @@ def eval_UCF101(FILL_TYPE, IMP_FILL_TYPE):
             record = json.loads(line)
             # if record['filename']!='v_BlowDryHair_g01_c02': continue
             cls_idx = class_labels[record['filename'].split('_')[1].lower()]
-            orig_stat = grp_stats[record['filename']]
+            orig_stat = grp_stats[record['filename']]['original_stat']
 
             # ol = grp_data[record['filename']]['data']
 
@@ -474,8 +474,8 @@ def importance_correlation(GRP_PATH, IMP_PATH):
 
 if __name__ == "__main__":
     # importance_correlation(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl' ,r'C:\Users\lahir\Downloads\UCF101\analysis\shap')
-    # eval_UCF101(FILL_TYPE='late', IMP_FILL_TYPE='late')
-    avg_stat_ucf()
+    eval_UCF101(FILL_TYPE='late', IMP_FILL_TYPE='future')
+    # avg_stat_ucf()
     # TYPE = 'IG'
     # IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\baselines\0.001_{TYPE}.jsonl'
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
