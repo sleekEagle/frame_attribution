@@ -1,4 +1,4 @@
-from models.ssv2 import VJEPA2
+# from models.ssv2 import VJEPA2
 import shap
 import numpy as np
 import func
@@ -7,7 +7,7 @@ import torch
 import os
 from pathlib import Path
 import CONST
-from dataloaders import ssv2
+# from dataloaders import ssv2
 import time
 
 # ucf101dm = func.UCF101_data_model()
@@ -45,19 +45,25 @@ def batch_pred(model, t):
     return pred
         
 class CalcSHAP:
-    def __init__(self, model, fill_method):
+    def __init__(self, model, fill_method, shap_method = 'exact', N_SAMPLES=8):
         self.model = model.to('cuda')
         self.fill_method = fill_method
+        self.shap_method = shap_method
+        self.N_SAMPLES = N_SAMPLES
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # self.model = self.model.to(self.device) 
         self.model.eval()
-        # self.avg_pred = CONST.UCF_AVG_PRED
-        self.avg_pred = CONST.SSV2_AVG_PRED
+        self.avg_pred = CONST.UCF_AVG_PRED
+        # self.avg_pred = CONST.SSV2_AVG_PRED
         self.n_masks = 0
         self.difference = 0
+        self.masks = []
 
     def predict_with_mask(self, mask):
+        self.masks.append(mask)
         self.n_masks += len(mask)
+        if len(mask) == 1:
+            return self.predict_with_mask_single(mask)
         preds = torch.empty(0).to('cuda')
         zero_idx = [i for i,m in enumerate(mask) if sum(m)==0]
         non_zero_idx = [i for i,m in enumerate(mask) if i not in zero_idx]
@@ -127,8 +133,78 @@ class CalcSHAP:
         # pred[0,:] = self.avg_pred
         return preds.detach().cpu().numpy()
 
+    def predict_with_mask_single(self, mask):
+        nz_pred = torch.empty(0).to('cuda')
+        masked = self.video.clone()
+        vid_t = torch.empty(0).to(self.device)
 
-        # return preds.detach().numpy()
+        if self.fill_method=='future':
+            g = [func.future_fill_all(mask[0], self.groups)]
+        elif self.fill_method=='past':
+            g = [func.past_fill_all(mask[0], self.groups)]
+        elif self.fill_method=='middle':
+            g = [func.hybrid_fill_all(mask[0], self.groups, 'middle')]
+        elif self.fill_method=='random':
+            g = [func.hybrid_fill_all(mask[0], self.groups, 'random')]
+        elif self.fill_method=='late':
+            g = [func.past_fill_all(mask[0], self.groups),
+                    func.future_fill_all(mask[0], self.groups)]
+        for g_ in g:
+            vid_g = func.create_grouped_video(masked.permute(1,0,2,3), g_)
+            vid_g = vid_g.permute(1,0,2,3)[None,:]
+            vid_t = torch.concat([vid_t,vid_g])
+        with torch.no_grad():
+            p = self.model(vid_t.permute(0,2,1,3,4))
+            nz_pred = torch.concat([nz_pred,p],dim=0)
+        if self.fill_method=='late':
+            idxs = torch.linspace(0, nz_pred.size(0)-1, nz_pred.size(0), dtype=torch.int)
+            even_idx = idxs[::2]
+            odd_idx = idxs[1:][::2]
+            nz_pred = (nz_pred[even_idx] + nz_pred[odd_idx])*0.5
+        return nz_pred.detach().cpu().numpy()
+    
+
+    def explain_kernel(self, video, groups, check=False):
+        self.n_masks = 0
+        self.groups = groups
+        self.video = func.create_grouped_video(video.permute(1,0,2,3), groups).permute(1,0,2,3).to(self.device)
+        NUM_GROUPS = len(groups)
+        background = np.zeros((1, NUM_GROUPS))
+
+        explainer = shap.KernelExplainer(
+            model=self.predict_with_mask,
+            data=background
+        )
+        test_instance = np.ones((1, NUM_GROUPS)) 
+        # shap_values = explainer(test_instance)
+        shap_values = explainer.shap_values(
+            test_instance,
+            nsamples=self.N_SAMPLES
+        )
+        # self.masks = np.concatenate(self.masks,axis=0)
+
+        # shap_values = explainer.shap_values(test_instance, nsamples=3)
+        d = {}
+        d['shap_values'] = shap_values
+        d['expected_values'] = explainer.expected_value
+
+        if check:
+            # sv = shap_values.values[0,:]
+            sv = d['shap_values'][0,:]
+            bv = d['expected_values']
+            # bv = shap_values.base_values[0,:]
+            p  = self.model(self.video.permute(1,0,2,3)[None,:])[0,:].cpu().detach().numpy()
+            sv = np.sum(sv,axis=0)
+            difference = abs(p - bv - sv).mean()
+            # print(f'n masks = {self.n_masks}, max_masks = {2**len(groups.keys())}')
+            
+            # print('**************************************************')
+            # print(f'Groups: {list(groups.keys())}')
+            # print(f'Difference : {difference}')
+            # print('**************************************************')
+            self.difference = difference
+
+        return d
 
     def explain(self, video, groups, check=False):
         self.n_masks = 0
@@ -165,7 +241,7 @@ class CalcSHAP:
         return shap_values
     
 
-def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD):
+def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD,N_SAMPLES):
     #****************************************************************************
     # the model and the data loader
     #****************************************************************************
@@ -189,10 +265,13 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD):
     #*************************************************************************
     # initialize shap model 
     #*************************************************************************
-    ex = CalcSHAP(model, fill_method=FILL_METHOD)
+    ex = CalcSHAP(model, fill_method=FILL_METHOD, shap_method=SHAP_METHOD, N_SAMPLES=N_SAMPLES)
 
     #construct the out path for logging
-    f = 'exactSHAP_'+ FILL_METHOD + '_' + Path(GRP_PATH).stem.split('_')[-1]+'.jsonl'
+    if SHAP_METHOD == 'exact':
+        f = f'{SHAP_METHOD}_'+ FILL_METHOD + '_' + Path(GRP_PATH).stem.split('_')[-1]+'.jsonl'
+    else:
+        f = f'{SHAP_METHOD}_{N_SAMPLES}_'+ FILL_METHOD + '_' + Path(GRP_PATH).stem.split('_')[-1]+'.jsonl'
     # d = os.path.dirname(GRP_PATH)
     out_path = os.path.join(OUT_PATH,f)
 
@@ -223,15 +302,24 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD):
                     f = []
                 groups[int(k)] = f
 
-            shap_values = ex.explain(video, groups, check=True)
-
-            d = {}
-            d['filename'] = filename
-            d['shapley_values'] = shap_values.values.tolist()
-            d['base_values'] = shap_values.base_values.tolist()
-            d['difference'] = ex.difference
-            d['n_masks'] = ex.n_masks
-            d['groups'] = groups
+            if SHAP_METHOD == 'exact':
+                shap_values = ex.explain(video, groups, check=True)
+                d = {}
+                d['filename'] = filename
+                d['shapley_values'] = shap_values.values.tolist()
+                d['base_values'] = shap_values.base_values.tolist()
+                d['difference'] = ex.difference
+                d['n_masks'] = ex.n_masks
+                d['groups'] = groups
+            if SHAP_METHOD == 'kernel':
+                shap_data = ex.explain_kernel(video, groups, check=True)
+                d = {}
+                d['filename'] = filename
+                d['shapley_values'] = shap_data['shap_values'].tolist()
+                d['base_values'] = shap_data['expected_values'].tolist()
+                d['difference'] = ex.difference
+                d['n_masks'] = ex.n_masks
+                d['groups'] = groups
 
             with open(out_path, 'a') as f:
                 f.write(json.dumps(d) + '\n')
@@ -249,7 +337,7 @@ def calc_shap_ssv2(GRP_PATH, OUT_PATH, FILL_METHOD):
     #*************************************************************************
     # initialize shap model 
     #*************************************************************************
-    ex = CalcSHAP(model, fill_method=FILL_METHOD)
+    ex = CalcSHAP(model, fill_method=FILL_METHOD, shap_method='kernel')
 
     #construct the out path for logging
     f = 'exactSHAP_'+ FILL_METHOD + '_' + Path(GRP_PATH).stem.split('_')[-1]+'.jsonl'
@@ -306,7 +394,7 @@ def calc_shap_ssv2(GRP_PATH, OUT_PATH, FILL_METHOD):
                 f.write(json.dumps(d) + '\n')
 
 if __name__ == "__main__":
-    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap'
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap_test'
     FILL_METHOD = 'future'
-    calc_shap_ssv2(GRP_PATH, OUT_PATH, FILL_METHOD)
+    calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD='kernel',N_SAMPLES=9)
