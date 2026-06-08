@@ -43,58 +43,10 @@ def batch_pred(model, t):
             p = model(val)
             pred = torch.concat([pred,p],axis=0)
     return pred
-
-import torch.nn as nn
-class MaskedVideoModel(nn.Module):
-    """
-    Wraps your masking logic + model into a single nn.Module.
-    Input  : mask tensor  (batch, n_groups)  — floats 0.0 / 1.0
-    Output : model predictions (batch, n_classes)
-    """
-    def __init__(self, model, fill_method='future'):
-        super().__init__()
-        self.model       = model
-        self.fill_method = fill_method
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    def forward(self, mask):
-        self.n_masks += len(mask)
-        nz_pred = torch.empty(0).to('cuda')
-        masked = self.video.clone()
-        vid_t = torch.empty(0).to(self.device)
-
-        if self.fill_method=='future':
-            g = [func.future_fill_all(mask[0], self.groups)]
-        elif self.fill_method=='past':
-            g = [func.past_fill_all(mask[0], self.groups)]
-        elif self.fill_method=='middle':
-            g = [func.hybrid_fill_all(mask[0], self.groups, 'middle')]
-        elif self.fill_method=='random':
-            g = [func.hybrid_fill_all(mask[0], self.groups, 'random')]
-        elif self.fill_method=='late':
-            g = [func.past_fill_all(mask[0], self.groups),
-                    func.future_fill_all(mask[0], self.groups)]
-        for g_ in g:
-            vid_g = func.create_grouped_video(masked.permute(1,0,2,3), g_)
-            vid_g = vid_g.permute(1,0,2,3)[None,:]
-            vid_t = torch.concat([vid_t,vid_g])
-        p = self.model(vid_t.permute(0,2,1,3,4))
-        nz_pred = torch.concat([nz_pred,p],dim=0)
-        if self.fill_method=='late':
-            idxs = torch.linspace(0, nz_pred.size(0)-1, nz_pred.size(0), dtype=torch.int)
-            even_idx = idxs[::2]
-            odd_idx = idxs[1:][::2]
-            nz_pred = (nz_pred[even_idx] + nz_pred[odd_idx])*0.5
-        return nz_pred
         
 class CalcSHAP:
     def __init__(self, model, fill_method, shap_method = 'exact', N_SAMPLES=8):
-
-        if shap_method == 'deep':
-            self.model = MaskedVideoModel(model, fill_method)
-        else:
-            self.model = model.to('cuda')
-
+        self.model = model.to('cuda')
         self.fill_method = fill_method
         self.shap_method = shap_method
         self.N_SAMPLES = N_SAMPLES
@@ -253,46 +205,6 @@ class CalcSHAP:
             self.difference = difference
 
         return d
-    
-    
-    def explain_deep(self, video, groups, check=False):
-        self.model.n_masks = 0
-        self.model.groups = groups
-        self.model.video = func.create_grouped_video(video.permute(1,0,2,3), groups).permute(1,0,2,3).to(self.device)
-        NUM_GROUPS = len(groups)
-        background = torch.zeros(1, NUM_GROUPS).to(self.device)
-
-        explainer = shap.DeepExplainer(
-            model=self.model,
-            data=background
-        )
-        test_instance = torch.ones(1,  NUM_GROUPS).to(self.device)
-        # shap_values = explainer(test_instance)
-        shap_values = explainer.shap_values(test_instance)
-        # self.masks = np.concatenate(self.masks,axis=0)
-
-        # shap_values = explainer.shap_values(test_instance, nsamples=3)
-        d = {}
-        d['shap_values'] = shap_values
-        d['expected_values'] = explainer.expected_value
-
-        if check:
-            # sv = shap_values.values[0,:]
-            sv = d['shap_values'][0,:]
-            bv = d['expected_values']
-            # bv = shap_values.base_values[0,:]
-            p  = self.model(self.video.permute(1,0,2,3)[None,:])[0,:].cpu().detach().numpy()
-            sv = np.sum(sv,axis=0)
-            difference = abs(p - bv - sv).mean()
-            # print(f'n masks = {self.n_masks}, max_masks = {2**len(groups.keys())}')
-            
-            # print('**************************************************')
-            # print(f'Groups: {list(groups.keys())}')
-            # print(f'Difference : {difference}')
-            # print('**************************************************')
-            self.difference = difference
-
-        return d
 
     def explain(self, video, groups, check=False):
         self.n_masks = 0
@@ -358,7 +270,7 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD,N_SAMPLES):
     #construct the out path for logging
     if SHAP_METHOD == 'exact':
         f = f'{SHAP_METHOD}_'+ FILL_METHOD + '_' + Path(GRP_PATH).stem.split('_')[-1]+'.jsonl'
-    elif SHAP_METHOD in ['kernel','deep']:
+    else:
         f = f'{SHAP_METHOD}_{N_SAMPLES}_'+ FILL_METHOD + '_' + Path(GRP_PATH).stem.split('_')[-1]+'.jsonl'
     # d = os.path.dirname(GRP_PATH)
     out_path = os.path.join(OUT_PATH,f)
@@ -401,15 +313,6 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD,N_SAMPLES):
                 d['groups'] = groups
             if SHAP_METHOD == 'kernel':
                 shap_data = ex.explain_kernel(video, groups, check=True)
-                d = {}
-                d['filename'] = filename
-                d['shapley_values'] = shap_data['shap_values'].tolist()
-                d['base_values'] = shap_data['expected_values'].tolist()
-                d['difference'] = ex.difference
-                d['n_masks'] = ex.n_masks
-                d['groups'] = groups
-            if SHAP_METHOD == 'deep':
-                shap_data = ex.explain_deep(video, groups, check=True)
                 d = {}
                 d['filename'] = filename
                 d['shapley_values'] = shap_data['shap_values'].tolist()
@@ -494,4 +397,4 @@ if __name__ == "__main__":
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap'
     FILL_METHOD = 'late'
-    calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD='deep',N_SAMPLES=64)
+    calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD='kernel',N_SAMPLES=32)
