@@ -196,9 +196,9 @@ class EvalLogits:
 
 def eval_UCF101(FILL_TYPE, IMP_FILL_TYPE):
     # FILL_TYPE = 'past' # past, future, middle, random, late
-    IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\kernel_32_{IMP_FILL_TYPE}_0.001.jsonl'
+    IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\partition_32_{IMP_FILL_TYPE}_0.001.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\kernel_32_{IMP_FILL_TYPE}_{FILL_TYPE}_0.001.jsonl'
+    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\partition_32_{IMP_FILL_TYPE}_{FILL_TYPE}_0.001.jsonl'
 
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.0001.jsonl'
     grp_stats = get_orig_logits(GRP_PATH)
@@ -347,7 +347,7 @@ def eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH, TYPE='IG'):
 
 
 def avg_stat_ucf():
-    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\kernel_32_late_late_0.001.jsonl'
+    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\partition_32_late_late_0.001.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     grp_stats = get_orig_logits(GRP_PATH)
 

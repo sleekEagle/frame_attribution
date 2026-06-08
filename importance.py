@@ -1,4 +1,4 @@
-# from models.ssv2 import VJEPA2
+
 import shap
 import numpy as np
 import func
@@ -7,8 +7,10 @@ import torch
 import os
 from pathlib import Path
 import CONST
-# from dataloaders import ssv2
+from dataloaders import ssv2
+from models.ssv2 import VJEPA2
 import time
+from scipy.cluster.hierarchy import linkage
 
 # ucf101dm = func.UCF101_data_model()
 # model = ucf101dm.model
@@ -53,8 +55,8 @@ class CalcSHAP:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # self.model = self.model.to(self.device) 
         self.model.eval()
-        self.avg_pred = CONST.UCF_AVG_PRED
-        # self.avg_pred = CONST.SSV2_AVG_PRED
+        # self.avg_pred = CONST.UCF_AVG_PRED
+        self.avg_pred = CONST.SSV2_AVG_PRED
         self.n_masks = 0
         self.difference = 0
         self.masks = []
@@ -162,7 +164,7 @@ class CalcSHAP:
             odd_idx = idxs[1:][::2]
             nz_pred = (nz_pred[even_idx] + nz_pred[odd_idx])*0.5
         return nz_pred.detach().cpu().numpy()
-    
+
 
     def explain_kernel(self, video, groups, check=False):
         self.n_masks = 0
@@ -205,6 +207,65 @@ class CalcSHAP:
             self.difference = difference
 
         return d
+    
+    def explain_partition(self, video, groups, check=False):
+        self.n_masks = 0
+        self.groups = groups
+        self.video = func.create_grouped_video(video.permute(1,0,2,3), groups).permute(1,0,2,3).to(self.device)
+        NUM_GROUPS = len(groups)
+        background = np.zeros((1, NUM_GROUPS))
+
+        def sequential_linkage(n):
+            """
+            Build a valid linkage by clustering evenly spaced 1D points.
+            Guarantees correct leaf counts that satisfy SHAP's assertion.
+            """
+            if n == 1:
+                # Single feature — no clustering needed, return empty linkage
+                return np.zeros((0, 4))
+            # Each frame is a point on a line — adjacent frames will cluster together
+            points = np.arange(n).reshape(-1, 1).astype(float)
+            Z = linkage(points, method="complete", metric="euclidean")
+            return Z
+
+        masker = shap.maskers.Partition(
+            data=background,
+            clustering=sequential_linkage(NUM_GROUPS)
+        )
+
+        explainer = shap.Explainer(
+            model=self.predict_with_mask,
+            masker = masker,
+            algorithm="partition"
+        )
+
+        test_instance = np.ones((1, NUM_GROUPS)) 
+        # shap_values = explainer(test_instance)
+        shap_values = explainer(
+            test_instance,
+            nsamples=self.N_SAMPLES
+        )
+        # self.masks = np.concatenate(self.masks,axis=0)
+
+        # shap_values = explainer.shap_values(test_instance, nsamples=3)
+        d = {}
+        d['shap_values'] = shap_values
+        d['expected_values'] = explainer.expected_value
+
+        if check:
+            sv = shap_values.values[0,:]
+            bv = shap_values.base_values[0,:]
+            p  = self.model(self.video.permute(1,0,2,3)[None,:])[0,:].cpu().detach().numpy()
+            sv = np.sum(sv,axis=0)
+            difference = abs(p - bv - sv).mean()
+            
+            # print('**************************************************')
+            # print(f'Groups: {list(groups.keys())}')
+            # print(f'Difference : {difference}')
+            # print('**************************************************')
+            self.difference = difference
+
+        return shap_values
 
     def explain(self, video, groups, check=False):
         self.n_masks = 0
@@ -302,6 +363,8 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD,N_SAMPLES):
                     f = []
                 groups[int(k)] = f
 
+            if len(groups)==1: continue
+
             if SHAP_METHOD == 'exact':
                 shap_values = ex.explain(video, groups, check=True)
                 d = {}
@@ -320,12 +383,21 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD,N_SAMPLES):
                 d['difference'] = ex.difference
                 d['n_masks'] = ex.n_masks
                 d['groups'] = groups
+            if SHAP_METHOD == 'partition':
+                shap_values = ex.explain_partition(video, groups, check=True)
+                d = {}
+                d['filename'] = filename
+                d['shapley_values'] = shap_values.values.tolist()
+                d['base_values'] = shap_values.base_values.tolist()
+                d['difference'] = ex.difference
+                d['n_masks'] = ex.n_masks
+                d['groups'] = groups
 
             with open(out_path, 'a') as f:
                 f.write(json.dumps(d) + '\n')
 
 
-def calc_shap_ssv2(GRP_PATH, OUT_PATH, FILL_METHOD):
+def calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES):
     model = VJEPA2()
     model.eval()
     class_names = list(model.label2id.keys())
@@ -337,10 +409,13 @@ def calc_shap_ssv2(GRP_PATH, OUT_PATH, FILL_METHOD):
     #*************************************************************************
     # initialize shap model 
     #*************************************************************************
-    ex = CalcSHAP(model, fill_method=FILL_METHOD, shap_method='kernel')
+    ex = CalcSHAP(model, fill_method=FILL_METHOD, shap_method=SHAP_METHOD, N_SAMPLES=N_SAMPLES)
 
     #construct the out path for logging
-    f = 'exactSHAP_'+ FILL_METHOD + '_' + Path(GRP_PATH).stem.split('_')[-1]+'.jsonl'
+    if SHAP_METHOD == 'exact':
+        f = f'{SHAP_METHOD}_'+ FILL_METHOD + '_' + Path(GRP_PATH).stem.split('_')[-1]+'.jsonl'
+    else:
+        f = f'{SHAP_METHOD}_{N_SAMPLES}_'+ FILL_METHOD + '_' + Path(GRP_PATH).stem.split('_')[-1]+'.jsonl'
     # d = os.path.dirname(GRP_PATH)
     out_path = os.path.join(OUT_PATH,f)
 
@@ -394,7 +469,14 @@ def calc_shap_ssv2(GRP_PATH, OUT_PATH, FILL_METHOD):
                 f.write(json.dumps(d) + '\n')
 
 if __name__ == "__main__":
-    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap'
-    FILL_METHOD = 'late'
-    calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD='kernel',N_SAMPLES=32)
+    # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    # OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap'
+    # FILL_METHOD = 'late'
+    # calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD='partition',N_SAMPLES=32)
+
+
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap'
+    FILL_METHOD = 'future'
+    SHAP_METHOD = 'partition'
+    calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES=32)
