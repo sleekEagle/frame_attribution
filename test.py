@@ -1,45 +1,71 @@
 import shap
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
+import torch
+import torch.nn as nn
 from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 
-# Load data and train a model
-X, y = load_iris(return_X_y=True, as_frame=False)
+# ── 1. Data ──────────────────────────────────────────────────────────────
+X, y = load_iris(return_X_y=True)
 feature_names = ["sepal_len", "sepal_wid", "petal_len", "petal_wid"]
 
-class CountedModel:
-    def __init__(self, model):
-        self.model = model
-        self.call_count = 0
+scaler = StandardScaler()
+X = scaler.fit_transform(X).astype(np.float32)
 
-    def predict_proba(self, X):
-        self.call_count += X.shape[0]   # count individual row evaluations
-        return self.model.predict_proba(X)
-model = RandomForestClassifier(n_estimators=100, random_state=42)
-model.fit(X, y)
-counted = CountedModel(model)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Use a small background dataset (summary of training data)
-background = X.mean(axis=0).reshape(1, -1)
+X_train_t = torch.tensor(X_train)
+X_test_t  = torch.tensor(X_test)
+y_train_t = torch.tensor(y_train, dtype=torch.long)
 
-explainer2 = shap.KernelExplainer(counted.predict_proba, background)
-counted.call_count = 0   # reset before explain
+# ── 2. Model ─────────────────────────────────────────────────────────────
+class IrisNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(4, 16),
+            nn.ReLU(),
+            nn.Linear(16, 8),
+            nn.ReLU(),
+            nn.Linear(8, 3)        # raw logits, 3 classes
+        )
+    def forward(self, x):
+        return self.net(x)
 
-instance = X[0:1]
-shap_values2 = explainer2.shap_values(instance, nsamples=4)
-print(f"Actual model calls recorded: {counted.call_count}")  # 320
+model = IrisNet()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+loss_fn   = nn.CrossEntropyLoss()
 
-print(f"maskMatrix shape  : {explainer2.maskMatrix.shape}")
-print(f"Unique masks used : {explainer2.maskMatrix.shape[0]}")
-print()
-print("All masks:")
-print(explainer2.maskMatrix.astype(int))
+# ── 3. Train ──────────────────────────────────────────────────────────────
+model.train()
+for epoch in range(200):
+    optimizer.zero_grad()
+    loss = loss_fn(model(X_train_t), y_train_t)
+    loss.backward()
+    optimizer.step()
 
-# explainer = shap.KernelExplainer(model.predict_proba, background)
+model.eval()
+acc = (model(X_test_t).argmax(dim=1) == torch.tensor(y_test)).float().mean()
+print(f"Test accuracy: {acc:.2%}")
 
+# ── 4. SHAP DeepExplainer ─────────────────────────────────────────────────
+# Background: small random subset of training data (50 rows is typical)
+background = X_train_t[:50]
 
-# # shap_values = explainer.shap_values(instance, nsamples=32)  # <-- key parameter
+explainer = shap.DeepExplainer(model, background)
 
-# print("SHAP values per class:")
-# for i, cls in enumerate(["setosa", "versicolor", "virginica"]):
-#     print(f"  {cls}: {dict(zip(feature_names, shap_values[i][0].round(4)))}")
+# Explain 5 test instances
+instances = X_test_t[:5]
+shap_values = explainer.shap_values(instances)   
+# shap_values: list of 3 arrays, one per class, each shape (5, 4)
+
+# ── 5. Inspect results ────────────────────────────────────────────────────
+class_names = ["setosa", "versicolor", "virginica"]
+
+for i, cls in enumerate(class_names):
+    print(f"\nSHAP values for class '{cls}' (5 instances × 4 features):")
+    df = np.round(shap_values[i], 4)
+    print(f"  {'':12s} " + "  ".join(f"{f:>12s}" for f in feature_names))
+    for row_idx, row in enumerate(df):
+        print(f"  instance {row_idx}:  " + "  ".join(f"{v:>12.4f}" for v in row))
