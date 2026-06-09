@@ -202,7 +202,7 @@ class EvalLogits:
         self.orig_stat = orig_stat
         self.orig_logits = orig_stat['logits']
         self.orig_prob = F.softmax(torch.tensor(self.orig_logits),dim=0)
-        self.pred_cls = np.argmax(np.array(self.orig_stat))
+        self.pred_cls = np.argmax(np.array(self.orig_logits))
         self.show_mask = show_mask
         self.fill_type = fill_type
         self.N_CLS = 101
@@ -342,7 +342,8 @@ def eval_UCF101(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
             if not line:
                 continue
             record = json.loads(line)
-            # if record['filename']!='v_BlowDryHair_g01_c02': continue
+            # if record['filename']!='v_YoYo_g07_c04': continue
+
             cls_idx = class_labels[record['filename'].split('_')[1].lower()]
             orig_stat = grp_stats[record['filename']]['original_stat']
             pred_cls = orig_stat['cls']
@@ -464,16 +465,13 @@ def eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH, TYPE='IG'):
 
 
 def avg_stat_ucf():
-    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\partition_32_late_late_0.001.jsonl'
+    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     grp_stats = get_orig_logits(GRP_PATH)
 
     metrics = {
-        'entropy':0,
         'logit':0,
-        'margin1':0,
-        'margin3':0,
-        'margin5':0
+        'prob':0
     }
     d = {'rmv_asc':func.deep_copy_dict(metrics),
          'rmv_dec':func.deep_copy_dict(metrics) ,
@@ -487,6 +485,7 @@ def avg_stat_ucf():
          'add_rl':func.deep_copy_dict(metrics)}
     
     n=0
+    prob_auc = []
     with open(EVAL_PATH, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
@@ -498,6 +497,10 @@ def avg_stat_ucf():
             if grp_stats[d_['filename']]['original_stat']['cls'] != grp_stats[d_['filename']]['grp_pred_cls']:
                 continue
 
+            
+            # cls = grp_stats[d_['filename']]['grp_pred_cls']
+            # F.softmax(torch.tensor(grp_stats[d_['filename']]['all_grp_stats']['logits']))[cls]
+
             for k in set(d_.keys()) - {'filename'}:
                 for m in d_[k]['auc']:
                     d[k][m] += d_[k]['auc'][m]
@@ -506,7 +509,7 @@ def avg_stat_ucf():
         for m in d[k]:
             d[k][m]/=n
         
-    metrics = ['entropy', 'logit', 'margin1', 'margin3', 'margin5']
+    metrics = ['prob', 'logit']
 
     for m in metrics:
         print(f'\n{m} AUC: ')
@@ -592,11 +595,11 @@ def importance_correlation(GRP_PATH, IMP_PATH):
 if __name__ == "__main__":
     # importance_correlation(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl' ,r'C:\Users\lahir\Downloads\UCF101\analysis\shap')
     
-    IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\partition_32_late_0.001.jsonl'
-    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\partition_32_late_late_0.001.jsonl'
-    eval_UCF101(FILL_TYPE='late', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
-    # avg_stat_ucf()
+    # IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\exactSHAP_late_0.001.jsonl'
+    # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    # OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
+    # eval_UCF101(FILL_TYPE='late', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
+    avg_stat_ucf()
     # TYPE = 'IG'
     # IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\baselines\0.001_{TYPE}.jsonl'
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
