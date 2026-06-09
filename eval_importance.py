@@ -314,7 +314,7 @@ class EvalLogits:
         
         return {'list': metrics, 'auc': auc}
 
-def eval_UCF101(FILL_TYPE, IMP_FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
+def eval_UCF101(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
     # FILL_TYPE = 'past' # past, future, middle, random, late
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.0001.jsonl'
     grp_stats = get_orig_logits(GRP_PATH)
@@ -592,10 +592,10 @@ def importance_correlation(GRP_PATH, IMP_PATH):
 if __name__ == "__main__":
     # importance_correlation(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl' ,r'C:\Users\lahir\Downloads\UCF101\analysis\shap')
     
-    IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\partition_32_{IMP_FILL_TYPE}_0.001.jsonl'
+    IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\partition_32_late_0.001.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\partition_32_{IMP_FILL_TYPE}_{FILL_TYPE}_0.001.jsonl'
-    eval_UCF101(FILL_TYPE='late', IMP_FILL_TYPE='late')
+    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\partition_32_late_late_0.001.jsonl'
+    eval_UCF101(FILL_TYPE='late', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
     # avg_stat_ucf()
     # TYPE = 'IG'
     # IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\baselines\0.001_{TYPE}.jsonl'
