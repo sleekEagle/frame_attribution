@@ -440,6 +440,7 @@ def calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES):
             if record['grp_pred_cls'] != record['original_stat']['cls']: continue
 
             filename = record['filename']
+            print(filename)
             filename = filename.split('/')[-2] + '/' + filename.split('/')[-1]
             idx = nice_names.index(filename)
             p = path_list[idx]
