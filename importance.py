@@ -225,7 +225,7 @@ class CalcSHAP:
                 return np.zeros((0, 4))
             # Each frame is a point on a line — adjacent frames will cluster together
             points = np.arange(n).reshape(-1, 1).astype(float)
-            Z = linkage(points, method="complete", metric="euclidean")
+            Z = linkage(points, method="ward")
             return Z
 
         masker = shap.maskers.Partition(
@@ -233,17 +233,16 @@ class CalcSHAP:
             clustering=sequential_linkage(NUM_GROUPS)
         )
 
-        explainer = shap.Explainer(
-            model=self.predict_with_mask,
-            masker = masker,
-            algorithm="partition"
+        explainer = shap.PartitionExplainer(
+            self.predict_with_mask,
+            masker
         )
 
         test_instance = np.ones((1, NUM_GROUPS)) 
         # shap_values = explainer(test_instance)
         shap_values = explainer(
             test_instance,
-            nsamples=self.N_SAMPLES
+            max_evals=self.N_SAMPLES
         )
         # self.masks = np.concatenate(self.masks,axis=0)
 
@@ -455,28 +454,49 @@ def calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES):
                 groups[int(k)] = f
 
             video = model.video_from_path(p)['pixel_values_videos'][0,:]
-            shap_values = ex.explain(video, groups, check=False)
 
-            d = {}
-            d['filename'] = filename
-            d['shapley_values'] = shap_values.values.tolist()
-            d['base_values'] = shap_values.base_values.tolist()
-            d['difference'] = ex.difference
-            d['n_masks'] = ex.n_masks
-            d['groups'] = groups
+            if len(groups)==1: continue
+
+            if SHAP_METHOD == 'exact':
+                shap_values = ex.explain(video, groups, check=True)
+                d = {}
+                d['filename'] = filename
+                d['shapley_values'] = shap_values.values.tolist()
+                d['base_values'] = shap_values.base_values.tolist()
+                d['difference'] = ex.difference
+                d['n_masks'] = ex.n_masks
+                d['groups'] = groups
+            if SHAP_METHOD == 'kernel':
+                shap_data = ex.explain_kernel(video, groups, check=True)
+                d = {}
+                d['filename'] = filename
+                d['shapley_values'] = shap_data['shap_values'].tolist()
+                d['base_values'] = shap_data['expected_values'].tolist()
+                d['difference'] = ex.difference
+                d['n_masks'] = ex.n_masks
+                d['groups'] = groups
+            if SHAP_METHOD == 'partition':
+                shap_values = ex.explain_partition(video, groups, check=True)
+                d = {}
+                d['filename'] = filename
+                d['shapley_values'] = shap_values.values.tolist()
+                d['base_values'] = shap_values.base_values.tolist()
+                d['difference'] = ex.difference
+                d['n_masks'] = ex.n_masks
+                d['groups'] = groups
 
             with open(out_path, 'a') as f:
                 f.write(json.dumps(d) + '\n')
 
 if __name__ == "__main__":
-    # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    # OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap'
-    # FILL_METHOD = 'late'
-    # calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD='partition',N_SAMPLES=32)
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap'
+    FILL_METHOD = 'late'
+    calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD='partition',N_SAMPLES=32)
 
 
-    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap'
-    FILL_METHOD = 'future'
-    SHAP_METHOD = 'partition'
-    calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES=32)
+    # GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    # OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap'
+    # FILL_METHOD = 'future'
+    # SHAP_METHOD = 'partition'
+    # calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES=32)

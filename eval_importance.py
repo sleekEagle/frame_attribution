@@ -27,45 +27,192 @@ def get_orig_logits(PATH):
             d[record['filename']] = record
     return d
 
+# class EvalLogits:
+#     def __init__(self, full_video, model, groups, orig_stat, cls_idx, fill_type, show_mask=False):
+#         self.full_video = full_video
+#         self.model = model
+#         self.groups = groups
+#         self.orig_stat = orig_stat
+#         self.cls_idx = cls_idx
+#         self.show_mask = show_mask
+#         self.fill_type = fill_type
+#         self.N_CLS = 101
+
+#         #prepare the all and none metrics
+#         all_metrics, none_metrics = {},{}
+
+#         # none_metrics['entropy'] = float(entropy(F.softmax(CONST.UCF_AVG_PRED,dim=0)))
+#         # none_metrics['logit'] = float(CONST.UCF_AVG_PRED[cls_idx])
+#         # for m in [1,3,5]:
+#         #     none_metrics[f'margin_{m}'] = float(func.get_margin(CONST.UCF_AVG_PRED, cls_idx=cls_idx, k=m))
+#         none_metrics['entropy'] = math.log(self.N_CLS)
+#         none_metrics['logit'] = 1/self.N_CLS
+#         for m in [1,3,5]:
+#             none_metrics[f'margin_{m}'] = 0.0
+
+#         logits = torch.tensor(orig_stat['logits'])
+#         all_metrics['entropy'] = orig_stat['entropy']
+#         all_metrics['logit'] = float(logits[cls_idx])
+#         for m in [1,3,5]:
+#             all_metrics[f'margin_{m}'] = float(func.get_margin(logits, cls_idx=cls_idx, k=m))
+
+#         self.all_metrics, self.none_metrics = all_metrics, none_metrics
+
+#     def eval_remove(self, idx_order):
+#         metrics = {
+#             'entropy': [0],
+#             'margin1': [1],
+#             'margin3': [1],
+#             'margin5': [1],
+#             'logit': [1]
+#         }
+#         mask = [1]*len(self.groups)
+#         if self.show_mask:
+#             print(mask)
+#         for idx in idx_order:
+#             mask[idx] = 0
+#             if self.show_mask :
+#                 print(mask)
+#             if sum(mask) == 0:
+#                 metrics['entropy'].append(1)
+#                 metrics['margin1'].append(0)
+#                 metrics['margin3'].append(0)
+#                 metrics['margin5'].append(0)
+#                 metrics['logit'].append(0)
+#                 continue
+#             if self.fill_type == 'past':
+#                 g = [func.past_fill_all(mask, self.groups)]
+#             elif self.fill_type == 'future':
+#                 g = [func.future_fill_all(mask, self.groups)]
+#             elif self.fill_type == 'middle':
+#                 g = [func.hybrid_fill_all(mask, self.groups, 'middle')]
+#             elif self.fill_type=='random':
+#                 g = [func.hybrid_fill_all(mask, self.groups, 'random')]
+#             elif self.fill_type=='late':
+#                 g = [func.past_fill_all(mask, self.groups),
+#                          func.future_fill_all(mask, self.groups)]
+
+#             avg_ = {
+#                 'entropy' : 0,
+#                 'logit': 0,
+#                 'margin1': 0,
+#                 'margin3': 0,
+#                 'margin5': 0,
+#             }
+#             n = 0
+#             for g_ in g:
+#                 vid_g = func.create_grouped_video(self.full_video, g_)
+#                 stat = func.get_pred_stats(self.model, vid_g)
+#                 # assert (stat['entropy'] - self.all_metrics['entropy'])/(self.none_metrics['entropy'] - self.all_metrics['entropy'])>0,'error'
+#                 avg_['entropy'] += (stat['entropy'] - self.all_metrics['entropy'])/(self.none_metrics['entropy'] - self.all_metrics['entropy'])
+#                 avg_['logit'] += (stat['logits'][self.cls_idx] - self.none_metrics['logit'])/(self.all_metrics['logit'] - self.none_metrics['logit'])
+#                 for m in [1,3,5]:
+#                     avg_[f'margin{m}'] += (stat[f'margin_{m}'] - self.none_metrics[f'margin_{m}'])/(self.all_metrics[f'margin_{m}'] - self.none_metrics[f'margin_{m}'])
+#                 n += 1
+#             for k in avg_:
+#                 metrics[k].append(avg_[k]/n)
+
+#         auc = {}
+#         x = np.linspace(0, 1, len(metrics['entropy']))
+#         # assert float(trapezoid(metrics['entropy'], x)) >=0 ,'entropy auc is negative'
+#         auc['entropy'] = float(trapezoid(metrics['entropy'], x))
+#         auc['logit'] = float(trapezoid(metrics['logit'], x))
+#         for m in [1,3,5]:
+#             # assert float(trapezoid(metrics[f'margin{m}'], x)) >=0 ,f'margin{m} auc is negative'
+#             auc[f'margin{m}'] = float(trapezoid(metrics[f'margin{m}'], x))
+
+
+#         # mask = [1,0,0]
+#         # # mask[0]=0
+#         # g_ = func.past_fill_all(mask, self.groups)
+#         # vid_g = func.create_grouped_video(self.full_video, g_)
+#         # stat = func.get_pred_stats(self.model, vid_g)
+        
+  
+#         return {'list': metrics, 'auc': auc}
+    
+    
+#     def eval_add(self, idx_order):
+#         metrics = {
+#             'entropy': [1],
+#             'margin1': [0],
+#             'margin3': [0],
+#             'margin5': [0],
+#             'logit': [0]
+#         }
+#         mask = [0]*len(self.groups)
+#         if self.show_mask:
+#             print(mask)
+#         for idx in idx_order:
+#             mask[idx] = 1
+#             if self.show_mask :
+#                 print(mask)
+#             if sum(mask) == 0:
+#                 metrics['entropy'].append(0)
+#                 metrics['margin1'].append(1)
+#                 metrics['margin3'].append(1)
+#                 metrics['margin5'].append(1)
+#                 metrics['logit'].append(1)
+#                 continue
+#             if self.fill_type == 'past':
+#                 g = [func.past_fill_all(mask, self.groups)]
+#             elif self.fill_type == 'future':
+#                 g = [func.future_fill_all(mask, self.groups)]
+#             elif self.fill_type == 'middle':
+#                 g = [func.hybrid_fill_all(mask, self.groups, 'middle')]
+#             elif self.fill_type=='random':
+#                 g = [func.hybrid_fill_all(mask, self.groups, 'random')]
+#             elif self.fill_type=='late':
+#                 g = [func.past_fill_all(mask, self.groups),
+#                          func.future_fill_all(mask, self.groups)]
+
+#             avg_ = {
+#                 'entropy' : 0,
+#                 'logit': 0,
+#                 'margin1': 0,
+#                 'margin3': 0,
+#                 'margin5': 0,
+#             }
+#             n = 0
+#             for g_ in g:
+#                 vid_g = func.create_grouped_video(self.full_video, g_)
+#                 stat = func.get_pred_stats(self.model, vid_g)
+#                 avg_['entropy'] += (stat['entropy'] - self.all_metrics['entropy'])/(self.none_metrics['entropy'] - self.all_metrics['entropy'])
+#                 avg_['logit'] += (stat['logits'][self.cls_idx] - self.none_metrics['logit'])/(self.all_metrics['logit'] - self.none_metrics['logit'])
+#                 for m in [1,3,5]:
+#                     avg_[f'margin{m}'] += (stat[f'margin_{m}'] - self.none_metrics[f'margin_{m}'])/(self.all_metrics[f'margin_{m}'] - self.none_metrics[f'margin_{m}'])
+#                 n += 1
+#             for k in avg_:
+#                 metrics[k].append(avg_[k]/n)
+
+#         auc = {}
+#         x = np.linspace(0, 1, len(metrics['entropy']))
+#         auc['entropy'] = float(trapezoid(metrics['entropy'], x))
+#         auc['logit'] = float(trapezoid(metrics['logit'], x))
+#         for m in [1,3,5]:
+#             auc[f'margin{m}'] = float(trapezoid(metrics[f'margin{m}'], x))
+
+#         return {'list': metrics, 'auc': auc}
+
 class EvalLogits:
-    def __init__(self, full_video, model, groups, orig_stat, cls_idx, fill_type, show_mask=False):
+    def __init__(self, full_video, model, groups, orig_stat, fill_type, show_mask=False):
         self.full_video = full_video
         self.model = model
         self.groups = groups
         self.orig_stat = orig_stat
-        self.cls_idx = cls_idx
+        self.orig_logits = orig_stat['logits']
+        self.orig_prob = F.softmax(torch.tensor(self.orig_logits),dim=0)
+        self.pred_cls = np.argmax(np.array(self.orig_stat))
         self.show_mask = show_mask
         self.fill_type = fill_type
         self.N_CLS = 101
 
-        #prepare the all and none metrics
-        all_metrics, none_metrics = {},{}
-
-        # none_metrics['entropy'] = float(entropy(F.softmax(CONST.UCF_AVG_PRED,dim=0)))
-        # none_metrics['logit'] = float(CONST.UCF_AVG_PRED[cls_idx])
-        # for m in [1,3,5]:
-        #     none_metrics[f'margin_{m}'] = float(func.get_margin(CONST.UCF_AVG_PRED, cls_idx=cls_idx, k=m))
-        none_metrics['entropy'] = math.log(self.N_CLS)
-        none_metrics['logit'] = 1/self.N_CLS
-        for m in [1,3,5]:
-            none_metrics[f'margin_{m}'] = 0.0
-
-        logits = torch.tensor(orig_stat['logits'])
-        all_metrics['entropy'] = orig_stat['entropy']
-        all_metrics['logit'] = float(logits[cls_idx])
-        for m in [1,3,5]:
-            all_metrics[f'margin_{m}'] = float(func.get_margin(logits, cls_idx=cls_idx, k=m))
-
-        self.all_metrics, self.none_metrics = all_metrics, none_metrics
-
     def eval_remove(self, idx_order):
         metrics = {
-            'entropy': [0],
-            'margin1': [1],
-            'margin3': [1],
-            'margin5': [1],
-            'logit': [1]
+            'prob': [self.orig_prob[self.pred_cls].item()],
+            'logit': [self.orig_logits[self.pred_cls]]
         }
+
         mask = [1]*len(self.groups)
         if self.show_mask:
             print(mask)
@@ -73,12 +220,10 @@ class EvalLogits:
             mask[idx] = 0
             if self.show_mask :
                 print(mask)
+
             if sum(mask) == 0:
-                metrics['entropy'].append(1)
-                metrics['margin1'].append(0)
-                metrics['margin3'].append(0)
-                metrics['margin5'].append(0)
-                metrics['logit'].append(0)
+                metrics['prob'].append(1/self.N_CLS)
+                metrics['logit'].append(1/self.N_CLS)
                 continue
             if self.fill_type == 'past':
                 g = [func.past_fill_all(mask, self.groups)]
@@ -93,53 +238,35 @@ class EvalLogits:
                          func.future_fill_all(mask, self.groups)]
 
             avg_ = {
-                'entropy' : 0,
-                'logit': 0,
-                'margin1': 0,
-                'margin3': 0,
-                'margin5': 0,
+                'prob' : 0,
+                'logit': 0
             }
             n = 0
             for g_ in g:
                 vid_g = func.create_grouped_video(self.full_video, g_)
                 stat = func.get_pred_stats(self.model, vid_g)
-                # assert (stat['entropy'] - self.all_metrics['entropy'])/(self.none_metrics['entropy'] - self.all_metrics['entropy'])>0,'error'
-                avg_['entropy'] += (stat['entropy'] - self.all_metrics['entropy'])/(self.none_metrics['entropy'] - self.all_metrics['entropy'])
-                avg_['logit'] += (stat['logits'][self.cls_idx] - self.none_metrics['logit'])/(self.all_metrics['logit'] - self.none_metrics['logit'])
-                for m in [1,3,5]:
-                    avg_[f'margin{m}'] += (stat[f'margin_{m}'] - self.none_metrics[f'margin_{m}'])/(self.all_metrics[f'margin_{m}'] - self.none_metrics[f'margin_{m}'])
+                l = torch.tensor(stat['logits'])
+                p = F.softmax(l,dim=0)
+                avg_['prob'] += p[self.pred_cls].item()
+                avg_['logit'] += l[self.pred_cls].item()
                 n += 1
             for k in avg_:
                 metrics[k].append(avg_[k]/n)
 
         auc = {}
-        x = np.linspace(0, 1, len(metrics['entropy']))
-        # assert float(trapezoid(metrics['entropy'], x)) >=0 ,'entropy auc is negative'
-        auc['entropy'] = float(trapezoid(metrics['entropy'], x))
+        x = np.linspace(0, 1, len(metrics['prob']))
+        auc['prob'] = float(trapezoid(metrics['prob'], x))
         auc['logit'] = float(trapezoid(metrics['logit'], x))
-        for m in [1,3,5]:
-            # assert float(trapezoid(metrics[f'margin{m}'], x)) >=0 ,f'margin{m} auc is negative'
-            auc[f'margin{m}'] = float(trapezoid(metrics[f'margin{m}'], x))
-
-
-        # mask = [1,0,0]
-        # # mask[0]=0
-        # g_ = func.past_fill_all(mask, self.groups)
-        # vid_g = func.create_grouped_video(self.full_video, g_)
-        # stat = func.get_pred_stats(self.model, vid_g)
         
-  
         return {'list': metrics, 'auc': auc}
     
     
     def eval_add(self, idx_order):
         metrics = {
-            'entropy': [1],
-            'margin1': [0],
-            'margin3': [0],
-            'margin5': [0],
-            'logit': [0]
+            'prob': [1/self.N_CLS],
+            'logit': [1/self.N_CLS]
         }
+
         mask = [0]*len(self.groups)
         if self.show_mask:
             print(mask)
@@ -147,12 +274,10 @@ class EvalLogits:
             mask[idx] = 1
             if self.show_mask :
                 print(mask)
-            if sum(mask) == 0:
-                metrics['entropy'].append(0)
-                metrics['margin1'].append(1)
-                metrics['margin3'].append(1)
-                metrics['margin5'].append(1)
-                metrics['logit'].append(1)
+
+            if sum(mask) == len(self.groups):
+                metrics['prob'].append(self.orig_prob[self.pred_cls].item())
+                metrics['logit'].append(self.orig_logits[self.pred_cls])
                 continue
             if self.fill_type == 'past':
                 g = [func.past_fill_all(mask, self.groups)]
@@ -167,39 +292,30 @@ class EvalLogits:
                          func.future_fill_all(mask, self.groups)]
 
             avg_ = {
-                'entropy' : 0,
-                'logit': 0,
-                'margin1': 0,
-                'margin3': 0,
-                'margin5': 0,
+                'prob' : 0,
+                'logit': 0
             }
             n = 0
             for g_ in g:
                 vid_g = func.create_grouped_video(self.full_video, g_)
                 stat = func.get_pred_stats(self.model, vid_g)
-                avg_['entropy'] += (stat['entropy'] - self.all_metrics['entropy'])/(self.none_metrics['entropy'] - self.all_metrics['entropy'])
-                avg_['logit'] += (stat['logits'][self.cls_idx] - self.none_metrics['logit'])/(self.all_metrics['logit'] - self.none_metrics['logit'])
-                for m in [1,3,5]:
-                    avg_[f'margin{m}'] += (stat[f'margin_{m}'] - self.none_metrics[f'margin_{m}'])/(self.all_metrics[f'margin_{m}'] - self.none_metrics[f'margin_{m}'])
+                l = torch.tensor(stat['logits'])
+                p = F.softmax(l,dim=0)
+                avg_['prob'] += p[self.pred_cls].item()
+                avg_['logit'] += l[self.pred_cls].item()
                 n += 1
             for k in avg_:
                 metrics[k].append(avg_[k]/n)
 
         auc = {}
-        x = np.linspace(0, 1, len(metrics['entropy']))
-        auc['entropy'] = float(trapezoid(metrics['entropy'], x))
+        x = np.linspace(0, 1, len(metrics['prob']))
+        auc['prob'] = float(trapezoid(metrics['prob'], x))
         auc['logit'] = float(trapezoid(metrics['logit'], x))
-        for m in [1,3,5]:
-            auc[f'margin{m}'] = float(trapezoid(metrics[f'margin{m}'], x))
-
+        
         return {'list': metrics, 'auc': auc}
 
-def eval_UCF101(FILL_TYPE, IMP_FILL_TYPE):
+def eval_UCF101(FILL_TYPE, IMP_FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
     # FILL_TYPE = 'past' # past, future, middle, random, late
-    IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\partition_32_{IMP_FILL_TYPE}_0.001.jsonl'
-    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\partition_32_{IMP_FILL_TYPE}_{FILL_TYPE}_0.001.jsonl'
-
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.0001.jsonl'
     grp_stats = get_orig_logits(GRP_PATH)
 
@@ -229,6 +345,7 @@ def eval_UCF101(FILL_TYPE, IMP_FILL_TYPE):
             # if record['filename']!='v_BlowDryHair_g01_c02': continue
             cls_idx = class_labels[record['filename'].split('_')[1].lower()]
             orig_stat = grp_stats[record['filename']]['original_stat']
+            pred_cls = orig_stat['cls']
 
             # ol = grp_data[record['filename']]['data']
 
@@ -244,7 +361,7 @@ def eval_UCF101(FILL_TYPE, IMP_FILL_TYPE):
             # assert record['difference'] < 1e-2, 'The exactly shapley value difference is too large!'
             # assert len(record['groups']) == len(sv) , 'Number of shapley values do not match!'
 
-            sv_c = [s[cls_idx] for s in sv]
+            sv_c = [s[pred_cls] for s in sv]
             asc_idx = [int(i) for i in np.argsort(sv_c)]
 
             # let groups have integer keys
@@ -252,7 +369,7 @@ def eval_UCF101(FILL_TYPE, IMP_FILL_TYPE):
             for k in record['groups']:
                 groups[int(k)] = record['groups'][k]
 
-            el = EvalLogits(video, model, groups, orig_stat, cls_idx, FILL_TYPE)
+            el = EvalLogits(video, model, groups, orig_stat, FILL_TYPE)
 
             results = {
                 'filename': record['filename'],
@@ -474,8 +591,12 @@ def importance_correlation(GRP_PATH, IMP_PATH):
 
 if __name__ == "__main__":
     # importance_correlation(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl' ,r'C:\Users\lahir\Downloads\UCF101\analysis\shap')
-    # eval_UCF101(FILL_TYPE='late', IMP_FILL_TYPE='late')
-    avg_stat_ucf()
+    
+    IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\partition_32_{IMP_FILL_TYPE}_0.001.jsonl'
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\partition_32_{IMP_FILL_TYPE}_{FILL_TYPE}_0.001.jsonl'
+    eval_UCF101(FILL_TYPE='late', IMP_FILL_TYPE='late')
+    # avg_stat_ucf()
     # TYPE = 'IG'
     # IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\baselines\0.001_{TYPE}.jsonl'
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
