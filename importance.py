@@ -397,6 +397,7 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD,N_SAMPLES):
 
 
 def calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES):
+    print('in ssv2 shape calc')
     model = VJEPA2()
     model.eval()
     class_names = list(model.label2id.keys())
