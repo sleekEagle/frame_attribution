@@ -397,7 +397,7 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD,N_SAMPLES):
 
 
 def calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES):
-    print('in ssv2 shape calc')
+    # print('in ssv2 shape calc')
     model = VJEPA2()
     model.eval()
     class_names = list(model.label2id.keys())
@@ -441,7 +441,7 @@ def calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES):
             if record['grp_pred_cls'] != record['original_stat']['cls']: continue
 
             filename = record['filename']
-            print(filename)
+            # print(filename)
             filename = filename.split('/')[-2] + '/' + filename.split('/')[-1]
             idx = nice_names.index(filename)
             p = path_list[idx]
@@ -491,14 +491,14 @@ def calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES):
                 f.write(json.dumps(d) + '\n')
 
 if __name__ == "__main__":
-    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap'
-    FILL_METHOD = 'late'
-    calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD='partition',N_SAMPLES=32)
+    # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    # OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap'
+    # FILL_METHOD = 'late'
+    # calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD='partition',N_SAMPLES=32)
 
 
-    # GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    # OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap'
-    # FILL_METHOD = 'future'
-    # SHAP_METHOD = 'partition'
-    # calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES=32)
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap'
+    FILL_METHOD = 'future'
+    SHAP_METHOD = 'partition'
+    calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES=32)
