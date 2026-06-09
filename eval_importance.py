@@ -438,13 +438,13 @@ def eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH, TYPE='IG'):
                 imp_values.append(imp[k])
             asc_idx = [int(i) for i in np.argsort(imp_values)]
 
-            cls_idx = class_labels[filename.split('_')[1].lower()]
-            orig_stat = grp_stats[filename]
+            orig_stat = grp_stats[record['filename']]['original_stat']
+            pred_cls = orig_stat['cls']
 
             p = ucf101dm.construct_vid_path_from_full(filename)
             video = ucf101dm.load_jpg_ucf101(p, n=0).permute(1,0,2,3)
 
-            el = EvalLogits(video, model, groups, orig_stat, cls_idx, FILL_TYPE)
+            el = EvalLogits(video, model, groups, orig_stat, FILL_TYPE)
 
             results = {
                 'filename': record['filename'],
@@ -466,6 +466,7 @@ def eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH, TYPE='IG'):
 
 def avg_stat_ucf():
     EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
+    # EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\IG_0.001.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     grp_stats = get_orig_logits(GRP_PATH)
 
