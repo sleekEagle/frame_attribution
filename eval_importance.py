@@ -628,7 +628,7 @@ def plot_imp():
             x_vals = []
             for g in groups:
                 frames = groups[g] + [g]
-                print(frames)
+                # print(frames)
                 frames.sort()
                 x_vals.append(frames[0]*W + W*len(frames)*0.5)
                 rect = Rectangle(
@@ -653,20 +653,21 @@ def plot_imp():
             ax_bars.axis('off')
 
             width = 10
+            offset = 0.5
             x_vals = np.array(x_vals)
-            bars = ax_bars.bar(x_vals, best_imp+0.01, width, 
+            bars = ax_bars.bar(x_vals, best_imp+offset, width, 
                        label='best', alpha=0.7, edgecolor='black')
-            bars = ax_bars.bar(x_vals + width, best_ig, width, 
+            bars = ax_bars.bar(x_vals + width, best_ig+offset, width, 
                        label='ig', alpha=0.7, edgecolor='black')
-            bars = ax_bars.bar(x_vals+2*width, best_gc, width, 
+            bars = ax_bars.bar(x_vals+2*width, best_gc+offset, width, 
                        label='gc', alpha=0.7, edgecolor='black')
-            bars = ax_bars.bar(x_vals+3*width, best_oc, width, 
+            bars = ax_bars.bar(x_vals+3*width, best_oc+offset, width, 
                        label='oc', alpha=0.7, edgecolor='black')
             
 
             plt.show()
 
-    get_all_stats(best_names)
+    get_all_stats(worst_names)
 
         
 
