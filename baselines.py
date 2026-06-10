@@ -164,6 +164,17 @@ def calc_imp_UCF(GRP_PATH, OUT_PATH, INTERPR_METHOD='IG'):
             with open(OUT_PATH, 'a') as f:
                 f.write(json.dumps(d) + '\n')
 
+def get_orig_logits(PATH):
+    d = {}
+    with open(PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+
+            record = json.loads(line)            
+            d[record['filename']] = record
+    return d
 
 def calc_imp_ssv2(GRP_PATH, OUT_PATH, INTERPR_METHOD='IG'):
     from dataloaders import ssv2
@@ -174,6 +185,11 @@ def calc_imp_ssv2(GRP_PATH, OUT_PATH, INTERPR_METHOD='IG'):
     thr = Path(GRP_PATH).stem.split('_')[-1]
     filename = f'{thr}_{INTERPR_METHOD}.jsonl'
     OUT_PATH = os.path.join(OUT_PATH, filename)
+
+    exist_files = []
+    if os.path.exists(OUT_PATH):
+        data = get_orig_logits(OUT_PATH)
+        exist_files = list(data.keys())
 
     # print('in ssv2 shape calc')
     model = VJEPA2()
@@ -208,6 +224,8 @@ def calc_imp_ssv2(GRP_PATH, OUT_PATH, INTERPR_METHOD='IG'):
 
             filename = record['filename']
             filename = filename.split('/')[-2] + '/' + filename.split('/')[-1]
+            if filename in exist_files: continue
+
             idx = nice_names.index(filename)
             p = path_list[idx]
 
@@ -242,7 +260,7 @@ def calc_imp_ssv2(GRP_PATH, OUT_PATH, INTERPR_METHOD='IG'):
             d['correct'] = record['correct']
             with open(OUT_PATH, 'a') as f:
                 f.write(json.dumps(d) + '\n')
-                
+
 
 if __name__ == "__main__":
     GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
