@@ -390,14 +390,9 @@ def eval_UCF101(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
                 f.write(json.dumps(results) + '\n')
 
 
-def eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH, TYPE='IG'):
-    # FILL_TYPE = 'past' # past, future, middle, random, late
+def eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH):
     FILL_TYPE = 'late'
-    # IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\baselines\0.001_{TYPE}.jsonl'
-    # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    # OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\{TYPE}_0.001.jsonl'
 
-    # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.0001.jsonl'
     grp_stats = get_orig_logits(GRP_PATH)
 
     # idx = np.argmax(np.array(grp_data['v_BlowDryHair_g01_c02']['data']))
@@ -463,16 +458,17 @@ def eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH, TYPE='IG'):
             with open(OUT_PATH, 'a') as f:
                 f.write(json.dumps(results) + '\n')
 
-
 def avg_stat_ucf():
-    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
+    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\IG_0.001.jsonl'
     # EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\IG_0.001.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     grp_stats = get_orig_logits(GRP_PATH)
 
     metrics = {
         'logit':0,
-        'prob':0
+        'prob':0,
+        'logit_norm':0,
+        'prob_norm':0
     }
     d = {'rmv_asc':func.deep_copy_dict(metrics),
          'rmv_dec':func.deep_copy_dict(metrics) ,
@@ -498,19 +494,23 @@ def avg_stat_ucf():
             if grp_stats[d_['filename']]['original_stat']['cls'] != grp_stats[d_['filename']]['grp_pred_cls']:
                 continue
 
-            
-            # cls = grp_stats[d_['filename']]['grp_pred_cls']
-            # F.softmax(torch.tensor(grp_stats[d_['filename']]['all_grp_stats']['logits']))[cls]
-
             for k in set(d_.keys()) - {'filename'}:
                 for m in d_[k]['auc']:
-                    d[k][m] += d_[k]['auc'][m]
+                    ar = np.array(d_[k]['list'][m])
+                    ar_norm = (ar - ar.min())/(ar.max() - ar.min())
+                    x = np.linspace(0, 1, len(ar))
+                    auc_norm = float(trapezoid(ar_norm, x))
+                    auc = float(trapezoid(ar, x))
+
+                    d[k][m] += auc
+                    d[k][f'{m}_norm'] += auc_norm
             n+=1
+
     for k in d:
         for m in d[k]:
             d[k][m]/=n
         
-    metrics = ['prob', 'logit']
+    metrics = ['prob', 'logit', 'prob_norm', 'logit_norm']
 
     for m in metrics:
         print(f'\n{m} AUC: ')
@@ -605,4 +605,4 @@ if __name__ == "__main__":
     # IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\baselines\0.001_{TYPE}.jsonl'
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     # OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\{TYPE}_0.001.jsonl'
-    # eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH, TYPE)
+    # eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH)

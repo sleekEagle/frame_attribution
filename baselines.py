@@ -164,7 +164,87 @@ def calc_imp_UCF(GRP_PATH, OUT_PATH, INTERPR_METHOD='IG'):
             with open(OUT_PATH, 'a') as f:
                 f.write(json.dumps(d) + '\n')
 
+
+def calc_imp_ssv2(GRP_PATH, OUT_PATH, INTERPR_METHOD='IG'):
+    from dataloaders import ssv2
+    from models.ssv2 import VJEPA2
+    import time
+
+    #create outout file
+    thr = Path(GRP_PATH).stem.split('_')[-1]
+    filename = f'{thr}_{INTERPR_METHOD}.jsonl'
+    OUT_PATH = os.path.join(OUT_PATH, filename)
+
+    # print('in ssv2 shape calc')
+    model = VJEPA2()
+    model.eval()
+    class_names = list(model.label2id.keys())
+    baseline = Baseline(model, method=INTERPR_METHOD)
+
+    cls_list, path_list = ssv2.get_sampled_paths()
+    n_files = len(path_list)
+    nice_names = [Path(p).parent.name + '/' + Path(p).name for p in path_list]
+
+    n=0
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f))
+    with open(GRP_PATH, 'r', encoding='utf-8') as f:
+        start_time = time.time()
+        for line in f:
+            end_time = time.time()
+            elapsed = end_time - start_time
+
+            print(f'{n/line_count*100:.1f}% is done. Time passed: {elapsed:.2f}s', end='\r')
+            n+=1
+
+            line = line.strip()
+            if not line:
+                continue
+
+            record = json.loads(line)
+            
+            # ignore if the grouping changed the prediction
+            if record['grp_pred_cls'] != record['original_stat']['cls']: continue
+
+            filename = record['filename']
+            filename = filename.split('/')[-2] + '/' + filename.split('/')[-1]
+            idx = nice_names.index(filename)
+            p = path_list[idx]
+
+            g = record['groups']
+            groups = {}
+            for k in g:
+                if 'frames' in g[k]:
+                    f = g[k]['frames']
+                else: 
+                    f = []
+                groups[int(k)] = f
+            if len(groups)==1: continue
+
+            video = model.video_from_path(p)['pixel_values_videos'][0,:]
+            video_g = func.create_grouped_video(video.permute(1,0,2,3), groups)
+            pred_cls = record['grp_pred_cls']
+            attr = baseline.frame_attribute(video_g, target=pred_cls)
+            # per-group attributions
+            grp_attr = {}
+            s = 0
+            for k in groups:
+                f_idx = [k] + groups[k]
+                m = float(attr[f_idx].mean())
+                grp_attr[k] = m
+                s += m
+            for k in groups:
+                grp_attr[k]/=s
+
+            d={}
+            d['filename'] = filename
+            d['attribution'] = grp_attr
+            d['correct'] = record['correct']
+            with open(OUT_PATH, 'a') as f:
+                f.write(json.dumps(d) + '\n')
+                
+
 if __name__ == "__main__":
-    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\baselines'
-    calc_imp_UCF(GRP_PATH, OUT_PATH, INTERPR_METHOD='occlusion')
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines'
+    calc_imp_ssv2(GRP_PATH, OUT_PATH, INTERPR_METHOD='occlusion')
