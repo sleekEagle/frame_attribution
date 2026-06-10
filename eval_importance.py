@@ -1,4 +1,3 @@
-import shap
 import numpy as np
 import func
 import json
@@ -519,6 +518,170 @@ def avg_stat_ucf():
             print(s)
     print(f'n : {n}')
 
+def normalize_list(l):
+    l = np.array(l)
+    l = (l-l.min())/(l.max() - l.min())
+    return l
+
+def plot_imp():
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle
+    from matplotlib.gridspec import GridSpec
+
+    ucf101dm = func.UCF101_data_model()
+
+    EVAL_PATHS = {
+        'best': r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl',
+        'IG': r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\IG_0.001.jsonl',
+        'gradcam': r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\gradcam_0.001.jsonl',
+        'occlusion': r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\occlusion_0.001.jsonl'
+    }
+    IMP_PATHS = {
+        'best': r'C:\Users\lahir\Downloads\UCF101\analysis\shap\exactSHAP_late_0.001.jsonl',
+        'IG': r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\0.001_IG.jsonl',
+        'gradcam': r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\0.001_gradcam.jsonl',
+        'occlusion': r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\0.001_occlusion.jsonl'
+    }
+
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    grp_stats = get_orig_logits(GRP_PATH)
+    
+    def get_metrics(EVAL_PATH):
+        with open(EVAL_PATH, 'r', encoding='utf-8') as f:
+            metrics = {}
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                d_ = json.loads(line)
+                
+                # Dont consider cases where grouping changes the model prediction
+                if grp_stats[d_['filename']]['original_stat']['cls'] != grp_stats[d_['filename']]['grp_pred_cls']:
+                    continue
+
+                filename = d_['filename']
+                # if filename != 'v_WalkingWithDog_g07_c03': continue
+
+                def get_auc(d_, met):
+                    ar = np.array(d_[met]['list']['prob'])
+                    ar_norm = (ar - ar.min())/(ar.max() - ar.min())
+                    x = np.linspace(0, 1, len(ar))
+                    auc_norm = float(trapezoid(ar_norm, x))
+                    return auc_norm
+                metric = 0.5 * (get_auc(d_, 'rmv_asc')/get_auc(d_, 'rmv_dec') + get_auc(d_, 'add_dec')/get_auc(d_, 'add_asc'))
+                metrics[filename] = metric
+        return metrics
+    
+    IG_met = get_metrics(EVAL_PATHS['IG'])
+    oc_met = get_metrics(EVAL_PATHS['occlusion'])
+    gc_met = get_metrics(EVAL_PATHS['gradcam'])
+    ex_met = get_metrics(EVAL_PATHS['best'])
+
+    sort_idx = np.argsort(np.array([ex_met[k] for k in ex_met]))
+    best_idx = sort_idx[-10:]
+    worst_idx = sort_idx[:10]
+    best_names = [list(ex_met.keys())[i] for i in best_idx]
+    worst_names = [list(ex_met.keys())[i] for i in worst_idx]
+
+    # get attributions
+    def get_all_stats(names):
+        imp_vals = {}
+        for k in IMP_PATHS:
+            imp_stats = get_orig_logits(IMP_PATHS[k])
+            wanted_stats = {}
+            for name in names:
+                grp_cls = grp_stats[name]['grp_pred_cls']
+                d_ = {}
+                d_['grps'] = grp_stats[name]['groups']
+                if k=='best':
+                    d_['imp'] = [ar[grp_cls] for ar in imp_stats[name]['shapley_values'][0]]
+                else:
+                    d_['imp'] = [imp_stats[name]['attribution'][g] for g in d_['grps']]            
+                wanted_stats[name] = d_
+            imp_vals[k] = wanted_stats
+
+        #make plots
+        for name in names:
+            
+            groups = {}
+            g=imp_vals['best'][name]['grps']
+            for k in g:
+                if 'frames' in g[k]:
+                    f = g[k]['frames']
+                else: 
+                    f = []
+                groups[int(k)] = f
+
+            p = ucf101dm.construct_vid_path_from_full(name)
+            video = ucf101dm.load_jpg_ucf101(p, n=0).permute(0,3,2,1)
+            T,H,W,C = video.size()
+            video = video.reshape(T*H,W,3).permute(1,0,2)
+            video_norm = ((video - video.min()) / (video.max() - video.min())).numpy()
+            
+            fig = plt.figure(figsize=(20, 3))
+            gs = GridSpec(2, 1, height_ratios=[1, 0.3], hspace=0.01)
+            ax_frames = fig.add_subplot(gs[0])
+            ax_frames.imshow(video_norm)
+            ax_frames.axis('off')
+
+            #plot rectangles around grouped frames
+            x_vals = []
+            for g in groups:
+                frames = groups[g] + [g]
+                print(frames)
+                frames.sort()
+                x_vals.append(frames[0]*W + W*len(frames)*0.5)
+                rect = Rectangle(
+                    (frames[0]*W, 0),           # (x, y) - top-left corner
+                    W*(len(frames)),              # width
+                    H,             # height
+                    linewidth=3,
+                    edgecolor='red',
+                    facecolor='none'
+                )
+                ax_frames.add_patch(rect)
+
+
+            best_imp = normalize_list(imp_vals['best'][name]['imp'])
+            best_ig = normalize_list(imp_vals['IG'][name]['imp'])
+            best_gc = normalize_list(imp_vals['gradcam'][name]['imp'])
+            best_oc = normalize_list(imp_vals['occlusion'][name]['imp'])
+
+            ax_bars = fig.add_subplot(gs[1])
+            total_width = video_norm.shape[1]
+            ax_bars.set_xlim(0, total_width)
+            ax_bars.axis('off')
+
+            width = 10
+            x_vals = np.array(x_vals)
+            bars = ax_bars.bar(x_vals, best_imp+0.01, width, 
+                       label='best', alpha=0.7, edgecolor='black')
+            bars = ax_bars.bar(x_vals + width, best_ig, width, 
+                       label='ig', alpha=0.7, edgecolor='black')
+            bars = ax_bars.bar(x_vals+2*width, best_gc, width, 
+                       label='gc', alpha=0.7, edgecolor='black')
+            bars = ax_bars.bar(x_vals+3*width, best_oc, width, 
+                       label='oc', alpha=0.7, edgecolor='black')
+            
+
+            plt.show()
+
+    get_all_stats(best_names)
+
+        
+
+
+
+        
+
+
+
+
+
+    pass
+
+
+
 
 '''
 correlations:
@@ -600,7 +763,7 @@ if __name__ == "__main__":
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     # OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
     # eval_UCF101(FILL_TYPE='late', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
-    avg_stat_ucf()
+    plot_imp()
     # TYPE = 'IG'
     # IMP_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\baselines\0.001_{TYPE}.jsonl'
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
