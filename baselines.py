@@ -210,7 +210,7 @@ def calc_imp_ssv2(GRP_PATH, OUT_PATH, INTERPR_METHOD='IG'):
             end_time = time.time()
             elapsed = end_time - start_time
 
-            print(f'{n/line_count*100:.1f}% is done. Time passed: {elapsed:.2f}s', end='\r')
+            print(f'{n/line_count*100:.1f}% is done. Time passed: {elapsed:.2f}s', end='\r', flush=True)
             n+=1
 
             line = line.strip()
