@@ -530,6 +530,79 @@ def eval_ssv2(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
             with open(OUT_PATH, 'a') as f:
                 f.write(json.dumps(results) + '\n')
 
+
+def eval_ssv2_baseline(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
+    from dataloaders import ssv2
+    from models.ssv2 import VJEPA2
+
+    model = VJEPA2()
+    model.eval()
+
+    cls_list, path_list = ssv2.get_sampled_paths()
+    nice_names = [Path(p).parent.name + '/' + Path(p).name for p in path_list]
+    d = get_orig_logits(GRP_PATH)
+    grp_stats = {}
+    for k in d:
+        grp_stats['/'.join(k.split('/')[-2:])] = d[k]
+
+    with open(IMP_PATH, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in enumerate(f))
+
+    n=0
+    with open(IMP_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            print(f'{n/line_count*100:.1f}% is done.', end='\r')
+            n+=1
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            # if record['filename']!='v_YoYo_g07_c04': continue
+
+            imp = record['attribution']
+            filename = record['filename']
+
+            # let groups have integer keys
+            groups = {}
+            imp_values = []
+            for k in grp_stats[filename]['groups']:
+                if 'frames' in grp_stats[filename]['groups'][k]:
+                    groups[int(k)] = grp_stats[filename]['groups'][k]['frames']
+                else:
+                    groups[int(k)] = grp_stats[filename]['groups'][k]
+                    
+                imp_values.append(imp[k])
+            asc_idx = [int(i) for i in np.argsort(imp_values)]
+
+            orig_stat = grp_stats[record['filename']]['original_stat']
+            pred_cls = orig_stat['cls']
+
+            filename = filename.split('/')[-2] + '/' + filename.split('/')[-1]
+            idx = nice_names.index(filename)
+            p = path_list[idx]
+
+            video = model.video_from_path(p)['pixel_values_videos'][0,:]
+            video = video.permute(1,0,2,3)
+
+            el = EvalLogits(video, model, groups, orig_stat, FILL_TYPE)
+
+            results = {
+                'filename': record['filename'],
+                'rmv_asc': el.eval_remove(asc_idx),
+                'rmv_dec': el.eval_remove(asc_idx[::-1]),
+                'rmv_rand': el.eval_remove(random.sample(asc_idx, len(asc_idx))),
+                'rmv_lr': el.eval_remove(sorted(asc_idx)),
+                'rmv_rl': el.eval_remove(sorted(asc_idx)[::-1]),
+                'add_asc': el.eval_add(asc_idx),
+                'add_dec': el.eval_add(asc_idx[::-1]),
+                'add_rand': el.eval_add(random.sample(asc_idx, len(asc_idx))),
+                'add_lr': el.eval_add(sorted(asc_idx)),
+                'add_rl': el.eval_add(sorted(asc_idx)[::-1])
+            }
+
+            with open(OUT_PATH, 'a') as f:
+                f.write(json.dumps(results) + '\n')
+
 def avg_stat_ucf():
     EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\IG_0.001.jsonl'
     # EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\IG_0.001.jsonl'
@@ -847,7 +920,7 @@ if __name__ == "__main__":
     # eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH)
 
     
-    IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\partition_32_future_0.0001.jsonl'
+    IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\0.0001_occlusion.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    OUT_PATH = rf'C:\Users\lahir\Downloads\ssv2_analysis\shap\eval\exact_future_future_0.001.jsonl'
-    eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
+    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\occlusion_future_0.001.jsonl'
+    eval_ssv2_baseline(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
