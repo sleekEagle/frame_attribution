@@ -669,6 +669,33 @@ def normalize_list(l):
     l = (l-l.min())/(l.max() - l.min())
     return l
 
+
+def get_metrics(EVAL_PATH, grp_stats):
+    with open(EVAL_PATH, 'r', encoding='utf-8') as f:
+        metrics = {}
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            d_ = json.loads(line)
+            
+            # Dont consider cases where grouping changes the model prediction
+            if grp_stats[d_['filename']]['original_stat']['cls'] != grp_stats[d_['filename']]['grp_pred_cls']:
+                continue
+
+            filename = d_['filename']
+            # if filename != 'v_WalkingWithDog_g07_c03': continue
+
+            def get_auc(d_, met):
+                ar = np.array(d_[met]['list']['prob'])
+                ar_norm = (ar - ar.min())/(ar.max() - ar.min())
+                x = np.linspace(0, 1, len(ar))
+                auc_norm = float(trapezoid(ar_norm, x))
+                return auc_norm
+            metric = 0.5 * (get_auc(d_, 'rmv_asc')/get_auc(d_, 'rmv_dec') + get_auc(d_, 'add_dec')/get_auc(d_, 'add_asc'))
+            metrics[filename] = metric
+    return metrics
+    
 def plot_imp():
     import matplotlib.pyplot as plt
     from matplotlib.patches import Rectangle
@@ -692,36 +719,12 @@ def plot_imp():
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     grp_stats = get_orig_logits(GRP_PATH)
     
-    def get_metrics(EVAL_PATH):
-        with open(EVAL_PATH, 'r', encoding='utf-8') as f:
-            metrics = {}
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                d_ = json.loads(line)
-                
-                # Dont consider cases where grouping changes the model prediction
-                if grp_stats[d_['filename']]['original_stat']['cls'] != grp_stats[d_['filename']]['grp_pred_cls']:
-                    continue
 
-                filename = d_['filename']
-                # if filename != 'v_WalkingWithDog_g07_c03': continue
-
-                def get_auc(d_, met):
-                    ar = np.array(d_[met]['list']['prob'])
-                    ar_norm = (ar - ar.min())/(ar.max() - ar.min())
-                    x = np.linspace(0, 1, len(ar))
-                    auc_norm = float(trapezoid(ar_norm, x))
-                    return auc_norm
-                metric = 0.5 * (get_auc(d_, 'rmv_asc')/get_auc(d_, 'rmv_dec') + get_auc(d_, 'add_dec')/get_auc(d_, 'add_asc'))
-                metrics[filename] = metric
-        return metrics
     
-    IG_met = get_metrics(EVAL_PATHS['IG'])
-    oc_met = get_metrics(EVAL_PATHS['occlusion'])
-    gc_met = get_metrics(EVAL_PATHS['gradcam'])
-    ex_met = get_metrics(EVAL_PATHS['best'])
+    IG_met = get_metrics(EVAL_PATHS['IG'], grp_stats)
+    oc_met = get_metrics(EVAL_PATHS['occlusion'], grp_stats)
+    gc_met = get_metrics(EVAL_PATHS['gradcam'], grp_stats)
+    ex_met = get_metrics(EVAL_PATHS['best'], grp_stats)
 
     sort_idx = np.argsort(np.array([ex_met[k] for k in ex_met]))
     best_idx = sort_idx[-10:]
@@ -902,6 +905,80 @@ def importance_correlation(GRP_PATH, IMP_PATH):
         corr = str(sum['mean_correlation'])
         print(f'{name} : {corr}')   
     
+def imp_metric_vs_grouping(GRP_PATH, IMP_EVAL_PATH, PLT_PATH):
+    import matplotlib.pyplot as plt
+
+    grp_stats = get_orig_logits(GRP_PATH)
+    imp_metrics = get_metrics(IMP_EVAL_PATH, grp_stats)
+
+    # group length distribution
+    # glens = [len(grp_stats[k]['groups']) for k in grp_stats.keys()]
+    # plt.hist(glens)
+    # plt.xticks(range(1, max(glens) + 1))
+    # plt.xlabel('Num Groups')
+    # plt.ylabel('Frequency')
+    # plt.box(False) 
+    # plt.savefig(os.path.join(PLT_PATH,'n_grp_dist.png'),bbox_inches='tight', pad_inches=0, dpi=300)
+
+        
+    imp = []
+    logit_change, margin1_change, margin3_change, margin5_change = [],[],[],[]
+    n_groups = []
+    for filename in imp_metrics.keys():
+        met = imp_metrics[filename]
+        ng = len(grp_stats[filename]['groups'])
+        if ng == 1: continue
+        gstat = grp_stats[filename]['all_grp_stats']
+        ostat = grp_stats[filename]['original_stat']
+        change_stat = func.get_stat_change(ostat, gstat)
+
+        if not grp_stats[filename]['correct']: continue
+
+        imp.append(met)
+        n_groups.append(ng)
+        logit_change.append(change_stat['max_logit_change'])
+        margin1_change.append(change_stat['margin_1_change'])
+        margin3_change.append(change_stat['margin_3_change'])
+        margin5_change.append(change_stat['margin_5_change'])
+
+    # metric distribution
+    # plt.hist(imp,bins=100)
+    # plt.xlabel('Attribution Metric')
+    # plt.ylabel('Frequency')
+    # plt.box(False) 
+    # plt.savefig(os.path.join(PLT_PATH,'imp_metric_dist.png'),bbox_inches='tight', pad_inches=0, dpi=300)
+    
+    # plt.scatter(n_groups, imp, s=5)
+    # plt.xlabel('Num Groups')
+    # plt.ylabel('Attribution Metric')
+    # plt.box(False) 
+    # plt.savefig(os.path.join(PLT_PATH,'ng_vs_metric.png'),bbox_inches='tight', pad_inches=0, dpi=300)
+
+    # plt.scatter(logit_change, imp, s=5)
+    # plt.xlabel('Logit Change')
+    # plt.ylabel('Attribution Metric')
+    # plt.box(False) 
+    # plt.savefig(os.path.join(PLT_PATH,'lchange_vs_metric.png'),bbox_inches='tight', pad_inches=0, dpi=300)
+    # plt.xlim(-10,10)
+
+    # plt.scatter(margin1_change, imp, s=5)
+    # plt.xlabel('Margin 1 Change')
+    # plt.ylabel('Attribution Metric')
+    # plt.xlim(-10,3)
+    # plt.box(False) 
+    # plt.savefig(os.path.join(PLT_PATH,'M1change_vs_metric.png'),bbox_inches='tight', pad_inches=0, dpi=300)
+
+    plt.scatter(margin5_change, imp, s=5)
+    plt.xlabel('Margin 5 Change')
+    plt.ylabel('Attribution Metric')
+    plt.box(False) 
+    plt.savefig(os.path.join(PLT_PATH,'M5change_vs_metric.png'),bbox_inches='tight', pad_inches=0, dpi=300)
+
+
+    
+
+
+
 
 if __name__ == "__main__":
     # importance_correlation(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl' ,r'C:\Users\lahir\Downloads\UCF101\analysis\shap')
@@ -920,7 +997,12 @@ if __name__ == "__main__":
     # eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH)
 
     
-    IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\0.0001_occlusion.jsonl'
-    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\occlusion_future_0.001.jsonl'
-    eval_ssv2_baseline(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
+    # IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\0.0001_occlusion.jsonl'
+    # GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    # OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\occlusion_future_0.001.jsonl'
+    # eval_ssv2_baseline(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
+
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    IMP_EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
+    PLT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\plots'
+    imp_metric_vs_grouping(GRP_PATH, IMP_EVAL_PATH, PLT_PATH)
