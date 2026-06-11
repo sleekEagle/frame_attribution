@@ -55,8 +55,8 @@ class CalcSHAP:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # self.model = self.model.to(self.device) 
         self.model.eval()
-        # self.avg_pred = CONST.UCF_AVG_PRED
-        self.avg_pred = CONST.SSV2_AVG_PRED
+        self.avg_pred = CONST.UCF_AVG_PRED
+        # self.avg_pred = CONST.SSV2_AVG_PRED
         self.n_masks = 0
         self.difference = 0
         self.masks = []

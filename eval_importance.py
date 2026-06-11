@@ -975,10 +975,72 @@ def imp_metric_vs_grouping(GRP_PATH, IMP_EVAL_PATH, PLT_PATH):
     plt.savefig(os.path.join(PLT_PATH,'M5change_vs_metric.png'),bbox_inches='tight', pad_inches=0, dpi=300)
 
 
+
+
+def group_and_imp(filename, GRP_THRESHOLD=1e-3):
+    import group
+    import importance
+
+    FILL_METHOD = 'late'
+    SHAP_METHOD = 'exact'
+    N_SAMPLES = 0
+
+    ucf101dm = func.UCF101_data_model()
+    p = ucf101dm.construct_vid_path_from_full(filename)
+    video = ucf101dm.load_jpg_ucf101(p, n=0).permute(0,3,2,1)
+    video = video.permute(3,0,1,2)
+
+    model = ucf101dm.model
+    class_names = ucf101dm.inference_class_names
+    class_labels = {}
+    for k in class_names.keys():
+        cls_name = class_names[k]
+        class_labels[cls_name.lower()] = k
     
+    gt_idx = class_labels[filename.split('_')[1].lower()]
+
+    group_stats = group.group_frames(model, video, gt_idx, GRP_THRESHOLD)
+    groups = {}
+    for k in group_stats['groups']:
+        if 'frames' in group_stats['groups'][k]:
+            f = group_stats['groups'][k]['frames']
+        else: 
+            f = []
+        groups[int(k)] = f
+
+    ex = importance.CalcSHAP(model, fill_method=FILL_METHOD, shap_method=SHAP_METHOD, N_SAMPLES=N_SAMPLES)
+
+    if SHAP_METHOD == 'exact':
+        imp_values = ex.explain(video.permute(1,0,2,3), groups, check=True)
+        imp_values = imp_values.values.tolist()[0]
+        pass
+    if SHAP_METHOD == 'kernel':
+        imp_values = ex.explain_kernel(video, groups, check=True)
+    if SHAP_METHOD == 'partition':
+        imp_values = ex.explain_partition(video, groups, check=True)
+
+    #calc imp metrics
+    el = EvalLogits(video, model, groups, group_stats['original_stat'], FILL_METHOD)
+
+    asc_idx = [int(i) for i in np.argsort(imp_values)]
+
+    results = {
+        'filename': record['filename'],
+        'rmv_asc': el.eval_remove(asc_idx),
+        'rmv_dec': el.eval_remove(asc_idx[::-1]),
+        'rmv_rand': el.eval_remove(random.sample(asc_idx, len(asc_idx))),
+        'rmv_lr': el.eval_remove(sorted(asc_idx)),
+        'rmv_rl': el.eval_remove(sorted(asc_idx)[::-1]),
+        'add_asc': el.eval_add(asc_idx),
+        'add_dec': el.eval_add(asc_idx[::-1]),
+        'add_rand': el.eval_add(random.sample(asc_idx, len(asc_idx))),
+        'add_lr': el.eval_add(sorted(asc_idx)),
+        'add_rl': el.eval_add(sorted(asc_idx)[::-1])
+    }
 
 
 
+    pass
 
 if __name__ == "__main__":
     # importance_correlation(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl' ,r'C:\Users\lahir\Downloads\UCF101\analysis\shap')
@@ -1002,7 +1064,9 @@ if __name__ == "__main__":
     # OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\occlusion_future_0.001.jsonl'
     # eval_ssv2_baseline(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
 
-    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    IMP_EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
-    PLT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\plots'
-    imp_metric_vs_grouping(GRP_PATH, IMP_EVAL_PATH, PLT_PATH)
+    # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    # IMP_EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
+    # PLT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\plots'
+    # imp_metric_vs_grouping(GRP_PATH, IMP_EVAL_PATH, PLT_PATH)
+
+    group_and_imp('v_ApplyLipstick_g24_c04')
