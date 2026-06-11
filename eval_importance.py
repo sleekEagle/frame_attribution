@@ -980,6 +980,7 @@ def imp_metric_vs_grouping(GRP_PATH, IMP_EVAL_PATH, PLT_PATH):
 def group_and_imp(filename, GRP_THRESHOLD=1e-3):
     import group
     import importance
+    from scipy.special import softmax
 
     FILL_METHOD = 'late'
     SHAP_METHOD = 'exact'
@@ -999,7 +1000,28 @@ def group_and_imp(filename, GRP_THRESHOLD=1e-3):
     
     gt_idx = class_labels[filename.split('_')[1].lower()]
 
+    #********** grouping **************
+
     group_stats = group.group_frames(model, video, gt_idx, GRP_THRESHOLD)
+
+    o_logits = np.array(group_stats['original_stat']['logits'])
+    o_cls = np.argmax(o_logits)
+    g_logits = group_stats['all_grp_stats']['logits']
+    l_change = (o_logits[o_cls] - g_logits[o_cls])/(o_logits[o_cls])
+
+    o_prob = softmax(group_stats['original_stat']['logits'])
+    g_prob = softmax(group_stats['all_grp_stats']['logits'])
+    p_change = (o_prob[o_cls] - g_prob[o_cls])/(o_prob[o_cls])
+
+    m_changes = [] 
+    for m in [1,3,5]:
+        om = func.get_margin(torch.tensor(o_logits), o_cls, k=m)
+        gm = func.get_margin(torch.tensor(g_logits), o_cls, k=m)
+        m_change = (om-gm)/(om)
+        m_changes.append(m_change.item())
+
+
+    #********** importance **************
     groups = {}
     for k in group_stats['groups']:
         if 'frames' in group_stats['groups'][k]:
@@ -1013,7 +1035,7 @@ def group_and_imp(filename, GRP_THRESHOLD=1e-3):
     if SHAP_METHOD == 'exact':
         imp_values = ex.explain(video.permute(1,0,2,3), groups, check=True)
         imp_values = imp_values.values.tolist()[0]
-        pass
+        imp_values = [val[o_cls] for val in imp_values]
     if SHAP_METHOD == 'kernel':
         imp_values = ex.explain_kernel(video, groups, check=True)
     if SHAP_METHOD == 'partition':
@@ -1025,7 +1047,6 @@ def group_and_imp(filename, GRP_THRESHOLD=1e-3):
     asc_idx = [int(i) for i in np.argsort(imp_values)]
 
     results = {
-        'filename': record['filename'],
         'rmv_asc': el.eval_remove(asc_idx),
         'rmv_dec': el.eval_remove(asc_idx[::-1]),
         'rmv_rand': el.eval_remove(random.sample(asc_idx, len(asc_idx))),

@@ -179,7 +179,6 @@ def group_frames(model, video, gt_idx, GRP_THRESHOLD):
     s = func.get_pred_stats(model, v)
     delta = func.get_stat_change(orig_stat, s)
 
-
     group_dict['all_group_logit'] = s['max_logit']
     group_dict['all_group_change'] = delta
     group_dict['grp_pred_cls'] = s['cls']
