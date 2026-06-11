@@ -472,6 +472,16 @@ def eval_ssv2(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
     for k in d:
         grp_stats['/'.join(k.split('/')[-2:])] = d[k]
 
+
+    #read existing data
+    existing_names = []
+    if os.path.exists(OUT_PATH):
+        with open(OUT_PATH, 'r', encoding='utf-8') as f:
+            for line in f:
+                record = json.loads(line)
+                existing_names.append(record['filename'])
+
+
     with open(IMP_PATH, 'r', encoding='utf-8') as f:
         line_count = sum(1 for _ in enumerate(f))
 
@@ -485,6 +495,7 @@ def eval_ssv2(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
                 continue
             record = json.loads(line)
             # if record['filename']!='v_YoYo_g07_c04': continue
+            if record['filename'] in existing_names: continue
 
             orig_stat = grp_stats[record['filename']]['original_stat']
             pred_cls = orig_stat['cls']
@@ -538,6 +549,13 @@ def eval_ssv2_baseline(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
     model = VJEPA2()
     model.eval()
 
+    existing_names = []
+    if os.path.exists(OUT_PATH):
+        with open(OUT_PATH, 'r', encoding='utf-8') as f:
+            for line in f:
+                record = json.loads(line)
+                existing_names.append(record['filename'])
+
     cls_list, path_list = ssv2.get_sampled_paths()
     nice_names = [Path(p).parent.name + '/' + Path(p).name for p in path_list]
     d = get_orig_logits(GRP_PATH)
@@ -557,6 +575,7 @@ def eval_ssv2_baseline(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
             if not line:
                 continue
             record = json.loads(line)
+            if record['filename'] in existing_names: continue
             # if record['filename']!='v_YoYo_g07_c04': continue
 
             imp = record['attribution']
@@ -1083,11 +1102,16 @@ if __name__ == "__main__":
     # IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\0.0001_occlusion.jsonl'
     # GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
     # OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\occlusion_future_0.001.jsonl'
-    # eval_ssv2_baseline(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
+    # eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
+
+    IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\partition_32_future_0.0001.jsonl'
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\partition_32_future_0.0001.jsonl'
+    eval_ssv2_baseline(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
 
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     # IMP_EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
     # PLT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\plots'
     # imp_metric_vs_grouping(GRP_PATH, IMP_EVAL_PATH, PLT_PATH)
 
-    group_and_imp('v_ApplyLipstick_g24_c04')
+    # group_and_imp('v_ApplyLipstick_g24_c04')
