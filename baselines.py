@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from captum.attr import GuidedGradCam, IntegratedGradients, FeatureAblation, Occlusion
-from CONST import UCF_INP_SHAPE
+from CONST import UCF_INP_SHAPE, SSV2_INP_SHAPE
 import func
 import json
 import matplotlib.pyplot as plt
@@ -69,7 +69,8 @@ class Baseline():
         self.model = model.to('cuda')
         if method == 'IG':
             self.interpr = IntegratedGradients(self.model)
-            self.baseline = torch.zeros(*UCF_INP_SHAPE).to('cuda')
+            # self.baseline = torch.zeros(*UCF_INP_SHAPE).to('cuda')
+            self.baseline = torch.zeros(*SSV2_INP_SHAPE).to('cuda')
         elif method == 'gradcam':
             # self.interpr = GuidedGradCam(self.model, self.model.layer4) # for ucf101
             self.interpr = GuidedGradCam(self.model, 
@@ -182,6 +183,7 @@ def calc_imp_ssv2(GRP_PATH, OUT_PATH, INTERPR_METHOD='IG'):
     from dataloaders import ssv2
     from models.ssv2 import VJEPA2
     import time
+    import random
 
     #create outout file
     thr = Path(GRP_PATH).stem.split('_')[-1]
@@ -245,12 +247,15 @@ def calc_imp_ssv2(GRP_PATH, OUT_PATH, INTERPR_METHOD='IG'):
             video_g = func.create_grouped_video(video.permute(1,0,2,3), groups)
             pred_cls = record['grp_pred_cls']
             attr = baseline.frame_attribute(video_g, target=pred_cls)
+
             # per-group attributions
             grp_attr = {}
             s = 0
             for k in groups:
                 f_idx = [k] + groups[k]
                 m = float(attr[f_idx].mean())
+                if m == 0.0:
+                    m = random.random()
                 grp_attr[k] = m
                 s += m
             for k in groups:
@@ -267,4 +272,4 @@ def calc_imp_ssv2(GRP_PATH, OUT_PATH, INTERPR_METHOD='IG'):
 if __name__ == "__main__":
     GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
     OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines'
-    calc_imp_ssv2(GRP_PATH, OUT_PATH, INTERPR_METHOD='gradcam')
+    calc_imp_ssv2(GRP_PATH, OUT_PATH, INTERPR_METHOD='IG')  
