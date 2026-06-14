@@ -71,7 +71,9 @@ class Baseline():
             self.interpr = IntegratedGradients(self.model)
             self.baseline = torch.zeros(*UCF_INP_SHAPE).to('cuda')
         elif method == 'gradcam':
-            self.interpr = GuidedGradCam(self.model, self.model.layer4)
+            # self.interpr = GuidedGradCam(self.model, self.model.layer4) # for ucf101
+            self.interpr = GuidedGradCam(self.model, 
+                                         self.model.model.vjepa2.encoder.embeddings.patch_embeddings.proj) # for ssv2
         elif method == 'feat_abl':
             self.interpr = FeatureAblation(self.model)
         elif method == 'occlusion':
@@ -265,4 +267,4 @@ def calc_imp_ssv2(GRP_PATH, OUT_PATH, INTERPR_METHOD='IG'):
 if __name__ == "__main__":
     GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
     OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines'
-    calc_imp_ssv2(GRP_PATH, OUT_PATH, INTERPR_METHOD='occlusion')
+    calc_imp_ssv2(GRP_PATH, OUT_PATH, INTERPR_METHOD='gradcam')

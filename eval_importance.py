@@ -477,7 +477,9 @@ def eval_ssv2(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
     existing_names = []
     if os.path.exists(OUT_PATH):
         with open(OUT_PATH, 'r', encoding='utf-8') as f:
+            n = 0
             for line in f:
+                n+=1
                 record = json.loads(line)
                 existing_names.append(record['filename'])
 
@@ -1106,8 +1108,8 @@ if __name__ == "__main__":
 
     IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\partition_32_future_0.0001.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\partition_32_future_0.0001.jsonl'
-    eval_ssv2_baseline(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
+    OUT_PATH = r'C:\Users\lahir\Downloads\partition_32_future_0.0001.jsonl'
+    eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
 
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     # IMP_EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'

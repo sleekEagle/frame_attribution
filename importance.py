@@ -419,6 +419,14 @@ def calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES):
     # d = os.path.dirname(GRP_PATH)
     out_path = os.path.join(OUT_PATH,f)
 
+    #read existing data
+    existing_names = []
+    if os.path.exists(out_path):
+        with open(out_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                record = json.loads(line)
+                existing_names.append(record['filename'])
+
     n=0
     with open(GRP_PATH, 'r', encoding='utf-8') as f:
         line_count = sum(1 for _ in enumerate(f))
@@ -444,6 +452,8 @@ def calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES):
             # print(filename)
             filename = filename.split('/')[-2] + '/' + filename.split('/')[-1]
             idx = nice_names.index(filename)
+            if filename in existing_names: continue
+
             p = path_list[idx]
 
             g = record['groups']
