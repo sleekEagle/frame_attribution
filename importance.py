@@ -335,6 +335,13 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD,N_SAMPLES):
     # d = os.path.dirname(GRP_PATH)
     out_path = os.path.join(OUT_PATH,f)
 
+    existing_names = []
+    if os.path.exists(out_path):
+        with open(out_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                record = json.loads(line)
+                existing_names.append(record['filename'])
+
     #read groups
     n=0
     with open(GRP_PATH, 'r', encoding='utf-8') as f:
@@ -350,6 +357,7 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD,N_SAMPLES):
 
             record = json.loads(line)
             filename = record['filename']
+            if filename in existing_names: continue
 
             p = ucf101dm.construct_vid_path_from_full(filename)
             video = ucf101dm.load_jpg_ucf101(p, n=0)
@@ -501,14 +509,14 @@ def calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES):
                 f.write(json.dumps(d) + '\n')
 
 if __name__ == "__main__":
-    # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    # OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap'
-    # FILL_METHOD = 'late'
-    # calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD='partition',N_SAMPLES=32)
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap'
+    FILL_METHOD = 'late'
+    calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD='partition',N_SAMPLES=32)
 
 
-    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap'
-    FILL_METHOD = 'future'
-    SHAP_METHOD = 'partition'
-    calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES=32)
+    # GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    # OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap'
+    # FILL_METHOD = 'future'
+    # SHAP_METHOD = 'partition'
+    # calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES=32)

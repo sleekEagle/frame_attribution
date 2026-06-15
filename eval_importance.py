@@ -625,10 +625,36 @@ def eval_ssv2_baseline(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
                 f.write(json.dumps(results) + '\n')
 
 def avg_stat_ucf():
-    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\IG_0.001.jsonl'
-    # EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\IG_0.001.jsonl'
+    # EVAL_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\partition_32_future_0.0001.jsonl'
+    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\gradcam_0.001.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    grp_stats = get_orig_logits(GRP_PATH)
+    gs = get_orig_logits(GRP_PATH)
+
+    # for ssv2
+    grp_stats = {}
+    for k in gs:
+        grp_stats['/'.join(k.split('/')[-2:])] = gs[k]
+    
+    # unique filenames = 3783
+    # files where n grps > 1 and grp pred aggrees with the all frames prediction = 3230
+    # len(set(grp_stats.keys()))
+    # c = 0
+    # for k in grp_stats:
+    #     if grp_stats[k]['original_stat']['cls'] != grp_stats[k]['grp_pred_cls']:
+    #         continue
+    #     if len(grp_stats[k]['groups']) <= 1:
+    #         continue
+    #     c+=1
+
+    # part_data = get_orig_logits(EVAL_PATH)
+    # n=0
+    # for d in part_data:
+    #     if grp_stats[d]['original_stat']['cls'] != grp_stats[d]['grp_pred_cls']:
+    #         continue
+    #     if len(grp_stats[d]['groups']) <= 1 :
+    #         continue
+    #     n+=1
+
 
     metrics = {
         'logit':0,
@@ -649,6 +675,7 @@ def avg_stat_ucf():
     
     n=0
     prob_auc = []
+    bad_grp = 0
     with open(EVAL_PATH, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
@@ -658,6 +685,9 @@ def avg_stat_ucf():
             
             # Dont consider cases where grouping changes the model prediction
             if grp_stats[d_['filename']]['original_stat']['cls'] != grp_stats[d_['filename']]['grp_pred_cls']:
+                bad_grp += 1
+                continue
+            if len(grp_stats[d_['filename']]['groups']) == 1:
                 continue
 
             for k in set(d_.keys()) - {'filename'}:
@@ -684,6 +714,7 @@ def avg_stat_ucf():
             s = f'{k} : {d[k][m]}'
             print(s)
     print(f'n : {n}')
+    print(f'bad grp: {bad_grp}')
 
 def normalize_list(l):
     l = np.array(l)
@@ -1101,15 +1132,15 @@ if __name__ == "__main__":
     # eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH)
 
     
-    # IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\0.0001_occlusion.jsonl'
+    # IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\0.0001_gradcam.jsonl'
     # GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
     # OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\occlusion_future_0.001.jsonl'
-    # eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
+    # eval_ssv2_baseline(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
 
-    IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\partition_32_future_0.0001.jsonl'
-    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    OUT_PATH = r'C:\Users\lahir\Downloads\partition_32_future_0.0001.jsonl'
-    eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
+    # IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\partition_32_future_0.0001.jsonl'
+    # GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    # OUT_PATH = r'C:\Users\lahir\Downloads\partition_32_future_0.0001.jsonl'
+    # eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
 
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     # IMP_EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
@@ -1117,3 +1148,5 @@ if __name__ == "__main__":
     # imp_metric_vs_grouping(GRP_PATH, IMP_EVAL_PATH, PLT_PATH)
 
     # group_and_imp('v_ApplyLipstick_g24_c04')
+
+    avg_stat_ucf()
