@@ -686,6 +686,7 @@ def avg_stat_ucf():
             # Dont consider cases where grouping changes the model prediction
             if grp_stats[d_['filename']]['original_stat']['cls'] != grp_stats[d_['filename']]['grp_pred_cls']:
                 bad_grp += 1
+                print(d_['filename'])
                 continue
             if len(grp_stats[d_['filename']]['groups']) == 1:
                 continue
@@ -1027,9 +1028,7 @@ def imp_metric_vs_grouping(GRP_PATH, IMP_EVAL_PATH, PLT_PATH):
     plt.savefig(os.path.join(PLT_PATH,'M5change_vs_metric.png'),bbox_inches='tight', pad_inches=0, dpi=300)
 
 
-
-
-def group_and_imp(filename, GRP_THRESHOLD=1e-3):
+def group_and_imp(model, video, gt_idx, GRP_THRESHOLD=1e-3):
     import group
     import importance
     from scipy.special import softmax
@@ -1038,22 +1037,7 @@ def group_and_imp(filename, GRP_THRESHOLD=1e-3):
     SHAP_METHOD = 'exact'
     N_SAMPLES = 0
 
-    ucf101dm = func.UCF101_data_model()
-    p = ucf101dm.construct_vid_path_from_full(filename)
-    video = ucf101dm.load_jpg_ucf101(p, n=0).permute(0,3,2,1)
-    video = video.permute(3,0,1,2)
-
-    model = ucf101dm.model
-    class_names = ucf101dm.inference_class_names
-    class_labels = {}
-    for k in class_names.keys():
-        cls_name = class_names[k]
-        class_labels[cls_name.lower()] = k
-    
-    gt_idx = class_labels[filename.split('_')[1].lower()]
-
     #********** grouping **************
-
     group_stats = group.group_frames(model, video, gt_idx, GRP_THRESHOLD)
 
     o_logits = np.array(group_stats['original_stat']['logits'])
@@ -1082,38 +1066,200 @@ def group_and_imp(filename, GRP_THRESHOLD=1e-3):
             f = []
         groups[int(k)] = f
 
-    ex = importance.CalcSHAP(model, fill_method=FILL_METHOD, shap_method=SHAP_METHOD, N_SAMPLES=N_SAMPLES)
+    # ex = importance.CalcSHAP(model, fill_method=FILL_METHOD, shap_method=SHAP_METHOD, N_SAMPLES=N_SAMPLES)
 
-    if SHAP_METHOD == 'exact':
-        imp_values = ex.explain(video.permute(1,0,2,3), groups, check=True)
-        imp_values = imp_values.values.tolist()[0]
-        imp_values = [val[o_cls] for val in imp_values]
-    if SHAP_METHOD == 'kernel':
-        imp_values = ex.explain_kernel(video, groups, check=True)
-    if SHAP_METHOD == 'partition':
-        imp_values = ex.explain_partition(video, groups, check=True)
+    # if SHAP_METHOD == 'exact':
+    #     imp_values = ex.explain(video.permute(1,0,2,3), groups, check=True)
+    #     imp_values = imp_values.values.tolist()[0]
+    #     imp_values = [val[o_cls] for val in imp_values]
+    # if SHAP_METHOD == 'kernel':
+    #     imp_values = ex.explain_kernel(video, groups, check=True)
+    # if SHAP_METHOD == 'partition':
+    #     imp_values = ex.explain_partition(video, groups, check=True)
 
-    #calc imp metrics
-    el = EvalLogits(video, model, groups, group_stats['original_stat'], FILL_METHOD)
+    # #calc imp metrics
+    # el = EvalLogits(video, model, groups, group_stats['original_stat'], FILL_METHOD)
 
-    asc_idx = [int(i) for i in np.argsort(imp_values)]
+    # asc_idx = [int(i) for i in np.argsort(imp_values)]
 
-    results = {
-        'rmv_asc': el.eval_remove(asc_idx),
-        'rmv_dec': el.eval_remove(asc_idx[::-1]),
-        'rmv_rand': el.eval_remove(random.sample(asc_idx, len(asc_idx))),
-        'rmv_lr': el.eval_remove(sorted(asc_idx)),
-        'rmv_rl': el.eval_remove(sorted(asc_idx)[::-1]),
-        'add_asc': el.eval_add(asc_idx),
-        'add_dec': el.eval_add(asc_idx[::-1]),
-        'add_rand': el.eval_add(random.sample(asc_idx, len(asc_idx))),
-        'add_lr': el.eval_add(sorted(asc_idx)),
-        'add_rl': el.eval_add(sorted(asc_idx)[::-1])
+    # results = {
+    #     'rmv_asc': el.eval_remove(asc_idx),
+    #     'rmv_dec': el.eval_remove(asc_idx[::-1]),
+    #     'rmv_rand': el.eval_remove(random.sample(asc_idx, len(asc_idx))),
+    #     'rmv_lr': el.eval_remove(sorted(asc_idx)),
+    #     'rmv_rl': el.eval_remove(sorted(asc_idx)[::-1]),
+    #     'add_asc': el.eval_add(asc_idx),
+    #     'add_dec': el.eval_add(asc_idx[::-1]),
+    #     'add_rand': el.eval_add(random.sample(asc_idx, len(asc_idx))),
+    #     'add_lr': el.eval_add(sorted(asc_idx)),
+    #     'add_rl': el.eval_add(sorted(asc_idx)[::-1])
+    # }
+
+    output = {}
+    # output['auc'] = results
+    output['grp_metrics'] = {
+        'groups': groups,
+        'logit_change': float(l_change),
+        'prob_change': float(p_change),
+        'm_changes' : m_changes,
+        'gt_cls': gt_idx,
+        'pred_cls': group_stats['original_stat']['cls'],
+        'grp_cls': group_stats['grp_pred_cls']
     }
 
 
+    return output
 
-    pass
+def plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=1e-3):
+
+    import matplotlib.pyplot as plt
+    from matplotlib.gridspec import GridSpec
+
+    dpi = 100
+    
+    full_vid_path = os.path.join(out_path,'full.png')
+
+    C,T,H,W = video.size()
+    img_width_px = W * T        # total width of image strip
+    img_height_px = H           # image height
+    text_width_px = 200         # width reserved for text
+    
+    fig_width = (img_width_px + text_width_px) / dpi
+    fig_height = img_height_px / dpi
+
+    fig = plt.figure(figsize=(fig_width, fig_height), dpi=dpi)
+    gs = GridSpec(
+        1, 2,
+        width_ratios=[img_width_px, text_width_px],
+        wspace=0.005
+    )
+    ax_img = fig.add_subplot(gs[0, 0])
+    ax_text = fig.add_subplot(gs[0, 1])
+
+    ax_img.set_xlim(0, W*T)  # Show from before first to after last
+    ax_img.set_ylim(H, 0)  # Show full height with some padding
+    ax_img.axis('off') 
+    ax_text.axis('off') 
+
+    out = group_and_imp(model, video, gt_cls, GRP_THRESHOLD=THR)
+    pred_cls = out['grp_metrics']['pred_cls']
+    pred_cls_str = class_names[pred_cls]
+    gt_cls_str = class_names[gt_cls]
+
+    if not os.path.exists(full_vid_path):
+        # show the video
+        videop = video.permute(2,1,3,0)
+        W,T,H,C = videop.size()
+        videop = videop.reshape(W,T*H,3)
+        videop_norm = ((videop - videop.min()) / (videop.max() - videop.min())).numpy()
+
+        ax_img.imshow(videop_norm)
+        plt.axis('off')
+
+        text = f'$GT={gt_cls_str}$ \n$pred={pred_cls_str}$'
+
+        ax_text.text(
+            0.0, 0.5,
+            text,
+            transform=ax_text.transAxes,
+            fontsize=9,
+            verticalalignment='center',
+            horizontalalignment='left'
+        )
+        plt.savefig(full_vid_path, bbox_inches='tight', pad_inches=0, dpi=dpi)
+
+
+    fig = plt.figure(figsize=(fig_width, fig_height), dpi=dpi)
+    gs = GridSpec(
+        1, 2,
+        width_ratios=[img_width_px, text_width_px],
+        wspace=0.005
+    )
+    ax_img = fig.add_subplot(gs[0, 0])
+    ax_text = fig.add_subplot(gs[0, 1])
+
+    ax_img.set_xlim(0, W*T)  # Show from before first to after last
+    ax_img.set_ylim(H, 0)  # Show full height with some padding
+    ax_img.axis('off') 
+    ax_text.axis('off') 
+
+    groups = out['grp_metrics']['groups']
+    kframes = list(groups.keys())
+
+    C,T,H,W = video.size()
+    #calculate x pos of key frames
+    xpos = [k*W for k in kframes]
+
+    for i in range(len(kframes)):
+        k = kframes[i]
+        frame = video[:,k,:].permute(1,2,0)
+        frame = ((frame - frame.min()) / (frame.max() - frame.min())).numpy()
+        ax_img.imshow(frame, extent=[xpos[i], xpos[i]+W, 
+                                       0 + H, 0])
+
+    #display metrics
+    lch = out['grp_metrics']['logit_change']
+    pch = out['grp_metrics']['prob_change']
+    m1ch = out['grp_metrics']['m_changes'][0]
+    m3ch = out['grp_metrics']['m_changes'][1]
+    m5ch = out['grp_metrics']['m_changes'][2]
+    grp_cls = out['grp_metrics']['grp_cls']
+    grp_cls_str = class_names[grp_cls]
+
+    text = f'Thr={THR} \n$\Delta_L={lch:.2f}$ $\Delta_P={pch:.2f}$ \n$\Delta_{{m1}}={m1ch:.2f}$ \n $\Delta_{{m3}}={m3ch:.2f}$ $\Delta_{{m5}}={m5ch:.2f}$ \n $grp={grp_cls_str}$'
+
+    ax_text.text(
+        0.0, 0.5,
+        text,
+        transform=ax_text.transAxes,
+        fontsize=9,
+        verticalalignment='center',
+        horizontalalignment='left'
+    )
+    ax_text.axis('off')
+
+    fig.savefig(os.path.join(out_path,f'{THR}.png'), bbox_inches='tight', pad_inches=0, dpi=100)
+    fig.clf()
+
+def iterative_grouping_ucf(filename):
+    out_path = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\iterative_grouping'
+    out_path = os.path.join(out_path,filename)
+    os.makedirs(out_path,exist_ok=True)
+
+    ucf101dm = func.UCF101_data_model()
+    # p = ucf101dm.construct_vid_path_from_full(filename)
+    # video = ucf101dm.load_jpg_ucf101(p, n=0).permute(0,3,2,1)
+    # video = video.permute(3,0,1,2)
+
+    model = ucf101dm.model
+    inference_loader = ucf101dm.inference_loader
+    inference_class_names = ucf101dm.inference_class_names
+    class_names = ucf101dm.inference_class_names
+    class_labels = {}
+    for k in class_names.keys():
+        cls_name = class_names[k]
+        class_labels[cls_name.lower()] = k
+    #****************************************************************************
+
+    for idx, batch in enumerate(inference_loader):
+        print(f'{idx/len(inference_loader)*100:.2f} % is done.', end='\r')
+        # if idx==40: break
+        inputs, targets = batch
+        if targets[0][0] != filename: continue
+        video = inputs[0,:]
+        break
+    
+    gt_cls = class_labels[filename.split('_')[1].lower()]
+
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    gs = get_orig_logits(GRP_PATH)
+
+    gs[filename]['grp_pred_cls']
+    gs[filename]['original_stat']['cls']
+    gs[filename]['groups'].keys()
+
+    plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=-1e-1)
+
 
 if __name__ == "__main__":
     # importance_correlation(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl' ,r'C:\Users\lahir\Downloads\UCF101\analysis\shap')
@@ -1147,6 +1293,7 @@ if __name__ == "__main__":
     # PLT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\plots'
     # imp_metric_vs_grouping(GRP_PATH, IMP_EVAL_PATH, PLT_PATH)
 
-    # group_and_imp('v_ApplyLipstick_g24_c04')
+    iterative_grouping_ucf('v_BalanceBeam_g03_c01')
 
-    avg_stat_ucf()
+
+    # avg_stat_ucf()

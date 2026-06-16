@@ -224,6 +224,17 @@ def group_frames_loader_UCF101(out_dir, resume_path, GRP_THRESHOLD = 1e-3):
         gt_idx = class_labels[targets[0][0].split('_')[1].lower()]
         filename = targets[0][0]
 
+        '''
+        for v_Archery_g01_c06 :
+        origina_pred_cls = 67
+        grp_pred_cls = 44
+        gt_cls = 2
+        GRP_THRESHOLD = 1e-3
+        
+        video.mean(): tensor(0.2375)
+        video.min(): tensor(-1.5414)
+        video.max(): tensor(1.8021)
+        '''
         if filename != 'v_Archery_g01_c06':
             continue
 
@@ -368,10 +379,10 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
 if __name__ == '__main__':
     # sample_paths_ssv2()
     out_dir = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_test'
-    out_dir = r'C:\Users\lahir\Downloads\ssv2_analysis'
+    # out_dir = r'C:\Users\lahir\Downloads\ssv2_analysis'
     # group_frames_loader_UCF101(out_dir, resume_path=r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl', GRP_THRESHOLD=1e-3)
     # group_frames_loader_SSV2(out_dir, GRP_THRESHOLD=1e-3)
-    group_frames_loader_UCF101(out_dir, resume_path=False, GRP_THRESHOLD=1e-8)
+    group_frames_loader_UCF101(out_dir, resume_path=False, GRP_THRESHOLD=1e-3)
 
 
     
