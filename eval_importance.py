@@ -686,10 +686,12 @@ def avg_stat_ucf():
             # Dont consider cases where grouping changes the model prediction
             if grp_stats[d_['filename']]['original_stat']['cls'] != grp_stats[d_['filename']]['grp_pred_cls']:
                 bad_grp += 1
-                print(d_['filename'])
+                # print(d_['filename'])
                 continue
             if len(grp_stats[d_['filename']]['groups']) == 1:
                 continue
+
+            print(d_['filename'])
 
             for k in set(d_.keys()) - {'filename'}:
                 for m in d_[k]['auc']:
@@ -1242,9 +1244,17 @@ def plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=1e-
     ax_text.axis('off')
 
     fig.savefig(os.path.join(out_path,f'{THR}.png'), bbox_inches='tight', pad_inches=0, dpi=100)
-    fig.clf()
+    plt.close('all')
+    print(f'orig_pred : {pred_cls_str}  grp_pred: {grp_cls_str}')
 
 def iterative_grouping_ucf(filename):
+    from torch.utils.data import Subset
+
+    cls_idx_path = r'C:\Users\lahir\Downloads\UCF101\analysis\class_idx.json'
+    with open(cls_idx_path, 'r') as f:
+        idx_data = json.load(f)
+    idx = idx_data[filename]
+
     out_path = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\grouping\iterative_grouping'
     out_path = os.path.join(out_path,filename)
     os.makedirs(out_path,exist_ok=True)
@@ -1264,13 +1274,17 @@ def iterative_grouping_ucf(filename):
         class_labels[cls_name.lower()] = k
     #****************************************************************************
 
-    for idx, batch in enumerate(inference_loader):
-        print(f'{idx/len(inference_loader)*100:.2f} % is done.', end='\r')
-        # if idx==40: break
-        inputs, targets = batch
-        if targets[0][0] != filename: continue
-        video = inputs[0,:]
-        break
+    inputs, targets = Subset(inference_loader.dataset, [idx])[0]
+    video = inputs[0]
+    assert targets[0][0]==filename , 'filename does not match!'
+
+    # for idx, batch in enumerate(inference_loader):
+    #     print(f'{idx/len(inference_loader)*100:.2f} % is done.', end='\r')
+    #     # if idx==40: break
+    #     inputs, targets = batch
+    #     if targets[0][0] != filename: continue
+    #     video = inputs[0,:]
+    #     break
     
     gt_cls = class_labels[filename.split('_')[1].lower()]
 
@@ -1281,7 +1295,70 @@ def iterative_grouping_ucf(filename):
     gs[filename]['original_stat']['cls']
     gs[filename]['groups'].keys()
 
-    plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=-3e-3)
+    plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=-1)
+
+
+def stack_images_vertical(input_dir, output_path, spacing=0):
+    from PIL import Image
+    """
+    Stack images vertically with optional spacing
+    
+    Args:
+        input_dir: Directory containing images
+        output_path: Path to save the stacked image
+        spacing: Space between images in pixels
+    """
+    # Get all image files (sorted)
+    image_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
+    image_files = sorted([
+        f for f in os.listdir(input_dir) 
+        if os.path.splitext(f)[1].lower() in image_extensions
+    ])
+    
+    if not image_files:
+        print("No images found in directory")
+        return
+    
+    # Load all images
+    images = []
+    for img_file in image_files:
+        img_path = os.path.join(input_dir, img_file)
+        img = Image.open(img_path)
+        images.append(img)
+    
+    # Get dimensions (assuming all images are same size)
+    width, height = images[0].size
+    total_height = height * len(images) + spacing * (len(images) - 1)
+    
+    # Create new image
+    stacked_image = Image.new('RGB', (width, total_height))
+    
+    # Paste images vertically
+    y_offset = 0
+    for img in images:
+        stacked_image.paste(img, (0, y_offset))
+        y_offset += height + spacing
+    
+    # Save
+    stacked_image.save(output_path)
+    print(f"Stacked image saved to: {output_path}")
+    print(f"Total images: {len(images)}, Final size: {width}x{total_height}")
+
+def ucf_dataset_explore():
+
+    OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\class_idx.json'
+    
+    ucf101dm = func.UCF101_data_model()
+    inference_loader = ucf101dm.inference_loader
+
+    d = {}
+    for idx, batch in enumerate(inference_loader):
+        print(f'{idx/len(inference_loader)*100:.2f} % is done.', end='\r')
+        inputs, targets = batch
+        d[targets[0][0]] = idx
+
+    with open(OUT_PATH, 'w') as f:
+        json.dump(d, f)
 
 
 if __name__ == "__main__":
@@ -1316,7 +1393,9 @@ if __name__ == "__main__":
     # PLT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\plots'
     # imp_metric_vs_grouping(GRP_PATH, IMP_EVAL_PATH, PLT_PATH)
 
-    iterative_grouping_ucf('v_BalanceBeam_g03_c01')
+    # ucf_dataset_explore()
+
+    iterative_grouping_ucf('v_YoYo_g04_c03')
 
 
     # avg_stat_ucf()
