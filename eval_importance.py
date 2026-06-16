@@ -1050,11 +1050,18 @@ def group_and_imp(model, video, gt_idx, GRP_THRESHOLD=1e-3):
     p_change = (o_prob[o_cls] - g_prob[o_cls])/(o_prob[o_cls])
 
     m_changes = [] 
+    orig_m = []
+    grp_m = []
     for m in [1,3,5]:
         om = func.get_margin(torch.tensor(o_logits), o_cls, k=m)
         gm = func.get_margin(torch.tensor(g_logits), o_cls, k=m)
         m_change = (om-gm)/(om)
+        orig_m.append(float(om))
+        grp_m.append(float(gm))
         m_changes.append(m_change.item())
+
+    o_entr = float(entropy(o_prob))
+    g_entr = float(entropy(g_prob))
 
 
     #********** importance **************
@@ -1099,6 +1106,14 @@ def group_and_imp(model, video, gt_idx, GRP_THRESHOLD=1e-3):
     # output['auc'] = results
     output['grp_metrics'] = {
         'groups': groups,
+        'orig_logit': o_logits[o_cls],
+        'orig_prob': o_prob[o_cls],
+        'grp_logit': g_logits[o_cls],
+        'grp_prob': g_prob[o_cls],
+        'orig_m': orig_m,
+        'grp_m': grp_m,
+        'orig_entr': o_entr,
+        'grp_entr': g_entr,
         'logit_change': float(l_change),
         'prob_change': float(p_change),
         'm_changes' : m_changes,
@@ -1156,7 +1171,14 @@ def plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=1e-
         ax_img.imshow(videop_norm)
         plt.axis('off')
 
-        text = f'$GT={gt_cls_str}$ \n$pred={pred_cls_str}$'
+        L = float(out['grp_metrics']['orig_logit'])
+        p = out['grp_metrics']['orig_prob']
+        m1 = float(out['grp_metrics']['orig_m'][0])
+        m3 = float(out['grp_metrics']['orig_m'][1])
+        m5 = float(out['grp_metrics']['orig_m'][2])
+        entr = float(out['grp_metrics']['orig_entr'])
+
+        text = f'GT={gt_cls_str} \npred={pred_cls_str}\nL={L:.2f} P={p:.2f} \nm1={m1:.2f} m3={m3:.2f} \nm5={m5:.2f} e={entr:.2f}'
 
         ax_text.text(
             0.0, 0.5,
@@ -1198,15 +1220,16 @@ def plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=1e-
                                        0 + H, 0])
 
     #display metrics
-    lch = out['grp_metrics']['logit_change']
-    pch = out['grp_metrics']['prob_change']
-    m1ch = out['grp_metrics']['m_changes'][0]
-    m3ch = out['grp_metrics']['m_changes'][1]
-    m5ch = out['grp_metrics']['m_changes'][2]
+    l = out['grp_metrics']['grp_logit']
+    p = out['grp_metrics']['grp_prob']
+    m1 = out['grp_metrics']['grp_m'][0]
+    m3 = out['grp_metrics']['grp_m'][1]
+    m5 = out['grp_metrics']['grp_m'][2]
+    e = out['grp_metrics']['grp_entr']
     grp_cls = out['grp_metrics']['grp_cls']
     grp_cls_str = class_names[grp_cls]
 
-    text = f'Thr={THR} \n$\Delta_L={lch:.2f}$ $\Delta_P={pch:.2f}$ \n$\Delta_{{m1}}={m1ch:.2f}$ \n $\Delta_{{m3}}={m3ch:.2f}$ $\Delta_{{m5}}={m5ch:.2f}$ \n $grp={grp_cls_str}$'
+    text = f'Thr={THR} \nL={l:.2f} P={p:.2f} \nm1={m1:.2f} m3={m3:.2f} \nm5={m5:.2f} e={e:.2f} \ngrp={grp_cls_str}'
 
     ax_text.text(
         0.0, 0.5,
@@ -1258,7 +1281,7 @@ def iterative_grouping_ucf(filename):
     gs[filename]['original_stat']['cls']
     gs[filename]['groups'].keys()
 
-    plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=-1e-1)
+    plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=-3e-3)
 
 
 if __name__ == "__main__":
