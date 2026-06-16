@@ -12,6 +12,7 @@ from scipy.integrate import trapezoid
 import math
 import pandas as pd
 from functools import reduce
+from torch.utils.data import Subset
 
 #get all pred original logits from the group log file
 def get_orig_logits(PATH):
@@ -747,16 +748,45 @@ def get_metrics(EVAL_PATH, grp_stats):
                 x = np.linspace(0, 1, len(ar))
                 auc_norm = float(trapezoid(ar_norm, x))
                 return auc_norm
-            metric = 0.5 * (get_auc(d_, 'rmv_asc')/get_auc(d_, 'rmv_dec') + get_auc(d_, 'add_dec')/get_auc(d_, 'add_asc'))
-            metrics[filename] = metric
+            
+            rmv_asc = get_auc(d_, 'rmv_asc')
+            rmv_dec = get_auc(d_, 'rmv_dec')
+            rmv_rand = get_auc(d_, 'rmv_rand')
+            add_dec = get_auc(d_, 'add_dec')
+            add_asc = get_auc(d_, 'add_asc')
+            add_rand = get_auc(d_, 'rmv_rand')
+            
+            
+            metric = 0.5 * (rmv_asc/rmv_dec + add_dec/add_asc)
+            met = {}
+            met['metric'] = metric
+            met['rmv_asc'] = rmv_asc
+            met['rmv_dec'] = rmv_dec
+            met['rmv_rand'] = rmv_rand
+            met['add_asc'] = add_asc
+            met['add_dec'] = add_dec
+            met['add_rand'] = add_rand
+            met['orig_pred'] = grp_stats[d_['filename']]['original_stat']['cls']
+            met['grp_pred'] = grp_stats[d_['filename']]['grp_pred_cls']
+            metrics[filename] = met
     return metrics
     
-def plot_imp():
+def plot_imp_ucf():
     import matplotlib.pyplot as plt
     from matplotlib.patches import Rectangle
     from matplotlib.gridspec import GridSpec
 
     ucf101dm = func.UCF101_data_model()
+    inference_loader = ucf101dm.inference_loader
+    class_names = ucf101dm.inference_class_names
+    class_labels = {}
+    for k in class_names.keys():
+        cls_name = class_names[k]
+        class_labels[cls_name.lower()] = k
+    
+    cls_idx_path = r'C:\Users\lahir\Downloads\UCF101\analysis\class_idx.json'
+    with open(cls_idx_path, 'r') as f:
+        idx_data = json.load(f)
 
     EVAL_PATHS = {
         'best': r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl',
@@ -774,21 +804,23 @@ def plot_imp():
     GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     grp_stats = get_orig_logits(GRP_PATH)
     
-
-    
     IG_met = get_metrics(EVAL_PATHS['IG'], grp_stats)
     oc_met = get_metrics(EVAL_PATHS['occlusion'], grp_stats)
     gc_met = get_metrics(EVAL_PATHS['gradcam'], grp_stats)
     ex_met = get_metrics(EVAL_PATHS['best'], grp_stats)
+    ex_met_ar = [ex_met[k]['metric'] for k in ex_met]
 
-    sort_idx = np.argsort(np.array([ex_met[k] for k in ex_met]))
+
+    sort_idx = np.argsort(np.array(ex_met_ar))
     best_idx = sort_idx[-10:]
     worst_idx = sort_idx[:10]
     best_names = [list(ex_met.keys())[i] for i in best_idx]
     worst_names = [list(ex_met.keys())[i] for i in worst_idx]
 
     # get attributions
-    def get_all_stats(names):
+    def get_all_stats(names, ex_met, class_names):
+        out_path = r'C:\Users\lahir\Downloads\UCF101\analysis\plots\imp'
+
         imp_vals = {}
         for k in IMP_PATHS:
             imp_stats = get_orig_logits(IMP_PATHS[k])
@@ -805,8 +837,7 @@ def plot_imp():
             imp_vals[k] = wanted_stats
 
         #make plots
-        for name in names:
-            
+        for name in names:            
             groups = {}
             g=imp_vals['best'][name]['grps']
             for k in g:
@@ -816,17 +847,49 @@ def plot_imp():
                     f = []
                 groups[int(k)] = f
 
-            p = ucf101dm.construct_vid_path_from_full(name)
-            video = ucf101dm.load_jpg_ucf101(p, n=0).permute(0,3,2,1)
+            idx = idx_data[name]
+            inputs, targets = Subset(inference_loader.dataset, [idx])[0]
+            video = inputs[0].permute(1,3,2,0)
+            assert targets[0][0]==name , 'filename does not match!'
+
             T,H,W,C = video.size()
             video = video.reshape(T*H,W,3).permute(1,0,2)
             video_norm = ((video - video.min()) / (video.max() - video.min())).numpy()
             
-            fig = plt.figure(figsize=(20, 3))
-            gs = GridSpec(2, 1, height_ratios=[1, 0.3], hspace=0.01)
-            ax_frames = fig.add_subplot(gs[0])
+            fig = plt.figure(figsize=(20, 2))
+            gs = GridSpec(2, 2, 
+              width_ratios=[1, 0.05],  # 85% for plot, 15% for text
+              height_ratios=[1, 0.3], 
+              hspace=0.00,
+              wspace=0.00)
+            
+            ax_frames = fig.add_subplot(gs[0,0])
             ax_frames.imshow(video_norm)
             ax_frames.axis('off')
+
+            ax_text = fig.add_subplot(gs[0, 1])  # gs[:, 1] spans both rows
+            ax_text.axis('off')
+
+            ra = ex_met[name]['rmv_asc']
+            rd = ex_met[name]['rmv_dec']
+            rr = ex_met[name]['rmv_rand']
+            aa = ex_met[name]['add_asc']
+            ad = ex_met[name]['add_dec']
+            ar = ex_met[name]['add_rand'] 
+
+            orig_pred = class_names[ex_met[name]['orig_pred']]
+            grp_pred = class_names[ex_met[name]['grp_pred']]
+            gt = name.split('_')[1]
+
+            text = f'rmv_asc:{ra:.2f}\nrmv_dec:{rd:.2f} \nrmv_rand:{rr:.2f} \nGT:{gt} \npred:{orig_pred} \ngpred:{grp_pred}'
+
+            ax_text.text(0.0, 0.5, 
+                        text,
+                        transform=ax_text.transAxes,
+                        fontsize=7,
+                        verticalalignment='center',
+                        horizontalalignment='left',
+                        fontfamily='monospace')
 
             #plot rectangles around grouped frames
             x_vals = []
@@ -851,27 +914,44 @@ def plot_imp():
             best_gc = normalize_list(imp_vals['gradcam'][name]['imp'])
             best_oc = normalize_list(imp_vals['occlusion'][name]['imp'])
 
-            ax_bars = fig.add_subplot(gs[1])
+            ax_bars = fig.add_subplot(gs[1,0])
             total_width = video_norm.shape[1]
             ax_bars.set_xlim(0, total_width)
+            ax_bars.set_ylim(0, 1.3)
             ax_bars.axis('off')
 
+
             width = 10
-            offset = 0.5
+            offset = 0.1
             x_vals = np.array(x_vals)
-            bars = ax_bars.bar(x_vals, best_imp+offset, width, 
-                       label='best', alpha=0.7, edgecolor='black')
-            bars = ax_bars.bar(x_vals + width, best_ig+offset, width, 
-                       label='ig', alpha=0.7, edgecolor='black')
-            bars = ax_bars.bar(x_vals+2*width, best_gc+offset, width, 
-                       label='gc', alpha=0.7, edgecolor='black')
-            bars = ax_bars.bar(x_vals+3*width, best_oc+offset, width, 
-                       label='oc', alpha=0.7, edgecolor='black')
+            bars1 = ax_bars.bar(x_vals, best_imp+offset, width, 
+                       label='Shap', alpha=0.7, edgecolor='black')
+            bars2 = ax_bars.bar(x_vals + width, best_ig+offset, width, 
+                       label='IG', alpha=0.7, edgecolor='black')
+            bars3 = ax_bars.bar(x_vals+2*width, best_gc+offset, width, 
+                       label='GC', alpha=0.7, edgecolor='black')
+            bars4 = ax_bars.bar(x_vals+3*width, best_oc+offset, width, 
+                       label='OC', alpha=0.7, edgecolor='black')
             
 
-            plt.show()
+            # ax_bars.legend(loc='upper right', bbox_to_anchor=(1.0, 1.0), fontsize=10)
+            ax_legend = fig.add_subplot(gs[1, 1])
+            ax_legend.axis('off')
 
-    get_all_stats(worst_names)
+            # Create legend in bottom-right
+            ax_legend.legend(handles=[bars1, bars2, bars3, bars4], 
+                            labels=['Shap', 'IG', 'GC', 'OC'],
+                            loc='center', 
+                            fontsize=7,
+                            frameon=False,
+                            framealpha=0.9,
+                            edgecolor='black',
+                            ncol=1,
+                            bbox_to_anchor=(0.3, 0.7))
+            plt.tight_layout()
+            plt.savefig(os.path.join(out_path,f'{name}.png'), bbox_inches='tight', pad_inches=0, dpi=300)
+
+    get_all_stats(best_names, ex_met, class_names)
 
         
 
@@ -1247,6 +1327,9 @@ def plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=1e-
     plt.close('all')
     print(f'orig_pred : {pred_cls_str}  grp_pred: {grp_cls_str}')
 
+'''
+iterate different thresholds for grouping and plot the logits and other metrics as we do
+'''
 def iterative_grouping_ucf(filename):
     from torch.utils.data import Subset
 
@@ -1296,53 +1379,6 @@ def iterative_grouping_ucf(filename):
     gs[filename]['groups'].keys()
 
     plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=-1)
-
-
-def stack_images_vertical(input_dir, output_path, spacing=0):
-    from PIL import Image
-    """
-    Stack images vertically with optional spacing
-    
-    Args:
-        input_dir: Directory containing images
-        output_path: Path to save the stacked image
-        spacing: Space between images in pixels
-    """
-    # Get all image files (sorted)
-    image_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
-    image_files = sorted([
-        f for f in os.listdir(input_dir) 
-        if os.path.splitext(f)[1].lower() in image_extensions
-    ])
-    
-    if not image_files:
-        print("No images found in directory")
-        return
-    
-    # Load all images
-    images = []
-    for img_file in image_files:
-        img_path = os.path.join(input_dir, img_file)
-        img = Image.open(img_path)
-        images.append(img)
-    
-    # Get dimensions (assuming all images are same size)
-    width, height = images[0].size
-    total_height = height * len(images) + spacing * (len(images) - 1)
-    
-    # Create new image
-    stacked_image = Image.new('RGB', (width, total_height))
-    
-    # Paste images vertically
-    y_offset = 0
-    for img in images:
-        stacked_image.paste(img, (0, y_offset))
-        y_offset += height + spacing
-    
-    # Save
-    stacked_image.save(output_path)
-    print(f"Stacked image saved to: {output_path}")
-    print(f"Total images: {len(images)}, Final size: {width}x{total_height}")
 
 def ucf_dataset_explore():
 
@@ -1395,7 +1431,9 @@ if __name__ == "__main__":
 
     # ucf_dataset_explore()
 
-    iterative_grouping_ucf('v_YoYo_g04_c03')
+    # iterative_grouping_ucf('v_YoYo_g04_c03')
 
 
     # avg_stat_ucf()
+
+    plot_imp_ucf()
