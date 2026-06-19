@@ -1400,10 +1400,10 @@ def ucf_dataset_explore():
 if __name__ == "__main__":
     # importance_correlation(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl' ,r'C:\Users\lahir\Downloads\UCF101\analysis\shap')
     
-    # IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\exactSHAP_late_0.001.jsonl'
-    # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    # OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
-    # eval_UCF101(FILL_TYPE='late', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
+    IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\framewise\frame_partition_32_late_0.001.jsonl'
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\framewise\eval\frame_partition_32_late_late_0.001.jsonl'
+    eval_UCF101(FILL_TYPE='late', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
 
     # plot_imp()
 
@@ -1436,4 +1436,4 @@ if __name__ == "__main__":
 
     # avg_stat_ucf()
 
-    plot_imp_ucf()
+    # plot_imp_ucf()

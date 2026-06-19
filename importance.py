@@ -408,7 +408,7 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD,N_SAMPLES, fra
                 f.write(json.dumps(d) + '\n')
 
 
-def calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES):
+def calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES, frame):
     from dataloaders import ssv2
     from models.ssv2 import VJEPA2
 
@@ -470,17 +470,25 @@ def calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES):
             if filename in existing_names: continue
 
             p = path_list[idx]
-
-            g = record['groups']
-            groups = {}
-            for k in g:
-                if 'frames' in g[k]:
-                    f = g[k]['frames']
-                else: 
-                    f = []
-                groups[int(k)] = f
-
+            
             video = model.video_from_path(p)['pixel_values_videos'][0,:]
+
+            if frame:
+                groups = {}
+                for i in range(video.size(0)):
+                    groups[i] = []
+            else:
+                g = record['groups']
+                groups = {}
+                for k in g:
+                    if 'frames' in g[k]:
+                        f = g[k]['frames']
+                    else: 
+                        f = []
+                    groups[int(k)] = f
+
+                if len(groups)==1: continue
+            
 
             if len(groups)==1: continue
 
@@ -517,15 +525,15 @@ def calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES):
 
 
 if __name__ == "__main__":
-    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\framewise'
-    FILL_METHOD = 'late'
-    frame = True
-    calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD='partition',N_SAMPLES=32, frame=frame)
+    # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    # OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\framewise'
+    # FILL_METHOD = 'late'
+    # frame = True
+    # calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD='partition',N_SAMPLES=32, frame=frame)
 
 
-    # GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    # OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap'
-    # FILL_METHOD = 'future'
-    # SHAP_METHOD = 'partition'
-    # calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES=32)
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\framewise'
+    FILL_METHOD = 'future'
+    SHAP_METHOD = 'partition'
+    calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES=32, frame=True)
