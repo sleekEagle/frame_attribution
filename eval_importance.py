@@ -448,11 +448,11 @@ def eval_UCF101_baseline(IMP_PATH, GRP_PATH, OUT_PATH):
                 'rmv_rand': el.eval_remove(random.sample(asc_idx, len(asc_idx))),
                 'rmv_lr': el.eval_remove(sorted(asc_idx)),
                 'rmv_rl': el.eval_remove(sorted(asc_idx)[::-1]),
-                'add_asc': el.eval_add(asc_idx),
-                'add_dec': el.eval_add(asc_idx[::-1]),
+                # 'add_asc': el.eval_add(asc_idx),
+                # 'add_dec': el.eval_add(asc_idx[::-1]),
                 'add_rand': el.eval_add(random.sample(asc_idx, len(asc_idx))),
-                'add_lr': el.eval_add(sorted(asc_idx)),
-                'add_rl': el.eval_add(sorted(asc_idx)[::-1])
+                # 'add_lr': el.eval_add(sorted(asc_idx)),
+                # 'add_rl': el.eval_add(sorted(asc_idx)[::-1])
             }
 
             with open(OUT_PATH, 'a') as f:
@@ -511,11 +511,14 @@ def eval_ssv2(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
             g = record['groups']
             groups = {}
             for k in g:
-                if 'frames' in g[k]:
-                    f = g[k]['frames']
-                else: 
-                    f = []
-                groups[int(k)] = f
+                groups[int(k)] = g[k]
+
+            # for k in g:
+            #     if 'frames' in g[k]:
+            #         f = g[k]['frames']
+            #     else: 
+            #         f = []
+            #     groups[int(k)] = f
 
             video = model.video_from_path(p)['pixel_values_videos'][0,:]
             video = video.permute(1,0,2,3)
@@ -534,11 +537,11 @@ def eval_ssv2(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
                 'rmv_rand': el.eval_remove(random.sample(asc_idx, len(asc_idx))),
                 'rmv_lr': el.eval_remove(sorted(asc_idx)),
                 'rmv_rl': el.eval_remove(sorted(asc_idx)[::-1]),
-                'add_asc': el.eval_add(asc_idx),
-                'add_dec': el.eval_add(asc_idx[::-1]),
+                # 'add_asc': el.eval_add(asc_idx),
+                # 'add_dec': el.eval_add(asc_idx[::-1]),
                 'add_rand': el.eval_add(random.sample(asc_idx, len(asc_idx))),
-                'add_lr': el.eval_add(sorted(asc_idx)),
-                'add_rl': el.eval_add(sorted(asc_idx)[::-1])
+                # 'add_lr': el.eval_add(sorted(asc_idx)),
+                # 'add_rl': el.eval_add(sorted(asc_idx)[::-1])
             }
 
             with open(OUT_PATH, 'a') as f:
@@ -625,10 +628,10 @@ def eval_ssv2_baseline(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
             with open(OUT_PATH, 'a') as f:
                 f.write(json.dumps(results) + '\n')
 
-def avg_stat_ucf():
+def avg_stat():
     # EVAL_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\partition_32_future_0.0001.jsonl'
-    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\baselines\eval\gradcam_0.001.jsonl'
-    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    EVAL_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\gradcam_future_0.0001.jsonl'
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
     gs = get_orig_logits(GRP_PATH)
 
     # for ssv2
@@ -636,8 +639,16 @@ def avg_stat_ucf():
     for k in gs:
         grp_stats['/'.join(k.split('/')[-2:])] = gs[k]
     
-    # unique filenames = 3783
-    # files where n grps > 1 and grp pred aggrees with the all frames prediction = 3230
+    '''
+    UCF:
+    unique filenames from groups = 3783
+    files where n grps > 1 and grp pred aggrees with the all frames prediction = 3230
+
+    ssv2
+    unique filenames from groups = 1044
+    files where n grps > 1 and grp pred aggrees with the all frames prediction = 940
+    '''
+    
     # len(set(grp_stats.keys()))
     # c = 0
     # for k in grp_stats:
@@ -1400,10 +1411,10 @@ def ucf_dataset_explore():
 if __name__ == "__main__":
     # importance_correlation(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl' ,r'C:\Users\lahir\Downloads\UCF101\analysis\shap')
     
-    IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\framewise\frame_partition_32_late_0.001.jsonl'
-    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\framewise\eval\frame_partition_32_late_late_0.001.jsonl'
-    eval_UCF101(FILL_TYPE='late', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
+    # IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\framewise\frame_partition_32_late_0.001.jsonl'
+    # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    # OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\framewise\eval\frame_partition_32_late_late_0.001.jsonl'
+    # eval_UCF101(FILL_TYPE='late', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
 
     # plot_imp()
 
@@ -1416,13 +1427,13 @@ if __name__ == "__main__":
     
     # IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\0.0001_gradcam.jsonl'
     # GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    # OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\occlusion_future_0.001.jsonl'
+    # OUT_PATH = r'C:\Users\lahir\Downloads\partition_32_future_0.0001.jsonl'
     # eval_ssv2_baseline(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
 
-    # IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\partition_32_future_0.0001.jsonl'
-    # GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    # OUT_PATH = r'C:\Users\lahir\Downloads\partition_32_future_0.0001.jsonl'
-    # eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
+    IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\partition_32_future_0.0001.jsonl'
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\eval\partition_32_future_0.0001.jsonl'
+    eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
 
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     # IMP_EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
@@ -1434,6 +1445,6 @@ if __name__ == "__main__":
     # iterative_grouping_ucf('v_YoYo_g04_c03')
 
 
-    # avg_stat_ucf()
+    # avg_stat()
 
     # plot_imp_ucf()

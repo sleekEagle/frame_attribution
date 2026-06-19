@@ -536,4 +536,4 @@ if __name__ == "__main__":
     OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\framewise'
     FILL_METHOD = 'future'
     SHAP_METHOD = 'partition'
-    calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES=32, frame=True)
+    calc_shap_ssv2(GRP_PATH, OUT_PATH, SHAP_METHOD, FILL_METHOD, N_SAMPLES=32, frame=False)
