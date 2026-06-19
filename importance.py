@@ -361,9 +361,8 @@ def calc_shap_UCF101(GRP_PATH, OUT_PATH, FILL_METHOD, SHAP_METHOD,N_SAMPLES, fra
             video = ucf101dm.load_jpg_ucf101(p, n=0)
 
             if frame:
-                n = video.size(0)
                 groups = {}
-                for i in range(n):
+                for i in range(video.size(0)):
                     groups[i] = []
             else:
                 g = record['groups']
