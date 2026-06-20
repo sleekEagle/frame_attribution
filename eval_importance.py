@@ -314,7 +314,7 @@ class EvalLogits:
         
         return {'list': metrics, 'auc': auc}
 
-def eval_UCF101(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
+def eval_UCF101(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH, frame):
     # FILL_TYPE = 'past' # past, future, middle, random, late
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.0001.jsonl'
     grp_stats = get_orig_logits(GRP_PATH)
@@ -345,30 +345,47 @@ def eval_UCF101(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
             # if record['filename']!='v_YoYo_g07_c04': continue
 
             cls_idx = class_labels[record['filename'].split('_')[1].lower()]
-            orig_stat = grp_stats[record['filename']]['original_stat']
-            pred_cls = orig_stat['cls']
 
             # ol = grp_data[record['filename']]['data']
 
             p = ucf101dm.construct_vid_path_from_full(record['filename'])
             video = ucf101dm.load_jpg_ucf101(p, n=0).permute(1,0,2,3)
 
-            # orig_stat = func.get_pred_stats(model, video)
-            # l = orig_stat['logits'][cls_idx]
-            sv = record['shapley_values'][0]
+            orig_stat = grp_stats[record['filename']]['original_stat']
+            pred_cls = orig_stat['cls']
+
+            # let groups have integer keys
+            if frame:
+                g = grp_stats[record['filename']]['groups']
+                groups = {}
+                for k in g:
+                    if 'frames' in g[k]:
+                        groups[int(k)] = g[k]['frames']
+                    else:
+                        groups[int(k)] = [int(k)]
+    
+                # get per group importance
+                sv = record['shapley_values'][0]
+                sv_c = [s[pred_cls] for s in sv]
+                imp_vals = []
+                for k in groups:
+                    indices = groups[k] + [k]
+                    g_imp = np.array([sv_c[i] for i in indices]).mean()
+                    imp_vals.append(float(g_imp))
+                asc_idx = [int(i) for i in np.argsort(imp_vals)]
+            else:
+                groups = {}
+                for k in record['groups']:
+                    groups[int(k)] = record['groups'][k]
+                sv = record['shapley_values'][0]
+                sv_c = [s[pred_cls] for s in sv]
+                asc_idx = [int(i) for i in np.argsort(sv_c)]
 
             # sanity checks
             # assert abs(ol[cls_idx]-l) < 1e-2, 'the prediction logit does not match the original prediction logit'
             # assert record['difference'] < 1e-2, 'The exactly shapley value difference is too large!'
             # assert len(record['groups']) == len(sv) , 'Number of shapley values do not match!'
 
-            sv_c = [s[pred_cls] for s in sv]
-            asc_idx = [int(i) for i in np.argsort(sv_c)]
-
-            # let groups have integer keys
-            groups = {}
-            for k in record['groups']:
-                groups[int(k)] = record['groups'][k]
 
             el = EvalLogits(video, model, groups, orig_stat, FILL_TYPE)
 
@@ -379,11 +396,11 @@ def eval_UCF101(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
                 'rmv_rand': el.eval_remove(random.sample(asc_idx, len(asc_idx))),
                 'rmv_lr': el.eval_remove(sorted(asc_idx)),
                 'rmv_rl': el.eval_remove(sorted(asc_idx)[::-1]),
-                'add_asc': el.eval_add(asc_idx),
-                'add_dec': el.eval_add(asc_idx[::-1]),
+                # 'add_asc': el.eval_add(asc_idx),
+                # 'add_dec': el.eval_add(asc_idx[::-1]),
                 'add_rand': el.eval_add(random.sample(asc_idx, len(asc_idx))),
-                'add_lr': el.eval_add(sorted(asc_idx)),
-                'add_rl': el.eval_add(sorted(asc_idx)[::-1])
+                # 'add_lr': el.eval_add(sorted(asc_idx)),
+                # 'add_rl': el.eval_add(sorted(asc_idx)[::-1])
             }
 
             with open(OUT_PATH, 'a') as f:
@@ -513,13 +530,6 @@ def eval_ssv2(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
             for k in g:
                 groups[int(k)] = g[k]
 
-            # for k in g:
-            #     if 'frames' in g[k]:
-            #         f = g[k]['frames']
-            #     else: 
-            #         f = []
-            #     groups[int(k)] = f
-
             video = model.video_from_path(p)['pixel_values_videos'][0,:]
             video = video.permute(1,0,2,3)
 
@@ -630,14 +640,15 @@ def eval_ssv2_baseline(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
 
 def avg_stat():
     # EVAL_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\partition_32_future_0.0001.jsonl'
-    EVAL_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\gradcam_future_0.0001.jsonl'
-    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    gs = get_orig_logits(GRP_PATH)
+    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\framewise\eval\frame_partition_32_late_late_0.001.jsonl'
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    grp_stats = get_orig_logits(GRP_PATH)
 
     # for ssv2
-    grp_stats = {}
-    for k in gs:
-        grp_stats['/'.join(k.split('/')[-2:])] = gs[k]
+    # gs = get_orig_logits(GRP_PATH)
+    # grp_stats = {}
+    # for k in gs:
+    #     grp_stats['/'.join(k.split('/')[-2:])] = gs[k]
     
     '''
     UCF:
@@ -702,8 +713,6 @@ def avg_stat():
                 continue
             if len(grp_stats[d_['filename']]['groups']) == 1:
                 continue
-
-            print(d_['filename'])
 
             for k in set(d_.keys()) - {'filename'}:
                 for m in d_[k]['auc']:
@@ -1411,10 +1420,10 @@ def ucf_dataset_explore():
 if __name__ == "__main__":
     # importance_correlation(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl' ,r'C:\Users\lahir\Downloads\UCF101\analysis\shap')
     
-    # IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\framewise\frame_partition_32_late_0.001.jsonl'
-    # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
-    # OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\framewise\eval\frame_partition_32_late_late_0.001.jsonl'
-    # eval_UCF101(FILL_TYPE='late', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
+    IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\framewise\frame_partition_32_late_0.001.jsonl'
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    OUT_PATH = rf'C:\Users\lahir\Downloads\UCF101\analysis\shap\framewise\eval\pergroup_frame_partition_32_late_late_0.001_.jsonl'
+    eval_UCF101(FILL_TYPE='late', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH, frame=True)
 
     # plot_imp()
 
@@ -1430,10 +1439,10 @@ if __name__ == "__main__":
     # OUT_PATH = r'C:\Users\lahir\Downloads\partition_32_future_0.0001.jsonl'
     # eval_ssv2_baseline(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
 
-    IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\partition_32_future_0.0001.jsonl'
-    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\eval\partition_32_future_0.0001.jsonl'
-    eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
+    # IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\partition_32_future_0.0001.jsonl'
+    # GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    # OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\eval\partition_32_future_0.0001.jsonl'
+    # eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
 
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     # IMP_EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
