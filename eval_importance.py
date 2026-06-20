@@ -808,6 +808,151 @@ def get_metrics(EVAL_PATH, grp_stats):
             metrics[filename] = met
     return metrics
     
+def plot_frame_vs_grp_ucf():
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle
+    from matplotlib.gridspec import GridSpec
+
+    GRP_IMP_EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
+    GRP_IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\exactSHAP_late_0.001.jsonl'
+    FRAME_IMP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\framewise\frame_partition_32_late_0.001.jsonl'
+    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    PLOT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\framewise\plots_frames_vs_groups'
+
+    grp_stats = get_orig_logits(GRP_PATH)
+
+    ex_met = get_metrics(GRP_IMP_EVAL_PATH, grp_stats)
+    ex_met_ar = [ex_met[k]['metric'] for k in ex_met]
+    sort_idx = np.argsort(np.array(ex_met_ar))
+    best_idx = sort_idx[-10:]
+    worst_idx = sort_idx[:10]
+    best_names = [list(ex_met.keys())[i] for i in best_idx]
+    worst_names = [list(ex_met.keys())[i] for i in worst_idx]
+
+
+    ucf101dm = func.UCF101_data_model()
+    inference_loader = ucf101dm.inference_loader
+    class_names = ucf101dm.inference_class_names
+    class_labels = {}
+    for k in class_names.keys():
+        cls_name = class_names[k]
+        class_labels[cls_name.lower()] = k
+    
+    cls_idx_path = r'C:\Users\lahir\Downloads\UCF101\analysis\class_idx.json'
+    with open(cls_idx_path, 'r') as f:
+        idx_data = json.load(f)
+
+    
+
+    def save_plot(name):
+        grp_imp_stats = get_orig_logits(GRP_IMP_PATH)
+        groups = {}
+        g=grp_imp_stats[name]['groups']
+        for k in g:
+            groups[int(k)] = g[k]
+
+        cls = grp_stats[name]['original_stat']['cls']
+        
+        idx = idx_data[name]
+        inputs, targets = Subset(inference_loader.dataset, [idx])[0]
+        video = inputs[0].permute(1,3,2,0)
+        assert targets[0][0]==name , 'filename does not match!'
+
+        T,H,W,C = video.size()
+        video = video.reshape(T*H,W,3).permute(1,0,2)
+        video_norm = ((video - video.min()) / (video.max() - video.min())).numpy()
+
+        #*********** video and group rectangles ***************************
+        fig = plt.figure(figsize=(20, 2), constrained_layout=True)
+        gs = GridSpec(3, 2, 
+            width_ratios=[1, 0.05],  # 85% for plot, 15% for text
+            height_ratios=[1, 0.3, 0.3], 
+            hspace=0.00,
+            wspace=0.00)
+
+        ax_frames = fig.add_subplot(gs[0,0])
+        ax_frames.imshow(video_norm)
+        ax_frames.axis('off')
+        extent = ax_frames.get_xlim(), ax_frames.get_ylim()
+        x_min, x_max = extent[0]
+        y_min, y_max = extent[1]
+
+
+        #plot rectangles around grouped frames
+        x_vals = []
+        for g in groups:
+            frames = groups[g] + [g]
+            # print(frames)
+            frames.sort()
+            x_vals.append(frames[0]*W + W*len(frames)*0.5)
+            rect = Rectangle(
+                (frames[0]*W, 0),           # (x, y) - top-left corner
+                W*(len(frames)),              # width
+                H,             # height
+                linewidth=3,
+                edgecolor='red',
+                facecolor='none'
+            )
+            ax_frames.add_patch(rect)
+
+        #********************* group wise importance *****************************
+        imp_ar = normalize_list([l[cls] for l in grp_imp_stats[name]['shapley_values'][0]])
+
+        ax_bars1 = fig.add_subplot(gs[1,0])
+        ax_bars1.axhline(y=0, color='black', linewidth=1, linestyle='-')
+        ax_bars1.axis('off')
+
+        width = 10
+        offset = 0.1
+        x_vals = np.array(x_vals)
+        bars1 = ax_bars1.bar(x_vals, imp_ar+offset, width, 
+                    label='Shap', alpha=0.7, color='steelblue')
+        ax_bars1.set_xlim(x_min, x_max)
+        # Set y-limits for the bars
+        ax_bars1.set_ylim(0, max(imp_ar + offset) * 1.1)
+
+        #********************* frame wise importance *****************************
+        frame_imp_stats = get_orig_logits(FRAME_IMP_PATH)
+
+        imp_ar = normalize_list([l[cls] for l in frame_imp_stats[name]['shapley_values'][0]])
+
+        ax_bars2 = fig.add_subplot(gs[2,0])
+        ax_bars2.axis('off')
+        ax_bars2.axhline(y=0, color='black', linewidth=1, linestyle='-')
+
+        width = 10
+        offset = 0.1
+        x_vals = np.arange(W/2, W*T-W/2+1, W)
+        bars1 = ax_bars2.bar(x_vals, imp_ar+offset, width, 
+                    label='Shap', alpha=0.7, color='coral')
+        ax_bars2.set_xlim(x_min, x_max)
+        # Set y-limits for the bars
+        ax_bars2.set_ylim(0, max(imp_ar + offset) * 1.1)
+
+        ax_bars1.text(0, 0.5, 'G', 
+                transform=ax_bars1.transAxes, 
+                rotation=0, va='center', ha='right', 
+                fontsize=8, fontweight='bold')
+
+        # After creating ax_bars2
+        ax_bars2.text(0, 0.5, 'F', 
+                    transform=ax_bars2.transAxes, 
+                    rotation=0, va='center', ha='right', 
+                    fontsize=8, fontweight='bold')
+        
+        plt.savefig(os.path.join(PLOT_PATH,f'{name}.png'), dpi=300, bbox_inches='tight')
+        
+        pass
+        
+    for name in best_names:
+        save_plot(name)
+
+    
+
+
+
+    pass
+
 def plot_imp_ucf():
     import matplotlib.pyplot as plt
     from matplotlib.patches import Rectangle
@@ -1456,10 +1601,10 @@ if __name__ == "__main__":
     # OUT_PATH = r'C:\Users\lahir\Downloads\partition_32_future_0.0001.jsonl'
     # eval_ssv2_baseline(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
 
-    IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\framewise\partition_32_future_0.0001.jsonl'
-    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\framewise\eval\groupwise_partition_32_future_0.0001.jsonl'
-    eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH, frame=True)
+    # IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\framewise\partition_32_future_0.0001.jsonl'
+    # GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    # OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\framewise\eval\groupwise_partition_32_future_0.0001.jsonl'
+    # eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH, frame=True)
 
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     # IMP_EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
@@ -1474,3 +1619,5 @@ if __name__ == "__main__":
     # avg_stat()
 
     # plot_imp_ucf()
+
+    plot_frame_vs_grp_ucf()
