@@ -659,15 +659,15 @@ def eval_ssv2_baseline(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
 
 def avg_stat():
     # EVAL_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\partition_32_future_0.0001.jsonl'
-    EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\framewise\eval\pergroup_frame_partition_32_late_late_0.001.jsonl'
-    GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
+    EVAL_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\gradcam_future_0.0001.jsonl'
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
     grp_stats = get_orig_logits(GRP_PATH)
 
     # for ssv2
-    # gs = get_orig_logits(GRP_PATH)
-    # grp_stats = {}
-    # for k in gs:
-    #     grp_stats['/'.join(k.split('/')[-2:])] = gs[k]
+    gs = get_orig_logits(GRP_PATH)
+    grp_stats = {}
+    for k in gs:
+        grp_stats['/'.join(k.split('/')[-2:])] = gs[k]
     
     '''
     UCF:
@@ -677,6 +677,9 @@ def avg_stat():
     ssv2
     unique filenames from groups = 1044
     files where n grps > 1 and grp pred aggrees with the all frames prediction = 940
+    for occlusion : 940
+    for gradcam: 940
+    for partition : 674
     '''
     
     # len(set(grp_stats.keys()))
@@ -696,6 +699,10 @@ def avg_stat():
     #     if len(grp_stats[d]['groups']) <= 1 :
     #         continue
     #     n+=1
+
+    # for k in part_data:
+    #     with open(r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\mod.jsonl', 'a') as f:
+    #         f.write(json.dumps(part_data[k]) + '\n')
 
 
     metrics = {
@@ -1765,8 +1772,8 @@ if __name__ == "__main__":
     # iterative_grouping_ucf('v_YoYo_g04_c03')
 
 
-    # avg_stat()
+    avg_stat()
 
     # plot_imp_ucf()
 
-    plot_frame_vs_grp_ssv()
+    # plot_frame_vs_grp_ssv()
