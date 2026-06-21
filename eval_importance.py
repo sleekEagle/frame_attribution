@@ -517,8 +517,6 @@ def eval_ssv2(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH, frame):
             # if record['filename']!='v_YoYo_g07_c04': continue
             if record['filename'] in existing_names: continue
 
-            if n<=677: continue
-
             orig_stat = grp_stats[record['filename']]['original_stat']
             pred_cls = orig_stat['cls']
 
@@ -1757,10 +1755,10 @@ if __name__ == "__main__":
     # OUT_PATH = r'C:\Users\lahir\Downloads\partition_32_future_0.0001.jsonl'
     # eval_ssv2_baseline(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
 
-    # IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\partition_32_future_0.0001.jsonl'
-    # GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    # OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\eval\partition_32_future_future_0.0001.jsonl'
-    # eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH, frame=True)
+    IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\partition_32_future_0.0001.jsonl'
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\eval\partition_32_future_future_0.0001.jsonl'
+    eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH, frame=True)
 
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     # IMP_EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
@@ -1772,7 +1770,7 @@ if __name__ == "__main__":
     # iterative_grouping_ucf('v_YoYo_g04_c03')
 
 
-    avg_stat()
+    # avg_stat()
 
     # plot_imp_ucf()
 
