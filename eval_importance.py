@@ -782,10 +782,13 @@ def get_metrics(EVAL_PATH, grp_stats):
             # if filename != 'v_WalkingWithDog_g07_c03': continue
 
             def get_auc(d_, met):
-                ar = np.array(d_[met]['list']['prob'])
-                ar_norm = (ar - ar.min())/(ar.max() - ar.min())
-                x = np.linspace(0, 1, len(ar))
-                auc_norm = float(trapezoid(ar_norm, x))
+                if met in d_:
+                    ar = np.array(d_[met]['list']['prob'])
+                    ar_norm = (ar - ar.min())/(ar.max() - ar.min())
+                    x = np.linspace(0, 1, len(ar))
+                    auc_norm = float(trapezoid(ar_norm, x))
+                else:
+                    auc_norm = -1
                 return auc_norm
             
             rmv_asc = get_auc(d_, 'rmv_asc')
@@ -953,6 +956,151 @@ def plot_frame_vs_grp_ucf():
     for name in best_names:
         save_plot(name)
 
+
+  
+def plot_frame_vs_grp_ssv():
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle, Circle
+    from matplotlib.gridspec import GridSpec
+    from dataloaders import ssv2
+    from models.ssv2 import VJEPA2
+
+    model = VJEPA2()
+    model.eval()
+
+
+    GRP_IMP_EVAL_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\eval\partition_32_future_future_0.0001.jsonl'
+    GRP_IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\partition_32_future_0.0001.jsonl'
+    FRAME_IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\framewise\partition_32_future_0.0001.jsonl'
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    PLOT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\framewise\plots_frames_vs_groups'
+
+    cls_list, path_list = ssv2.get_sampled_paths()
+    nice_names = [Path(p).parent.name + '/' + Path(p).name for p in path_list]
+    d = get_orig_logits(GRP_PATH)
+    grp_stats = {}
+    for k in d:
+        grp_stats['/'.join(k.split('/')[-2:])] = d[k]
+
+    ex_met = get_metrics(GRP_IMP_EVAL_PATH, grp_stats)
+    ex_met_ar = [ex_met[k]['metric'] for k in ex_met]
+    sort_idx = np.argsort(np.array(ex_met_ar))
+    best_idx = sort_idx[-30:]
+    worst_idx = sort_idx[10:20]
+    best_names = [list(ex_met.keys())[i] for i in best_idx]
+    worst_names = [list(ex_met.keys())[i] for i in worst_idx]
+
+
+    for k in grp_imp_stats:
+        print(grp_imp_stats[k]['groups'])
+
+    def save_plot(name):
+        grp_imp_stats = get_orig_logits(GRP_IMP_PATH)
+        groups = {}
+        g=grp_imp_stats[name]['groups']
+        for k in g:
+            groups[int(k)] = g[k]
+
+        cls = grp_stats[name]['original_stat']['cls']
+
+        filename = name
+        filename = filename.split('/')[-2] + '/' + filename.split('/')[-1]
+        idx = nice_names.index(filename)
+        p = path_list[idx]
+
+        video = model.video_from_path(p)['pixel_values_videos'][0,:]  
+        video = video.permute(0,2,3,1)      
+        T,H,W,C = video.size()
+        video = video.reshape(T*H,W,3).permute(1,0,2)
+        video_norm = ((video - video.min()) / (video.max() - video.min())).cpu().numpy()
+
+        #*********** video and group rectangles ***************************
+        fig = plt.figure(figsize=(20, 2), constrained_layout=True)
+        gs = GridSpec(3, 2, 
+            width_ratios=[1, 0.05],  # 85% for plot, 15% for text
+            height_ratios=[1, 0.3, 0.3], 
+            hspace=0.00,
+            wspace=0.00)
+
+        ax_frames = fig.add_subplot(gs[0,0])
+        ax_frames.imshow(video_norm)
+        ax_frames.axis('off')
+        extent = ax_frames.get_xlim(), ax_frames.get_ylim()
+        x_min, x_max = extent[0]
+        y_min, y_max = extent[1]
+
+
+        #plot rectangles around grouped frames
+        x_vals = []
+        for g in groups:
+            frames = groups[g] + [g]
+            # print(frames)
+            frames.sort()
+            x_vals.append(frames[0]*W + W*len(frames)*0.5)
+            rect = Rectangle(
+                (frames[0]*W, 0),           # (x, y) - top-left corner
+                W*(len(frames)),              # width
+                H,             # height
+                linewidth=3,
+                edgecolor='red',
+                facecolor='none'
+            )
+            #circle on the keyframe
+            ax_frames.add_patch(rect)
+            circle = Circle((g*W + W/2, 1.0), radius=10, color='red', fill=True)
+            ax_frames.add_patch(circle)
+
+
+        #********************* group wise importance *****************************
+        imp_ar = normalize_list([l[cls] for l in grp_imp_stats[name]['shapley_values'][0]])
+
+        ax_bars1 = fig.add_subplot(gs[1,0])
+        ax_bars1.axhline(y=0, color='black', linewidth=1, linestyle='-')
+        ax_bars1.axis('off')
+
+        width = 10
+        offset = 0.1
+        x_vals = np.array(x_vals)
+        bars1 = ax_bars1.bar(x_vals, imp_ar+offset, width, 
+                    label='Shap', alpha=0.7, color='steelblue')
+        ax_bars1.set_xlim(x_min, x_max)
+        # Set y-limits for the bars
+        ax_bars1.set_ylim(0, max(imp_ar + offset) * 1.1)
+
+        #********************* frame wise importance *****************************
+        frame_imp_stats = get_orig_logits(FRAME_IMP_PATH)
+
+        imp_ar = normalize_list([l[cls] for l in frame_imp_stats[name]['shapley_values'][0]])
+
+        ax_bars2 = fig.add_subplot(gs[2,0])
+        ax_bars2.axis('off')
+        ax_bars2.axhline(y=0, color='black', linewidth=1, linestyle='-')
+
+        width = 10
+        offset = 0.1
+        x_vals = np.arange(W/2, W*T-W/2+1, W)
+        bars1 = ax_bars2.bar(x_vals, imp_ar+offset, width, 
+                    label='Shap', alpha=0.7, color='coral')
+        ax_bars2.set_xlim(x_min, x_max)
+        # Set y-limits for the bars
+        ax_bars2.set_ylim(0, max(imp_ar + offset) * 1.1)
+
+        ax_bars1.text(0, 0.5, 'G', 
+                transform=ax_bars1.transAxes, 
+                rotation=0, va='center', ha='right', 
+                fontsize=8, fontweight='bold')
+
+        # After creating ax_bars2
+        ax_bars2.text(0, 0.5, 'F', 
+                    transform=ax_bars2.transAxes, 
+                    rotation=0, va='center', ha='right', 
+                    fontsize=8, fontweight='bold')
+        
+        name = name.replace('/','-')
+        plt.savefig(os.path.join(PLOT_PATH,f'{name}.png'), dpi=300, bbox_inches='tight')
+                
+    for name in best_names:
+        save_plot(name)
 
 def plot_imp_ucf():
     import matplotlib.pyplot as plt
@@ -1602,10 +1750,10 @@ if __name__ == "__main__":
     # OUT_PATH = r'C:\Users\lahir\Downloads\partition_32_future_0.0001.jsonl'
     # eval_ssv2_baseline(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
 
-    IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\partition_32_future_0.0001.jsonl'
-    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\eval\partition_32_future_future_0.0001.jsonl'
-    eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH, frame=True)
+    # IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\partition_32_future_0.0001.jsonl'
+    # GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    # OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\eval\partition_32_future_future_0.0001.jsonl'
+    # eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH, frame=True)
 
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     # IMP_EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
@@ -1621,4 +1769,4 @@ if __name__ == "__main__":
 
     # plot_imp_ucf()
 
-    # plot_frame_vs_grp_ucf()
+    plot_frame_vs_grp_ssv()
