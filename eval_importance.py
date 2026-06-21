@@ -517,6 +517,8 @@ def eval_ssv2(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH, frame):
             # if record['filename']!='v_YoYo_g07_c04': continue
             if record['filename'] in existing_names: continue
 
+            if n<=677: continue
+
             orig_stat = grp_stats[record['filename']]['original_stat']
             pred_cls = orig_stat['cls']
 
@@ -810,7 +812,7 @@ def get_metrics(EVAL_PATH, grp_stats):
     
 def plot_frame_vs_grp_ucf():
     import matplotlib.pyplot as plt
-    from matplotlib.patches import Rectangle
+    from matplotlib.patches import Rectangle, Circle
     from matplotlib.gridspec import GridSpec
 
     GRP_IMP_EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
@@ -824,8 +826,8 @@ def plot_frame_vs_grp_ucf():
     ex_met = get_metrics(GRP_IMP_EVAL_PATH, grp_stats)
     ex_met_ar = [ex_met[k]['metric'] for k in ex_met]
     sort_idx = np.argsort(np.array(ex_met_ar))
-    best_idx = sort_idx[-10:]
-    worst_idx = sort_idx[:10]
+    best_idx = sort_idx[-20:]
+    worst_idx = sort_idx[10:20]
     best_names = [list(ex_met.keys())[i] for i in best_idx]
     worst_names = [list(ex_met.keys())[i] for i in worst_idx]
 
@@ -893,7 +895,11 @@ def plot_frame_vs_grp_ucf():
                 edgecolor='red',
                 facecolor='none'
             )
+            #circle on the keyframe
             ax_frames.add_patch(rect)
+            circle = Circle((g*W + W/2, 1.0), radius=10, color='red', fill=True)
+            ax_frames.add_patch(circle)
+
 
         #********************* group wise importance *****************************
         imp_ar = normalize_list([l[cls] for l in grp_imp_stats[name]['shapley_values'][0]])
@@ -947,11 +953,6 @@ def plot_frame_vs_grp_ucf():
     for name in best_names:
         save_plot(name)
 
-    
-
-
-
-    pass
 
 def plot_imp_ucf():
     import matplotlib.pyplot as plt
@@ -1601,10 +1602,10 @@ if __name__ == "__main__":
     # OUT_PATH = r'C:\Users\lahir\Downloads\partition_32_future_0.0001.jsonl'
     # eval_ssv2_baseline(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
 
-    # IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\framewise\partition_32_future_0.0001.jsonl'
-    # GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    # OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\framewise\eval\groupwise_partition_32_future_0.0001.jsonl'
-    # eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH, frame=True)
+    IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\partition_32_future_0.0001.jsonl'
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\eval\partition_32_future_future_0.0001.jsonl'
+    eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH, frame=True)
 
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     # IMP_EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
@@ -1620,4 +1621,4 @@ if __name__ == "__main__":
 
     # plot_imp_ucf()
 
-    plot_frame_vs_grp_ucf()
+    # plot_frame_vs_grp_ucf()
