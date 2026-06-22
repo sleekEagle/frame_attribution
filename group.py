@@ -364,6 +364,12 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
         # if not str(p) == 'C:\\Users\\lahir\\Downloads\\s2s_test\\Hitting something with something\\1337.webm':
         #     continue
 
+        # filename = p.split('\\')[-1]
+        # if filename == "Bending something so that it deforms/156770.webm":
+        #     pass
+        # else:
+        #     continue
+
         if p in existing_list: continue
 
         video = model.video_from_path(p)['pixel_values_videos'][0,:].permute(1,0,2,3)
@@ -378,11 +384,11 @@ def group_frames_loader_SSV2(out_dir, GRP_THRESHOLD = 1e-3):
         
 if __name__ == '__main__':
     # sample_paths_ssv2()
-    out_dir = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_test'
+    out_dir = r'C:\Users\lahir\Downloads\UCF101\analysis\groups_test_'
     # out_dir = r'C:\Users\lahir\Downloads\ssv2_analysis'
     # group_frames_loader_UCF101(out_dir, resume_path=r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl', GRP_THRESHOLD=1e-3)
     # group_frames_loader_SSV2(out_dir, GRP_THRESHOLD=1e-3)
-    group_frames_loader_UCF101(out_dir, resume_path=False, GRP_THRESHOLD=1e-3)
+    group_frames_loader_SSV2(out_dir, GRP_THRESHOLD=1e-3)
 
 
     

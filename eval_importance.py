@@ -657,7 +657,7 @@ def eval_ssv2_baseline(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
 
 def avg_stat():
     # EVAL_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\partition_32_future_0.0001.jsonl'
-    EVAL_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\gradcam_future_0.0001.jsonl'
+    EVAL_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\framewise\partition_32_future_0.0001.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
     grp_stats = get_orig_logits(GRP_PATH)
 
@@ -677,7 +677,8 @@ def avg_stat():
     files where n grps > 1 and grp pred aggrees with the all frames prediction = 940
     for occlusion : 940
     for gradcam: 940
-    for partition : 674
+    for partition : 940
+    framewise_grouped : 
     '''
     
     # len(set(grp_stats.keys()))
@@ -699,7 +700,7 @@ def avg_stat():
     #     n+=1
 
     # for k in part_data:
-    #     with open(r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\mod.jsonl', 'a') as f:
+    #     with open(r'C:\Users\lahir\Downloads\ssv2_analysis\shap\eval\mod.jsonl', 'a') as f:
     #         f.write(json.dumps(part_data[k]) + '\n')
 
 
@@ -1106,6 +1107,196 @@ def plot_frame_vs_grp_ssv():
                 
     for name in best_names:
         save_plot(name)
+
+def plot_imp_ssv2():
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle
+    from matplotlib.gridspec import GridSpec
+
+    from dataloaders import ssv2
+    from models.ssv2 import VJEPA2
+
+    import textwrap
+
+    model = VJEPA2()
+    model.eval()
+
+    cls_list, path_list = ssv2.get_sampled_paths()
+    nice_names = [Path(p).parent.name + '/' + Path(p).name for p in path_list]
+
+    EVAL_PATHS = {
+        'best': r'C:\Users\lahir\Downloads\ssv2_analysis\shap\eval\partition_32_future_future_0.0001.jsonl',
+        'gradcam': r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\gradcam_future_0.0001.jsonl',
+        'occlusion': r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\occlusion_future_0.0001.jsonl'
+    }
+    IMP_PATHS = {
+        'best': r'C:\Users\lahir\Downloads\ssv2_analysis\shap\partition_32_future_0.0001.jsonl',
+        'gradcam': r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\0.0001_gradcam.jsonl',
+        'occlusion': r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\0.0001_occlusion.jsonl'
+    }
+
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    d = get_orig_logits(GRP_PATH)
+    grp_stats = {}
+    for k in d:
+        grp_stats['/'.join(k.split('/')[-2:])] = d[k]
+    
+    # IG_met = get_metrics(EVAL_PATHS['IG'], grp_stats)
+    oc_met = get_metrics(EVAL_PATHS['occlusion'], grp_stats)
+    gc_met = get_metrics(EVAL_PATHS['gradcam'], grp_stats)
+    ex_met = get_metrics(EVAL_PATHS['best'], grp_stats)
+    ex_met_ar = [ex_met[k]['metric'] for k in ex_met]
+
+
+    sort_idx = np.argsort(np.array(ex_met_ar))
+    best_idx = sort_idx[-20:]
+    worst_idx = sort_idx[:20]
+    best_names = [list(ex_met.keys())[i] for i in best_idx]
+    worst_names = [list(ex_met.keys())[i] for i in worst_idx]
+
+    # get attributions
+    def get_all_stats(names, ex_met, class_names):
+        out_path = r'C:\Users\lahir\Downloads\ssv2_analysis\plots\imp'
+
+        imp_vals = {}
+        for k in IMP_PATHS:
+            imp_stats = get_orig_logits(IMP_PATHS[k])
+            wanted_stats = {}
+            for name in names:
+                grp_cls = grp_stats[name]['grp_pred_cls']
+                d_ = {}
+                d_['grps'] = grp_stats[name]['groups']
+                if k=='best':
+                    d_['imp'] = [ar[grp_cls] for ar in imp_stats[name]['shapley_values'][0]]
+                else:
+                    d_['imp'] = [imp_stats[name]['attribution'][g] for g in d_['grps']]            
+                wanted_stats[name] = d_
+            imp_vals[k] = wanted_stats
+
+        #make plots
+        for name in names:            
+            groups = {}
+            g=imp_vals['best'][name]['grps']
+            for k in g:
+                if 'frames' in g[k]:
+                    f = g[k]['frames']
+                else: 
+                    f = []
+                groups[int(k)] = f
+
+            idx = nice_names.index(name)
+            p = path_list[idx]
+
+            video = model.video_from_path(p)['pixel_values_videos'][0,:]
+            video = video.permute(0,2,3,1)
+            T,H,W,C = video.size()
+            video = video.reshape(T*H,W,3).permute(1,0,2).cpu()
+            video_norm = ((video - video.min()) / (video.max() - video.min())).numpy()
+            
+            fig = plt.figure(figsize=(20, 2))
+            gs = GridSpec(2, 2, 
+              width_ratios=[1, 0.05],  # 85% for plot, 15% for text
+              height_ratios=[1, 0.3], 
+              hspace=0.00,
+              wspace=0.00)
+            
+            ax_frames = fig.add_subplot(gs[0,0])
+            ax_frames.imshow(video_norm)
+            ax_frames.axis('off')
+
+            ax_text = fig.add_subplot(gs[0, 1])  # gs[:, 1] spans both rows
+            ax_text.axis('off')
+
+            ra = ex_met[name]['rmv_asc']
+            rd = ex_met[name]['rmv_dec']
+            rr = ex_met[name]['rmv_rand']
+            aa = ex_met[name]['add_asc']
+            ad = ex_met[name]['add_dec']
+            ar = ex_met[name]['add_rand'] 
+
+            orig_pred = model.model.config.id2label[ex_met[name]['orig_pred']]
+            grp_pred =  model.model.config.id2label[ex_met[name]['grp_pred']]
+            gt = name.split('/')[0]
+
+            orig_pred = orig_pred.replace('[something]','sth')
+            grp_pred = grp_pred.replace('[something]','sth')
+            gt = gt.replace('something','sth')
+            orig_pred = '\n'.join(textwrap.wrap(orig_pred, width=30))
+            grp_pred = '\n'.join(textwrap.wrap(grp_pred, width=30))
+            gt = '\n'.join(textwrap.wrap(gt, width=30))
+
+            text = f'rmv_asc:{ra:.2f}\nrmv_dec:{rd:.2f} \nrmv_rand:{rr:.2f} \nGT:{gt} \npred:{orig_pred} \ngpred:{grp_pred}'
+
+            ax_text.text(0.0, 0.5, 
+                        text,
+                        transform=ax_text.transAxes,
+                        fontsize=7,
+                        verticalalignment='center',
+                        horizontalalignment='left',
+                        fontfamily='monospace')
+
+            #plot rectangles around grouped frames
+            x_vals = []
+            for g in groups:
+                frames = groups[g] + [g]
+                # print(frames)
+                frames.sort()
+                x_vals.append(frames[0]*W + W*len(frames)*0.5)
+                rect = Rectangle(
+                    (frames[0]*W, 0),           # (x, y) - top-left corner
+                    W*(len(frames)),              # width
+                    H,             # height
+                    linewidth=3,
+                    edgecolor='red',
+                    facecolor='none'
+                )
+                ax_frames.add_patch(rect)
+
+
+            best_imp = normalize_list(imp_vals['best'][name]['imp'])
+            # best_ig = normalize_list(imp_vals['IG'][name]['imp'])
+            best_gc = normalize_list(imp_vals['gradcam'][name]['imp'])
+            best_oc = normalize_list(imp_vals['occlusion'][name]['imp'])
+
+            ax_bars = fig.add_subplot(gs[1,0])
+            total_width = video_norm.shape[1]
+            ax_bars.set_xlim(0, total_width)
+            ax_bars.set_ylim(-0.15, 1.3)
+            ax_bars.axis('off')
+
+
+            width = 10
+            offset = 0.1
+            x_vals = np.array(x_vals)
+            bars1 = ax_bars.bar(x_vals, best_imp+offset, width, 
+                       label='Shap', alpha=0.7, edgecolor='black')
+            # bars2 = ax_bars.bar(x_vals + width, best_ig+offset, width, 
+            #            label='IG', alpha=0.7, edgecolor='black')
+            bars3 = ax_bars.bar(x_vals+width, best_gc+offset, width, 
+                       label='GC', alpha=0.7, edgecolor='black')
+            bars4 = ax_bars.bar(x_vals+2*width, best_oc+offset, width, 
+                       label='OC', alpha=0.7, edgecolor='black')
+            
+
+            # ax_bars.legend(loc='upper right', bbox_to_anchor=(1.0, 1.0), fontsize=10)
+            ax_legend = fig.add_subplot(gs[1, 1])
+            ax_legend.axis('off')
+
+            # Create legend in bottom-right
+            ax_legend.legend(handles=[bars1, bars3, bars4], 
+                            labels=['Shap', 'GC', 'OC'],
+                            loc='center', 
+                            fontsize=7,
+                            frameon=False,
+                            framealpha=0.9,
+                            edgecolor='black',
+                            ncol=1,
+                            bbox_to_anchor=(0.3, 0.7))
+            plt.tight_layout()
+            name = name.replace('/','-')
+            plt.savefig(os.path.join(out_path,f'{name}.png'), bbox_inches='tight', pad_inches=0, dpi=300)
+
+    get_all_stats(worst_names, ex_met, cls_list)
 
 def plot_imp_ucf():
     import matplotlib.pyplot as plt
@@ -1547,6 +1738,7 @@ def plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=1e-
 
     import matplotlib.pyplot as plt
     from matplotlib.gridspec import GridSpec
+    import textwrap
 
     dpi = 100
     
@@ -1578,12 +1770,14 @@ def plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=1e-
     pred_cls = out['grp_metrics']['pred_cls']
     pred_cls_str = class_names[pred_cls]
     gt_cls_str = class_names[gt_cls]
+    pred_cls_str = '\n'.join(textwrap.wrap(pred_cls_str, width=30))
+    gt_cls_str = '\n'.join(textwrap.wrap(gt_cls_str, width=30))
 
     if not os.path.exists(full_vid_path):
         # show the video
         videop = video.permute(2,1,3,0)
         W,T,H,C = videop.size()
-        videop = videop.reshape(W,T*H,3)
+        videop = videop.reshape(W,T*H,3).cpu()
         videop_norm = ((videop - videop.min()) / (videop.max() - videop.min())).numpy()
 
         ax_img.imshow(videop_norm)
@@ -1632,7 +1826,7 @@ def plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=1e-
 
     for i in range(len(kframes)):
         k = kframes[i]
-        frame = video[:,k,:].permute(1,2,0)
+        frame = video[:,k,:].permute(1,2,0).cpu()
         frame = ((frame - frame.min()) / (frame.max() - frame.min())).numpy()
         ax_img.imshow(frame, extent=[xpos[i], xpos[i]+W, 
                                        0 + H, 0])
@@ -1646,6 +1840,7 @@ def plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=1e-
     e = out['grp_metrics']['grp_entr']
     grp_cls = out['grp_metrics']['grp_cls']
     grp_cls_str = class_names[grp_cls]
+    grp_cls_str = '\n'.join(textwrap.wrap(grp_cls_str, width=30))
 
     text = f'Thr={THR} \nL={l:.2f} P={p:.2f} \nm1={m1:.2f} m3={m3:.2f} \nm5={m5:.2f} e={e:.2f} \ngrp={grp_cls_str}'
 
@@ -1716,6 +1911,50 @@ def iterative_grouping_ucf(filename):
 
     plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=-1)
 
+def iterative_grouping_ssv2(filename):
+    from dataloaders import ssv2
+    from models.ssv2 import VJEPA2
+    import textwrap
+
+    # finding file to plot 
+    # GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    # d = get_orig_logits(GRP_PATH)
+    # grp_stats = {}
+    # for k in d:
+    #     grp_stats['/'.join(k.split('/')[-2:])] = d[k]
+
+    # for k in d:
+    #     if d[k]['grp_pred_cls'] == d[k]['original_stat']['cls']: continue
+    # #     print(k)
+
+    model = VJEPA2()
+    model.eval()
+
+    cls_list, path_list = ssv2.get_sampled_paths()
+    nice_names = [Path(p).parent.name + '/' + Path(p).name for p in path_list]
+
+    idx = nice_names.index(filename)
+    p = path_list[idx]
+    video = model.video_from_path(p)['pixel_values_videos'][0,:]
+
+    out_path = r'C:\Users\lahir\Downloads\ssv2_analysis\plots\grouping\iterative_grouping'
+    out_path = os.path.join(out_path,filename.replace('/','-'))
+    os.makedirs(out_path,exist_ok=True)
+
+    gt_cls = model.label2id[filename.split('/')[0]]
+
+    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    d = get_orig_logits(GRP_PATH)
+    grp_stats = {}
+    for k in d:
+        grp_stats['/'.join(k.split('/')[-2:])] = d[k]
+
+    # grp_stats[filename]['grp_pred_cls']
+    # grp_stats[filename]['original_stat']['cls']
+    # grp_stats[filename]['groups'].keys()
+    video = video.permute(1,0,2,3)
+    plot_iterative_grouping(model, video, out_path, gt_cls, model.model.config.id2label, THR=-1)
+
 def ucf_dataset_explore():
 
     OUT_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\class_idx.json'
@@ -1755,10 +1994,10 @@ if __name__ == "__main__":
     # OUT_PATH = r'C:\Users\lahir\Downloads\partition_32_future_0.0001.jsonl'
     # eval_ssv2_baseline(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH)
 
-    IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\partition_32_future_0.0001.jsonl'
-    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
-    OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\eval\partition_32_future_future_0.0001.jsonl'
-    eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH, frame=True)
+    # IMP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\framewise\partition_32_future_0.0001.jsonl'
+    # GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    # OUT_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\framewise\eval\partition_32_future_future_0.0001.jsonl'
+    # eval_ssv2(FILL_TYPE='future', IMP_PATH=IMP_PATH, GRP_PATH=GRP_PATH, OUT_PATH=OUT_PATH, frame=True)
 
     # GRP_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl'
     # IMP_EVAL_PATH = r'C:\Users\lahir\Downloads\UCF101\analysis\shap\eval\exact_late_late_0.001.jsonl'
@@ -1768,10 +2007,11 @@ if __name__ == "__main__":
     # ucf_dataset_explore()
 
     # iterative_grouping_ucf('v_YoYo_g04_c03')
+    iterative_grouping_ssv2('Moving part of something/90857.webm')
 
 
     # avg_stat()
 
-    # plot_imp_ucf()
+    # plot_imp_ssv2()
 
     # plot_frame_vs_grp_ssv()
