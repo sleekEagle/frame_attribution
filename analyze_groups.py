@@ -23,6 +23,30 @@ histogram-based similarity calculation for frames from the video
 calculates the inter-group similarity and intra-group similarities
 *************************************************************************************
 '''
+# from deepseek
+def robust_MAD(in_mag, k=1.5):
+    """
+    PyTorch implementation of median + MAD thresholding.
+    Returns mean of values above threshold, or median if no values above.
+    """
+    # Calculate median
+    median = torch.median(in_mag)
+    
+    # Calculate MAD (Median Absolute Deviation)
+    mad = torch.median(torch.abs(in_mag - median))
+    
+    # Calculate threshold
+    threshold = median + k * mad
+    
+    # Filter values above threshold
+    filtered = in_mag[in_mag > threshold]
+    
+    # Return mean if filtered is not empty, else median
+    if filtered.numel() > 0:
+        return filtered.mean()
+    else:
+        return median
+    
 def frame_similarity_hist(frame1, frame2):
 
     frame1 = (frame1 - frame1.min())/(frame1.max()-frame1.min()+1e-5)
@@ -51,23 +75,40 @@ def frame_similarity_hist(frame1, frame2):
 
     return similarity.item()
 
-def video_similarity_hist(video, groups, MAX_COMBS=5):
-    rep_frames = [int(k) for k in groups.keys()]
-    out_combs = list(combinations(rep_frames, 2))
-    in_combs = []
+def video_similarity_hist(video, groups, raft_of=None, MAX_COMBS=5):
+    g = {}
     for k in groups:
-        if 'frames' not in groups[k]:
-            continue
-        frames = groups[k]['frames']
-        grp_combs = [(int(k), f) for f in frames]
-        in_combs.extend(grp_combs)
+        if 'frames' in groups[k]:
+            f = groups[k]['frames']
+        else: 
+            f = []
+        g[int(k)] = f
+    groups = g
+
+    in_combs, out_combs = [], []
+    kfs = [int(k) for k in list(groups.keys())]
+    kfs.sort()
+    for i in range(len(kfs)-1):
+        k=kfs[i]
+        frames = groups[k] + [k]
+        frames.sort()
+        if len(frames)<2: continue
+        start_idx = random.randint(0, len(frames) - 2)
+        in_combs.append(tuple(frames[start_idx:start_idx+2]))
+
+        nxt_frames = groups[kfs[i+1]] + [kfs[i+1]]
+        nxt_frames.sort()
+        out_combs.append((frames[-1], nxt_frames[0]))
+
+    random.shuffle(in_combs), random.shuffle(out_combs)
+
     n_samples = min(MAX_COMBS, min(len(in_combs),len(out_combs)))
     if n_samples==0:
         return 0, 0
     in_samples = random.sample(in_combs, n_samples)
     out_samples = random.sample(out_combs, n_samples)
 
-    def mean_sim(samples):
+    def mean_sim_hist(samples):
         sim = 0
         for s in samples:
             frame1 = video[s[0]]
@@ -76,10 +117,111 @@ def video_similarity_hist(video, groups, MAX_COMBS=5):
             sim+=s
         mean_sim = sim/len(samples)
         return mean_sim
-    in_sim = mean_sim(in_samples)
-    out_sim = mean_sim(out_samples)
+    def mean_diff_rmse(samples):
+        diff_sum = 0
+        for s in samples:
+            frame1 = video[s[0]]
+            frame2 = video[s[1]]
+            diff = (((frame1-frame2)**2).sum())**0.5
+            diff_sum+=diff
+        diff_mean = diff_sum/len(samples)
+        return diff_mean
+    
+    in_diff = mean_diff_rmse(in_samples)
+    out_diff = mean_diff_rmse(out_samples)
 
-    return in_sim, out_sim
+
+    # print(f'out: {out_samples}')
+    # print(f'in: {in_samples}')
+
+    #calculate optical flow
+    samples = in_samples + out_samples
+    img1_ar, img2_ar = torch.empty(0), torch.empty(0)
+    for s in samples:
+        img1 = video[min(s),:][None,:]
+        img2 = video[max(s),:][None,:]
+        img1_ar = torch.concat([img1_ar, img1], dim=0)
+        img2_ar = torch.concat([img2_ar, img2], dim=0)
+
+    flows = raft_of.predict_flow_batch(img1_ar, img2_ar)
+    mag = (flows**2).sum(dim=1)**0.5
+
+    in_mag = mag[:len(in_samples),:]
+    out_mag = mag[len(in_samples):,:]
+
+    in_mag = robust_MAD(in_mag)
+    out_mag = robust_MAD(out_mag)
+    
+    ret = {}
+    n=len(in_samples)
+    ret['rmse'] = {'in': in_diff*n, 'out': out_diff*n}
+    ret['flow'] = {'in': in_mag.item()*n, 'out': out_mag.item()*n}
+    # ret['n'] = n
+    return ret
+
+def get_dict(PATH):
+    d = {}
+    with open(PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+
+            record = json.loads(line)            
+            d[record['filename']] = record
+    return d
+
+
+
+
+
+
+def motion_metric_ucf():
+    import func
+
+    raft_of = func.RAFT_OF()
+
+    GRP_PATH = r"C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl"
+    GRP_DICT = get_dict(GRP_PATH)
+
+    metrics = {
+        'rmse': {'in':[], 'out':[]},
+        'flow': {'in':[], 'out':[]},
+    }
+
+    ucf101dm = func.UCF101_data_model()
+    model = ucf101dm.model
+    inference_loader = ucf101dm.inference_loader
+    inference_class_names = ucf101dm.inference_class_names
+    class_names = ucf101dm.inference_class_names
+    class_labels = {}
+    for k in class_names.keys():
+        cls_name = class_names[k]
+        class_labels[cls_name.lower()] = k
+    #****************************************************************************
+
+    for idx, batch in enumerate(inference_loader):
+        print(f'{idx/len(inference_loader)*100:.2f} % is done.', end='\r')
+        inputs, targets = batch
+        cls = [class_labels[t[0].split('_')[1].lower()] for t in targets]
+        video = inputs[0,:]
+        gt_idx = class_labels[targets[0][0].split('_')[1].lower()]
+        filename = targets[0][0]
+        grp_data = GRP_DICT[filename]
+        g = grp_data['groups']
+        if len(g)<=1: continue
+        ret = video_similarity_hist(video.permute(1,0,2,3), g, raft_of)
+        if type(ret)!=dict: continue
+
+        for k in ret:
+            for j in ret[k]:
+                metrics[k][j].append(ret[k][j])
+
+    print(f'**************In vs out metrics*************')
+    for k in metrics:
+        for j in metrics[k]:
+            val = metrics[k][j]
+            print(f'{k} {j} : mean: {torch.tensor(val).mean()}  std: {torch.tensor(val).std()}')
 
 
 def UCF101_metrics():
@@ -586,9 +728,11 @@ def tmp_freeze_grps_SSV2(FILL):
                 f.write(json.dumps(d) + '\n')
 
 if __name__ == '__main__':
-    tmp_freeze_grps_SSV2('future')
-    tmp_freeze_grps_SSV2('past')
-    tmp_freeze_grps_SSV2('late_sum')
-    tmp_freeze_grps_SSV2('hybrid_mid')
-    tmp_freeze_grps_SSV2('hybrid_random')
-    # calc_metrics()
+    # tmp_freeze_grps_SSV2('future')
+    # tmp_freeze_grps_SSV2('past')
+    # tmp_freeze_grps_SSV2('late_sum')
+    # tmp_freeze_grps_SSV2('hybrid_mid')
+    # tmp_freeze_grps_SSV2('hybrid_random')
+    # # calc_metrics()
+    motion_metric_ucf()
+

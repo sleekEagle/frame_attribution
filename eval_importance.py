@@ -657,7 +657,7 @@ def eval_ssv2_baseline(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
 
 def avg_stat():
     # EVAL_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\partition_32_future_0.0001.jsonl'
-    EVAL_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\framewise\partition_32_future_0.0001.jsonl'
+    EVAL_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\framewise\eval\partition_32_future_future_0.0001.jsonl'
     GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
     grp_stats = get_orig_logits(GRP_PATH)
 
@@ -2007,10 +2007,10 @@ if __name__ == "__main__":
     # ucf_dataset_explore()
 
     # iterative_grouping_ucf('v_YoYo_g04_c03')
-    iterative_grouping_ssv2('Moving part of something/90857.webm')
+    # iterative_grouping_ssv2('Moving part of something/90857.webm')
 
 
-    # avg_stat()
+    avg_stat()
 
     # plot_imp_ssv2()
 
