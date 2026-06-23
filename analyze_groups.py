@@ -175,7 +175,12 @@ def get_dict(PATH):
 
 
 
-
+'''
+rmse in : mean: 70.7188491821289  std: 71.59483337402344
+rmse out : mean: 78.25613403320312  std: 78.64163208007812
+flow in : mean: 6.552077293395996  std: 13.200096130371094
+flow out : mean: 7.147519111633301  std: 13.657974243164062
+'''
 def motion_metric_ucf():
     import func
 
@@ -211,6 +216,58 @@ def motion_metric_ucf():
         g = grp_data['groups']
         if len(g)<=1: continue
         ret = video_similarity_hist(video.permute(1,0,2,3), g, raft_of)
+        if type(ret)!=dict: continue
+
+        for k in ret:
+            for j in ret[k]:
+                metrics[k][j].append(ret[k][j])
+
+    print(f'**************In vs out metrics*************')
+    for k in metrics:
+        for j in metrics[k]:
+            val = metrics[k][j]
+            print(f'{k} {j} : mean: {torch.tensor(val).mean()}  std: {torch.tensor(val).std()}')
+
+'''
+rmse in : mean: 484.9666442871094  std: 359.51470947265625
+rmse out : mean: 520.0784301757812  std: 360.14508056640625
+flow in : mean: 42.782691955566406  std: 53.92948532104492
+flow out : mean: 49.445526123046875  std: 59.716949462890625
+'''
+def motion_metric_ssv():
+    import func
+
+    from dataloaders import ssv2
+    from models.ssv2 import VJEPA2
+
+    model = VJEPA2()
+    model.eval()
+    raft_of = func.RAFT_OF()
+
+    cls_list, path_list = ssv2.get_sampled_paths()
+    nice_names = [Path(p).parent.name + '/' + Path(p).name for p in path_list]
+    GRP_PATH = r"C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl"
+    d = get_dict(GRP_PATH)
+    grp_stats = {}
+    for k in d:
+        grp_stats['/'.join(k.split('/')[-2:])] = d[k]
+
+
+    metrics = {
+        'rmse': {'in':[], 'out':[]},
+        'flow': {'in':[], 'out':[]},
+    }
+
+    for i, fname in enumerate(grp_stats):
+        print(f'{i/len(grp_stats)*100:.1f}% is done.', end='\r')
+        g = grp_stats[fname]['groups']
+        if len(g)<=1: continue
+
+        idx = nice_names.index(fname)
+        p = path_list[idx]
+        video = model.video_from_path(p)['pixel_values_videos'][0,:]
+
+        ret = video_similarity_hist(video.cpu(), g, raft_of)
         if type(ret)!=dict: continue
 
         for k in ret:
@@ -734,5 +791,5 @@ if __name__ == '__main__':
     # tmp_freeze_grps_SSV2('hybrid_mid')
     # tmp_freeze_grps_SSV2('hybrid_random')
     # # calc_metrics()
-    motion_metric_ucf()
+    motion_metric_ssv()
 
