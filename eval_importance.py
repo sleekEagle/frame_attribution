@@ -657,8 +657,8 @@ def eval_ssv2_baseline(FILL_TYPE, IMP_PATH, GRP_PATH, OUT_PATH):
 
 def avg_stat():
     # EVAL_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\baselines\eval\partition_32_future_0.0001.jsonl'
-    EVAL_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\shap\framewise\eval\partition_32_future_future_0.0001.jsonl'
-    GRP_PATH = r'C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl'
+    EVAL_PATH = r"C:\Users\lahir\Downloads\ssv2_analysis\shap\framewise\eval\partition_32_future_future_0.0001.jsonl"
+    GRP_PATH = r"C:\Users\lahir\Downloads\ssv2_analysis\groups\groups_0.0001.jsonl"
     grp_stats = get_orig_logits(GRP_PATH)
 
     # for ssv2
@@ -1744,7 +1744,8 @@ def plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=1e-
     
     full_vid_path = os.path.join(out_path,'full.png')
 
-    C,T,H,W = video.size()
+    C,T,_,_ = video.size()
+    H=W=112
     img_width_px = W * T        # total width of image strip
     img_height_px = H           # image height
     text_width_px = 200         # width reserved for text
@@ -1772,6 +1773,8 @@ def plot_iterative_grouping(model, video, out_path, gt_cls, class_names, THR=1e-
     gt_cls_str = class_names[gt_cls]
     pred_cls_str = '\n'.join(textwrap.wrap(pred_cls_str, width=30))
     gt_cls_str = '\n'.join(textwrap.wrap(gt_cls_str, width=30))
+
+    video = F.interpolate(video, size=(112, 112), mode='bilinear', align_corners=False)
 
     if not os.path.exists(full_vid_path):
         # show the video
@@ -1953,7 +1956,7 @@ def iterative_grouping_ssv2(filename):
     # grp_stats[filename]['original_stat']['cls']
     # grp_stats[filename]['groups'].keys()
     video = video.permute(1,0,2,3)
-    plot_iterative_grouping(model, video, out_path, gt_cls, model.model.config.id2label, THR=-1)
+    plot_iterative_grouping(model, video, out_path, gt_cls, model.model.config.id2label, THR=-0.2)
 
 def ucf_dataset_explore():
 
@@ -2007,10 +2010,10 @@ if __name__ == "__main__":
     # ucf_dataset_explore()
 
     # iterative_grouping_ucf('v_YoYo_g04_c03')
-    # iterative_grouping_ssv2('Moving part of something/90857.webm')
+    iterative_grouping_ssv2('Moving part of something/90857.webm')
 
 
-    avg_stat()
+    # avg_stat()
 
     # plot_imp_ssv2()
 
