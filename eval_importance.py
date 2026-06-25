@@ -1974,6 +1974,102 @@ def ucf_dataset_explore():
     with open(OUT_PATH, 'w') as f:
         json.dump(d, f)
 
+def show_two_images_with_heatmap(img1, n1, img2, n2, heatmap, cmap='jet', save_path=None):
+    import matplotlib.pyplot as plt
+    import numpy as np
+    """
+    Display first image, second image, and the heatmap as a standalone mask
+    
+    Args:
+        img1: (3, H, W) tensor or numpy array - first image
+        n1: frame number for first image
+        img2: (3, H, W) tensor or numpy array - second image  
+        n2: frame number for second image
+        heatmap: (H, W) tensor - heatmap to display
+        cmap: colormap name ('jet', 'viridis', 'hot', etc.)
+        save_path: path to save the figure
+    """
+    def to_numpy(img):
+        """Convert tensor to numpy and normalize"""
+        if hasattr(img, 'detach'):
+            img = img.detach().cpu().numpy()
+        if img.shape[0] == 3:  # (C, H, W) -> (H, W, C)
+            img = np.transpose(img, (1, 2, 0))
+        if img.max() > 1.0:
+            img = (img - img.min()) / (img.max() - img.min() + 1e-8)
+        return img
+    
+    # Convert all inputs
+    img1_np = to_numpy(img1)
+    img2_np = to_numpy(img2)
+    
+    if hasattr(heatmap, 'detach'):
+        hm = heatmap.detach().cpu().numpy()
+    else:
+        hm = heatmap
+    hm = (hm - hm.min()) / (hm.max() - hm.min() + 1e-8)
+    
+    # Create figure with 3 subplots
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    
+    # Plot 1: First image
+    axes[0].imshow(img1_np)
+    axes[0].set_title(f'Frame: {n1}', fontsize=12, fontweight='bold')
+    axes[0].axis('off')
+    
+    # Plot 2: Second image
+    axes[1].imshow(img2_np)
+    axes[1].set_title(f'Frame: {n2}', fontsize=12, fontweight='bold')
+    axes[1].axis('off')
+    
+    # Plot 3: Heatmap (standalone, no overlay)
+    im = axes[2].imshow(hm, cmap=cmap)
+    axes[2].set_title('Pixel RMSE', fontsize=12, fontweight='bold')
+    axes[2].axis('off')
+    
+    plt.subplots_adjust(wspace=-0.3)
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight', pad_inches=0, dpi=300)
+        print(f"Saved to {save_path}")
+    
+    plt.show()
+
+def plot_motion():
+
+
+    filename = r'Pushing something so that it falls off the table/164737.webm'
+    frame_pairs = [[7,8],[8,15]]
+    fp=frame_pairs[0]
+
+    from dataloaders import ssv2
+    from models.ssv2 import VJEPA2
+
+    model = VJEPA2()
+    model.eval()
+
+    cls_list, path_list = ssv2.get_sampled_paths()
+    nice_names = [Path(p).parent.name + '/' + Path(p).name for p in path_list]
+
+    idx = nice_names.index(filename)
+    p = path_list[idx]
+    video = model.video_from_path(p)['pixel_values_videos'][0,:]
+    video = video.permute(0,1,3,2)
+
+    f1 = video[fp[0],:]
+    f2 = video[fp[1],:]
+    rmse = (((f1-f2)**2).mean(dim=0))**0.5
+    valid = rmse > 1.2
+    mean = rmse[valid].mean()
+    out_path = r'C:\Users\lahir\Downloads\ssv2_analysis\plots\motion'
+    out_dir = os.path.join(out_path, filename.replace('/','-'))
+    os.makedirs(out_dir,exist_ok=True)
+    out_file = os.path.join(out_dir, f'{fp[0]}_{fp[1]}.png')
+    show_two_images_with_heatmap(f1, fp[0], f2, fp[1], rmse, cmap='jet', save_path=out_file)
+    
+    pass
+
 
 if __name__ == "__main__":
     # importance_correlation(r'C:\Users\lahir\Downloads\UCF101\analysis\groups\groups_0.001.jsonl' ,r'C:\Users\lahir\Downloads\UCF101\analysis\shap')
@@ -2010,7 +2106,7 @@ if __name__ == "__main__":
     # ucf_dataset_explore()
 
     # iterative_grouping_ucf('v_YoYo_g04_c03')
-    iterative_grouping_ssv2('Moving part of something/90857.webm')
+    # iterative_grouping_ssv2('Moving part of something/90857.webm')
 
 
     # avg_stat()
@@ -2018,3 +2114,5 @@ if __name__ == "__main__":
     # plot_imp_ssv2()
 
     # plot_frame_vs_grp_ssv()
+
+    plot_motion()
