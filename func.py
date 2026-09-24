@@ -40,6 +40,23 @@ def show_rgb_image(img):
     plt.axis("off")
     plt.show(block=True)
 
+#input depth: [H, W] np array, or a path to a depth .tiff file
+def show_depth_map(depth, cmap='viridis', block=True):
+    import matplotlib.pyplot as plt
+    if isinstance(depth, str):
+        import tifffile
+        depth = tifffile.imread(depth).astype(np.float64)
+        if depth.ndim == 3:
+            depth = depth[..., 0]
+    valid = np.isfinite(depth) & (depth > 0)
+    masked = np.ma.masked_where(~valid, depth)
+    cmap_obj = plt.get_cmap(cmap).copy()
+    cmap_obj.set_bad(color='gray')
+    im = plt.imshow(masked, cmap=cmap_obj)
+    plt.colorbar(im, label='depth')
+    plt.axis("off")
+    plt.show(block=block)
+
 '''
 inp_np: 224,224,3
 mask_np: 224,224
