@@ -16,7 +16,7 @@ from pathlib import Path
 import cv2
 import cv2.aruco as aruco
 import matplotlib
-matplotlib.use("Agg")
+matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
@@ -40,7 +40,7 @@ def _bilinear_sample(gray: np.ndarray, xs: np.ndarray, ys: np.ndarray) -> np.nda
 
 
 def extract_esf_samples(image_path: Path, detector, obj_points_all, K, D, info: dict,
-                         lines_per_square: int = 3, margin_frac: float = 0.35,
+                         lines_per_square: int = 3, margin_frac: float = 0.1,
                          n_obj_samples: int = 300, sample_spacing_px: float = 0.5,
                          min_contrast: float = 15.0):
     """One calibration image -> list of edge-spread-function samples, one per (square, edge
@@ -59,6 +59,9 @@ def extract_esf_samples(image_path: Path, detector, obj_points_all, K, D, info: 
     K, D: that focal length's calibrated camera matrix and distortion coefficients.
     info: pattern_info_charuco.json's "charuco" section (squares_x, squares_y,
         square_length_m, ...).
+
+    Each returned dict also carries "img_xy" (Nx2), the actual image pixel coordinates the
+    ESF was sampled at, for overlaying on the source image as a sanity check.
     """
     gray_u8 = np.asarray(Image.open(image_path).convert("L"))
 
@@ -120,7 +123,7 @@ def extract_esf_samples(image_path: Path, detector, obj_points_all, K, D, info: 
                     results.append({
                         "row": row, "col": col, "edge": edge, "frac_height": float(frac),
                         "depth": depth, "s": s_uniform - s_edge, "esf": esf,
-                        "contrast": contrast,
+                        "contrast": contrast, "img_xy": np.stack([px, py], axis=1),
                     })
     return results
 
@@ -134,7 +137,7 @@ def main():
                       r"\Global_calibration_set\ChArUco_pattern\EOS_6D_A\fl_28mm\IMG_6495.JPG")
     parser = argparse.ArgumentParser(description=main.__doc__)
     parser.add_argument("image_path", type=Path, nargs="?", default=Path(default_image))
-    parser.add_argument("--out_plot", type=Path, default=None,
+    parser.add_argument("--out_plot", type=Path, default=r"C:\Users\lahir\MODEST\Global_calibration_set\MODEST_ChArUco\Global_calibration_set\ChArUco_pattern\EOS_6D_A\debug",
                          help="where to save example ESF curves (default: next to the image)")
     parser.add_argument("--n_plot", type=int, default=6, help="how many samples to plot")
     args = parser.parse_args()
@@ -156,13 +159,38 @@ def main():
     K, D = npz["K"], npz["D"]
 
     samples = extract_esf_samples(image_path, detector, obj_points_all, K, D, info)
+
     print(f"{image_path.name}: {len(samples)} ESF samples")
     if not samples:
         return
     depths = [s["depth"] for s in samples]
     print(f"  depth range: [{min(depths):.3f}, {max(depths):.3f}] m")
 
-    out_plot = args.out_plot or image_path.with_name(image_path.stem + "_esf_samples.png")
+    out_dir = args.out_plot or image_path.parent
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # points-on-image plot: every scan line actually sampled, plus its edge crossing point
+    gray_u8 = np.asarray(Image.open(image_path).convert("L"))
+    points_path = out_dir / f"{image_path.stem}_points.png"
+    fig, ax = plt.subplots(figsize=(10, 7))
+    ax.imshow(gray_u8, cmap="gray", vmin=0, vmax=255)
+    edge_xy = np.empty((len(samples), 2))
+    for i, s in enumerate(samples):
+        xy = s["img_xy"]
+        ax.plot(xy[:, 0], xy[:, 1], linewidth=0.6, alpha=0.6, color="tab:orange")
+        edge_xy[i] = np.interp(0.0, s["s"], xy[:, 0]), np.interp(0.0, s["s"], xy[:, 1])
+    ax.scatter(edge_xy[:, 0], edge_xy[:, 1], s=6, color="red", zorder=3,
+               label="edge crossing (depth sample)")
+    ax.set_title(f"scan lines considered: {image_path.name} ({len(samples)} samples)")
+    ax.legend(fontsize=8, loc="upper right")
+    ax.axis("off")
+    fig.tight_layout()
+    fig.savefig(points_path, dpi=150)
+    plt.close(fig)
+    print(f"  wrote {points_path}")
+
+    # ESF curves for a handful of samples
+    esf_path = out_dir / f"{image_path.stem}_esf.png"
     fig, ax = plt.subplots(figsize=(7, 5))
     for s in samples[:args.n_plot]:
         ax.plot(s["s"], s["esf"], marker=".", markersize=2, linewidth=0.8,
@@ -173,9 +201,9 @@ def main():
     ax.set_title(f"ESF samples: {image_path.name}")
     ax.legend(fontsize=7)
     fig.tight_layout()
-    fig.savefig(out_plot, dpi=150)
+    fig.savefig(esf_path, dpi=150)
     plt.close(fig)
-    print(f"  wrote {out_plot}")
+    print(f"  wrote {esf_path}")
 
 
 if __name__ == "__main__":
