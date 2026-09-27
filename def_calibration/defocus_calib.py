@@ -10,6 +10,7 @@ defocus-blur theory in focaldist_estimation.py's module docstring), so it is a l
 proxy for D_focus estimation.
 """
 import argparse
+import csv
 import json
 from pathlib import Path
 
@@ -61,7 +62,11 @@ def extract_esf_samples(image_path: Path, detector, obj_points_all, K, D, info: 
         square_length_m, ...).
 
     Each returned dict also carries "img_xy" (Nx2), the actual image pixel coordinates the
-    ESF was sampled at, for overlaying on the source image as a sanity check.
+    ESF was sampled at, for overlaying on the source image as a sanity check. "scan" is
+    "horizontal" for a horizontal scan line crossing one of the square's left/right (vertical)
+    edges, or "vertical" for a vertical scan line crossing one of its top/bottom (horizontal)
+    edges -- sampling both doubles coverage and lets horizontal- vs vertical-edge blur be
+    compared separately.
     """
     gray_u8 = np.asarray(Image.open(image_path).convert("L"))
 
@@ -83,9 +88,36 @@ def extract_esf_samples(image_path: Path, detector, obj_points_all, K, D, info: 
     t = np.linspace(-margin, margin, n_obj_samples)
     fracs = (np.arange(lines_per_square) + 1) / (lines_per_square + 1)  # e.g. .25, .5, .75
 
+    def sample_scan_line(obj_pts):
+        """obj_pts: Nx3 object-space line straddling an edge at t=0 (the middle sample) ->
+        (s, esf, px, py, contrast), or None if it fails the coverage/contrast checks."""
+        img_pts, _ = cv2.projectPoints(obj_pts, rvec, tvec, K, D)
+        img_pts = img_pts.reshape(-1, 2)
+
+        seg_len = np.linalg.norm(np.diff(img_pts, axis=0), axis=1)
+        arc = np.concatenate([[0.0], np.cumsum(seg_len)])
+        if arc[-1] < 2 * sample_spacing_px:
+            return None
+        s_edge = np.interp(0.0, t, arc)
+
+        s_uniform = np.arange(0.0, arc[-1], sample_spacing_px)
+        px = np.interp(s_uniform, arc, img_pts[:, 0])
+        py = np.interp(s_uniform, arc, img_pts[:, 1])
+
+        esf = _bilinear_sample(gray, px, py)
+        if np.isnan(esf).any():
+            return None
+
+        k = max(3, len(esf) // 10)
+        contrast = abs(float(esf[:k].mean()) - float(esf[-k:].mean()))
+        if contrast < min_contrast:
+            return None
+        return s_uniform - s_edge, esf, px, py, contrast
+
     results = []
     for row in range(squares_y):
         for col in range(squares_x):
+            # horizontal scan lines: cross the square's left/right (vertical) edges
             for edge, x_edge in (("left", col * sq), ("right", (col + 1) * sq)):
                 if (edge == "left" and col == 0) or (edge == "right" and col == squares_x - 1):
                     continue
@@ -93,27 +125,10 @@ def extract_esf_samples(image_path: Path, detector, obj_points_all, K, D, info: 
                     y_line = (row + frac) * sq
                     obj_pts = np.stack(
                         [x_edge + t, np.full_like(t, y_line), np.zeros_like(t)], axis=1)
-                    img_pts, _ = cv2.projectPoints(obj_pts, rvec, tvec, K, D)
-                    img_pts = img_pts.reshape(-1, 2)
-
-                    seg_len = np.linalg.norm(np.diff(img_pts, axis=0), axis=1)
-                    arc = np.concatenate([[0.0], np.cumsum(seg_len)])
-                    if arc[-1] < 2 * sample_spacing_px:
+                    sampled = sample_scan_line(obj_pts)
+                    if sampled is None:
                         continue
-                    s_edge = np.interp(0.0, t, arc)
-
-                    s_uniform = np.arange(0.0, arc[-1], sample_spacing_px)
-                    px = np.interp(s_uniform, arc, img_pts[:, 0])
-                    py = np.interp(s_uniform, arc, img_pts[:, 1])
-
-                    esf = _bilinear_sample(gray, px, py)
-                    if np.isnan(esf).any():
-                        continue
-
-                    k = max(3, len(esf) // 10)
-                    contrast = abs(float(esf[:k].mean()) - float(esf[-k:].mean()))
-                    if contrast < min_contrast:
-                        continue
+                    s, esf, px, py, contrast = sampled
 
                     obj_edge = np.array([[x_edge, y_line, 0.0]])
                     depth = float((R @ obj_edge.T + tvec)[2, 0])
@@ -121,32 +136,82 @@ def extract_esf_samples(image_path: Path, detector, obj_points_all, K, D, info: 
                         continue
 
                     results.append({
-                        "row": row, "col": col, "edge": edge, "frac_height": float(frac),
-                        "depth": depth, "s": s_uniform - s_edge, "esf": esf,
+                        "row": row, "col": col, "edge": edge, "scan": "horizontal",
+                        "frac": float(frac), "depth": depth, "s": s, "esf": esf,
+                        "contrast": contrast, "img_xy": np.stack([px, py], axis=1),
+                    })
+
+            # vertical scan lines: cross the square's top/bottom (horizontal) edges
+            for edge, y_edge in (("top", row * sq), ("bottom", (row + 1) * sq)):
+                if (edge == "top" and row == 0) or (edge == "bottom" and row == squares_y - 1):
+                    continue
+                for frac in fracs:
+                    x_line = (col + frac) * sq
+                    obj_pts = np.stack(
+                        [np.full_like(t, x_line), y_edge + t, np.zeros_like(t)], axis=1)
+                    sampled = sample_scan_line(obj_pts)
+                    if sampled is None:
+                        continue
+                    s, esf, px, py, contrast = sampled
+
+                    obj_edge = np.array([[x_line, y_edge, 0.0]])
+                    depth = float((R @ obj_edge.T + tvec)[2, 0])
+                    if depth <= 0:
+                        continue
+
+                    results.append({
+                        "row": row, "col": col, "edge": edge, "scan": "vertical",
+                        "frac": float(frac), "depth": depth, "s": s, "esf": esf,
                         "contrast": contrast, "img_xy": np.stack([px, py], axis=1),
                     })
     return results
 
 
-def main():
-    """Run extract_esf_samples() on a single image, for a quick sanity check. The image is
-    expected under the usual <calib_root>/<camera_dir>/fl_<X>mm/*.JPG layout (see
-    focaldist_estimation_calibimgs.py's module docstring), so calib_root, camera_dir and the
-    focal length are inferred from image_path's own parent directories."""
-    default_image = (r"C:\Users\lahir\MODEST\Global_calibration_set\MODEST_ChArUco"
-                      r"\Global_calibration_set\ChArUco_pattern\EOS_6D_A\fl_28mm\IMG_6495.JPG")
-    parser = argparse.ArgumentParser(description=main.__doc__)
-    parser.add_argument("image_path", type=Path, nargs="?", default=Path(default_image))
-    parser.add_argument("--out_plot", type=Path, default=r"C:\Users\lahir\MODEST\Global_calibration_set\MODEST_ChArUco\Global_calibration_set\ChArUco_pattern\EOS_6D_A\debug",
-                         help="where to save example ESF curves (default: next to the image)")
-    parser.add_argument("--n_plot", type=int, default=6, help="how many samples to plot")
-    args = parser.parse_args()
+def esf_width_10_90(s: np.ndarray, esf: np.ndarray, plateau_frac: float = 0.1):
+    """10%-90% rise/fall width of one ESF curve (same units as `s` -- pixels, here). For a
+    Gaussian PSF this equals exactly 2*Phi^-1(0.9)*sigma ~= 2.563*sigma (see this module's
+    docstring), so it's a low-noise, linear proxy for blur scale. Returns None if the two
+    plateaus can't be told apart (e.g. a flat/degenerate curve).
 
-    image_path = args.image_path
-    focal_name = image_path.parent.name  # e.g. "fl_28mm"
-    camera_dir = image_path.parent.parent  # e.g. .../EOS_6D_A
-    calib_root = camera_dir.parent  # .../ChArUco_pattern
+    Thresholds are set relative to the curve's own two plateau levels (averaged over
+    `plateau_frac` of each end, same convention as the contrast check in
+    extract_esf_samples()), not its raw min/max, so a single noisy sample can't skew them. The
+    affine normalization below maps the left end to 0 and the right end to 1 regardless of
+    whether the edge is rising or falling, so no direction handling is needed.
+    """
+    n = len(esf)
+    k = max(3, int(n * plateau_frac))
+    lo, hi = float(esf[:k].mean()), float(esf[-k:].mean())
+    if hi == lo:
+        return None
 
+    norm = (esf - lo) / (hi - lo)
+    s10 = float(np.interp(0.1, norm, s))
+    s90 = float(np.interp(0.9, norm, s))
+    return abs(s90 - s10)
+
+
+def process_directory(image_dir: Path, detector, obj_points_all, K, D, info: dict, **kwargs):
+    """Run extract_esf_samples() over every *.JPG in image_dir and reduce each sample to its
+    10-90 width, pooling results across the whole directory (kwargs are forwarded to
+    extract_esf_samples(), e.g. margin_frac). Returns a list of lightweight dicts (no s/esf/
+    img_xy arrays, just the numbers needed for a D_focus fit): {"image", "depth", "width",
+    "row", "col", "edge", "scan"}."""
+    results = []
+    for image_path in sorted(image_dir.glob("*.JPG")):
+        for s in extract_esf_samples(image_path, detector, obj_points_all, K, D, info, **kwargs):
+            width = esf_width_10_90(s["s"], s["esf"])
+            if width is None:
+                continue
+            results.append({
+                "image": image_path.name, "depth": s["depth"], "width": width,
+                "row": s["row"], "col": s["col"], "edge": s["edge"], "scan": s["scan"],
+            })
+    return results
+
+
+def _load_setup(focal_name: str, camera_dir: Path, calib_root: Path):
+    """Load the board geometry/detector and that focal length's intrinsics."""
     with open(calib_root / "pattern_info_charuco.json") as f:
         info = json.load(f)["charuco"]
     dictionary = aruco.getPredefinedDictionary(getattr(aruco, info["dictionary"]))
@@ -154,32 +219,84 @@ def main():
                                 info["square_length_m"], info["marker_length_m"], dictionary)
     obj_points_all = board.getChessboardCorners()
     detector = aruco.CharucoDetector(board)
-
     npz = np.load(camera_dir / "calibration" / f"{focal_name}.npz")
-    K, D = npz["K"], npz["D"]
+    return detector, obj_points_all, npz["K"], npz["D"], info
 
-    samples = extract_esf_samples(image_path, detector, obj_points_all, K, D, info)
 
-    print(f"{image_path.name}: {len(samples)} ESF samples")
-    if not samples:
-        return
-    depths = [s["depth"] for s in samples]
-    print(f"  depth range: [{min(depths):.3f}, {max(depths):.3f}] m")
+def main():
+    """Batch-process every image in a directory (e.g. an fl_XXmm folder): extract ESF samples,
+    reduce each to a 10-90 width, and write out a pooled (depth, width) CSV plus a width-vs-depth
+    scatter plot. Also saves points-on-image and ESF-curve diagnostic plots for one
+    representative image, as a sanity check. image_dir is expected under the usual
+    <calib_root>/<camera_dir>/fl_<X>mm/*.JPG layout (see focaldist_estimation_calibimgs.py's
+    module docstring), so calib_root and camera_dir are inferred from image_dir's own parent
+    directories."""
+    default_dir = (r"C:\Users\lahir\MODEST\Global_calibration_set\MODEST_ChArUco"
+                    r"\Global_calibration_set\ChArUco_pattern\EOS_6D_A\fl_70mm")
+    parser = argparse.ArgumentParser(description=main.__doc__)
+    parser.add_argument("image_dir", type=Path, nargs="?", default=Path(default_dir),
+                         help="directory of calibration images to process (e.g. an fl_XXmm folder)")
+    parser.add_argument("--out_plot", type=Path, default=r"C:\Users\lahir\MODEST\Global_calibration_set\MODEST_ChArUco\Global_calibration_set\ChArUco_pattern\EOS_6D_A\debug",
+                         help="where to save plots / the widths CSV")
+    parser.add_argument("--n_plot", type=int, default=6, help="how many samples to plot")
+    args = parser.parse_args()
 
-    out_dir = args.out_plot or image_path.parent
+    image_dir = args.image_dir
+    focal_name = image_dir.name  # e.g. "fl_28mm"
+    camera_dir = image_dir.parent  # e.g. .../EOS_6D_A
+    calib_root = camera_dir.parent  # .../ChArUco_pattern
+    detector, obj_points_all, K, D, info = _load_setup(focal_name, camera_dir, calib_root)
+
+    out_dir = args.out_plot or image_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # points-on-image plot: every scan line actually sampled, plus its edge crossing point
+    results = process_directory(image_dir, detector, obj_points_all, K, D, info)
+    print(f"{image_dir}: {len(results)} (depth, width) samples")
+    if not results:
+        return
+    for r in results:
+        print(f"{r['depth']:.4f}\t{r['width']:.3f}\t{r['image']}")
+
+    csv_path = out_dir / f"{focal_name}_widths.csv"
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=["image", "row", "col", "edge", "scan", "depth", "width"])
+        writer.writeheader()
+        writer.writerows(results)
+    print(f"wrote {csv_path}")
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.scatter([r["depth"] for r in results], [r["width"] for r in results], s=4, alpha=0.3)
+    ax.set_xlabel("depth (m)")
+    ax.set_ylabel("10-90 width (px)")
+    ax.set_title(f"width vs depth: {focal_name}")
+    fig.tight_layout()
+    width_plot_path = out_dir / f"{focal_name}_width_vs_depth.png"
+    fig.savefig(width_plot_path, dpi=150)
+    plt.close(fig)
+    print(f"wrote {width_plot_path}")
+
+    # points-on-image + ESF-curve diagnostic plots, for one representative image
+    image_path = sorted(image_dir.glob("*.JPG"))[0]
+    samples = extract_esf_samples(image_path, detector, obj_points_all, K, D, info)
+    if not samples:
+        return
+
     gray_u8 = np.asarray(Image.open(image_path).convert("L"))
     points_path = out_dir / f"{image_path.stem}_points.png"
     fig, ax = plt.subplots(figsize=(10, 7))
     ax.imshow(gray_u8, cmap="gray", vmin=0, vmax=255)
+    scan_colors = {"horizontal": "tab:orange", "vertical": "tab:cyan"}
     edge_xy = np.empty((len(samples), 2))
+    labeled_scans = set()
     for i, s in enumerate(samples):
         xy = s["img_xy"]
-        ax.plot(xy[:, 0], xy[:, 1], linewidth=0.6, alpha=0.6, color="tab:orange")
+        label = f"{s['scan']} scan" if s["scan"] not in labeled_scans else None
+        labeled_scans.add(s["scan"])
+        ax.plot(xy[:, 0], xy[:, 1], linewidth=0.6, alpha=0.6, color=scan_colors[s["scan"]],
+                label=label)
         edge_xy[i] = np.interp(0.0, s["s"], xy[:, 0]), np.interp(0.0, s["s"], xy[:, 1])
-    ax.scatter(edge_xy[:, 0], edge_xy[:, 1], s=6, color="red", zorder=3,
+    ax.scatter(edge_xy[:, 0], edge_xy[:, 1], s=2, color="red", zorder=3,
                label="edge crossing (depth sample)")
     ax.set_title(f"scan lines considered: {image_path.name} ({len(samples)} samples)")
     ax.legend(fontsize=8, loc="upper right")
@@ -193,8 +310,10 @@ def main():
     esf_path = out_dir / f"{image_path.stem}_esf.png"
     fig, ax = plt.subplots(figsize=(7, 5))
     for s in samples[:args.n_plot]:
+        width = esf_width_10_90(s["s"], s["esf"])
         ax.plot(s["s"], s["esf"], marker=".", markersize=2, linewidth=0.8,
-                label=f"row{s['row']} col{s['col']} {s['edge']} d={s['depth']:.2f}m")
+                label=f"row{s['row']} col{s['col']} {s['edge']} d={s['depth']:.2f}m "
+                      f"w10-90={width:.2f}px")
     ax.axvline(0.0, color="black", linestyle="--", linewidth=1)
     ax.set_xlabel("distance along scan line, centered on edge (px)")
     ax.set_ylabel("intensity")
