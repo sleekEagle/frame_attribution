@@ -42,13 +42,16 @@ matched by filename stem (0.jpg <-> 0.tiff, etc), and F<Y> parseable as a float 
 Output:
     <out_dir>/dfocus_results.txt       -- one row per (focal_length, side) (CSV):
         focal, side, status, n_fstops, n_images, n_samples, n_bins,
-        d_focus, d_focus_stderr, k, p, rmse
+        d_focus, d_focus_stderr, d_focus_argmax, k, p, rmse
     <out_dir>/plots/<focal>_<side>.png -- raw + binned data points (colored per f-stop) and
                                            each f-stop's fitted curve
 
 d_focus_stderr is the fit's parameter standard error for D_focus (from the covariance
 matrix); rmse is the overall residual error of the fitted curve against the binned points --
-both are useful, differently-scoped "fitting error" numbers.
+both are useful, differently-scoped "fitting error" numbers. d_focus_argmax is a simple,
+fit-free sanity check: the depth of maximum blur within the widest-aperture f-stop's own
+binned points (see process_setting()'s comment). Large disagreement between d_focus and
+d_focus_argmax flags an unreliable fit (e.g. extrapolation past the observed depth range).
 
 Requires: numpy, scipy, Pillow, tifffile, matplotlib.
 """
@@ -197,7 +200,8 @@ def fit_dfocus(depths: np.ndarray, blur: np.ndarray, fstops: np.ndarray) -> dict
     }
 
 
-def plot_fit(raw_d, raw_b, binned_d, binned_b, binned_n, fit: dict, out_path: Path, title: str):
+def plot_fit(raw_d, raw_b, binned_d, binned_b, binned_n, fit: dict, d_focus_argmax: float,
+             out_path: Path, title: str):
     d_dense = np.linspace(raw_d.min(), raw_d.max(), 400)
     unique_n = sorted(set(binned_n.tolist()))
     colors = plt.cm.viridis(np.linspace(0, 1, max(len(unique_n), 2)))
@@ -207,7 +211,7 @@ def plot_fit(raw_d, raw_b, binned_d, binned_b, binned_n, fit: dict, out_path: Pa
 
     for n_val, color in zip(unique_n, colors):
         mask = binned_n == n_val
-        ax.scatter(binned_d[mask], binned_b[mask], s=25, color=color, zorder=3,
+        ax.scatter(binned_d[mask], binned_b[mask], s=10, color=color, zorder=3,
                    label=f"F{n_val:g} (binned)")
         X_dense = np.vstack([d_dense / fit["d_scale"],
                               np.full_like(d_dense, n_val / fit["n_scale"])])
@@ -215,7 +219,9 @@ def plot_fit(raw_d, raw_b, binned_d, binned_b, binned_n, fit: dict, out_path: Pa
         ax.plot(d_dense, pred, color=color, linewidth=1.5)
 
     ax.axvline(fit["d_focus"], color="black", linestyle="--", linewidth=1,
-               label=f"D_focus = {fit['d_focus']:.2f}")
+               label=f"D_focus (fit) = {fit['d_focus']:.2f}")
+    ax.axvline(d_focus_argmax, color="firebrick", linestyle=":", linewidth=1,
+               label=f"D_focus (argmax) = {d_focus_argmax:.2f}")
     ax.set_xlabel("depth")
     ax.set_ylabel("Laplacian variance (blur metric)")
     ax.set_title(title)
@@ -282,6 +288,7 @@ def process_setting(focal, side, fstop_dirs, out_dir: Path, patch_size,
     n_images = n_raw_samples = 0
     raw_d_all, raw_b_all = [], []
     binned_d_all, binned_b_all, binned_n_all = [], [], []
+    fstop_ns = []  # one n_number per included f-stop, parallel to binned_d_all/binned_b_all
 
     for fstop_name, color_dir, depth_dir in fstop_dirs:
         n_number = parse_fstop(fstop_name)
@@ -315,6 +322,7 @@ def process_setting(focal, side, fstop_dirs, out_dir: Path, patch_size,
         binned_d_all.append(bd)
         binned_b_all.append(bb)
         binned_n_all.append(np.full(len(bd), n_number))
+        fstop_ns.append(n_number)
 
     base["n_images"] = n_images
 
@@ -332,10 +340,22 @@ def process_setting(focal, side, fstop_dirs, out_dir: Path, patch_size,
     except Exception as e:
         return {**base, "status": f"fit_failed: {e}", "n_samples": n_raw_samples}
 
-    plot_fit(raw_d, raw_b, binned_d, binned_b, binned_n, fit,
+    # Simple sanity-check estimate: the depth of maximum blur within the widest-aperture
+    # (smallest f-number) f-stop's own binned points. The widest aperture gives the
+    # strongest, most peaked blur-vs-depth signal, so its own argmax is the most reliable
+    # simple check; mixing f-stops here would bias toward whichever has the largest raw
+    # blur scale rather than reflecting the true depth of sharpest focus. Large disagreement
+    # between this and the curve fit's D_focus is a red flag for the fit (e.g. extrapolation
+    # past the observed depth range, or a spurious local optimum).
+    widest_idx = int(np.argmin(fstop_ns))
+    bd_widest, bb_widest = binned_d_all[widest_idx], binned_b_all[widest_idx]
+    d_focus_argmax = float(bd_widest[np.argmax(bb_widest)])
+
+    plot_fit(raw_d, raw_b, binned_d, binned_b, binned_n, fit, d_focus_argmax,
              out_dir / "plots" / f"{setting_name}.png", setting_name)
     return {**base, "status": "ok", "n_samples": n_raw_samples, "n_bins": len(binned_d),
             "d_focus": fit["d_focus"], "d_focus_stderr": fit["d_focus_stderr"],
+            "d_focus_argmax": d_focus_argmax,
             "k": fit["k"], "p": fit["p"], "rmse": fit["rmse"]}
 
 
@@ -359,7 +379,7 @@ def main():
     print(f"Found {len(settings)} camera settings under {scene_dir}")
 
     fieldnames = ["focal", "side", "status", "n_fstops", "n_images", "n_samples", "n_bins",
-                  "d_focus", "d_focus_stderr", "k", "p", "rmse"]
+                  "d_focus", "d_focus_stderr", "d_focus_argmax", "k", "p", "rmse"]
     results_path = out_dir / "dfocus_results.txt"
     with open(results_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
