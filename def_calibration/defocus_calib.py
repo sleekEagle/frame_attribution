@@ -182,6 +182,7 @@ def esf_width_10_90(s: np.ndarray, esf: np.ndarray, plateau_frac: float = 0.1):
     n = len(esf)
     k = max(3, int(n * plateau_frac))
     lo, hi = float(esf[:k].mean()), float(esf[-k:].mean())
+
     if hi == lo:
         return None
 
@@ -232,7 +233,7 @@ def main():
     module docstring), so calib_root and camera_dir are inferred from image_dir's own parent
     directories."""
     default_dir = (r"C:\Users\lahir\MODEST\Global_calibration_set\MODEST_ChArUco"
-                    r"\Global_calibration_set\ChArUco_pattern\EOS_6D_A\fl_70mm")
+                    r"\Global_calibration_set\ChArUco_pattern\EOS_6D_A\fl_32mm")
     parser = argparse.ArgumentParser(description=main.__doc__)
     parser.add_argument("image_dir", type=Path, nargs="?", default=Path(default_dir),
                          help="directory of calibration images to process (e.g. an fl_XXmm folder)")
@@ -275,6 +276,25 @@ def main():
     fig.savefig(width_plot_path, dpi=150)
     plt.close(fig)
     print(f"wrote {width_plot_path}")
+
+    # horizontal- vs vertical-scan bias check: depth and width distributions side by side
+    horiz = [r for r in results if r["scan"] == "horizontal"]
+    vert = [r for r in results if r["scan"] == "vertical"]
+    fig, (ax_d, ax_w) = plt.subplots(1, 2, figsize=(10, 5))
+    ax_d.violinplot([[r["depth"] for r in horiz], [r["depth"] for r in vert]], showmeans=True)
+    ax_d.set_xticks([1, 2], labels=["horizontal", "vertical"])
+    ax_d.set_ylabel("depth (m)")
+    ax_d.set_title("depth by scan direction")
+    ax_w.violinplot([[r["width"] for r in horiz], [r["width"] for r in vert]], showmeans=True)
+    ax_w.set_xticks([1, 2], labels=["horizontal", "vertical"])
+    ax_w.set_ylabel("10-90 width (px)")
+    ax_w.set_title("width by scan direction")
+    fig.suptitle(f"horizontal vs vertical scan bias: {focal_name}")
+    fig.tight_layout()
+    bias_plot_path = out_dir / f"{focal_name}_scan_bias.png"
+    fig.savefig(bias_plot_path, dpi=150)
+    plt.close(fig)
+    print(f"wrote {bias_plot_path}")
 
     # points-on-image + ESF-curve diagnostic plots, for one representative image
     image_path = sorted(image_dir.glob("*.JPG"))[0]
