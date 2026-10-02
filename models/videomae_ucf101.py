@@ -17,6 +17,7 @@ run through the checkpoint's own VideoMAEImageProcessor.
 """
 import torch
 import torchvision.transforms.functional as tvF
+from huggingface_hub import hf_hub_download
 from transformers import VideoMAEForVideoClassification, VideoMAEImageProcessor
 
 from models.video_utils import sample_frames
@@ -24,10 +25,27 @@ from models.video_utils import sample_frames
 CHECKPOINT = "nateraw/videomae-base-finetuned-ucf101"
 
 
+def _restore_qv_bias(model):
+    """The checkpoint stores attention biases as `q_bias`/`v_bias`; some transformers versions
+    (e.g. 5.8.0.dev0) no longer map them onto query.bias/value.bias and leave those as zeros.
+    Copy them over when that happened (key has no bias in VideoMAE, so zeros there are right)."""
+    attn0 = model.videomae.encoder.layer[0].attention.attention
+    if attn0.query.bias is None or attn0.query.bias.abs().sum() != 0:
+        return  # loaded correctly (or old-style q_bias params exist on the module)
+    sd = torch.load(hf_hub_download(CHECKPOINT, "pytorch_model.bin"), map_location="cpu")
+    with torch.no_grad():
+        for i, layer in enumerate(model.videomae.encoder.layer):
+            attn = layer.attention.attention
+            prefix = f"videomae.encoder.layer.{i}.attention.attention."
+            attn.query.bias.copy_(sd[prefix + "q_bias"])
+            attn.value.bias.copy_(sd[prefix + "v_bias"])
+
+
 class VideoMAEUCF101:
     def __init__(self):
         self.processor = VideoMAEImageProcessor.from_pretrained(CHECKPOINT)
         self.model = VideoMAEForVideoClassification.from_pretrained(CHECKPOINT)
+        _restore_qv_bias(self.model)
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model.to(self.device)
         self.FRAME_COUNT = self.model.config.num_frames
