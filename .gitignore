@@ -3,3 +3,6 @@
 __pycache__/
 .vscode/*
 results/*
+!results/e1/
+results/e1/*
+!results/e1/R3D_E1_summary.md
