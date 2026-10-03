@@ -87,7 +87,9 @@ TEMPORAL_CKPT = HERE / "play-fair" / "checkpoints" / "features" / "trn_8_frames.
 
 
 def _load_state_dict(module: nn.Module, path: Path) -> None:
-    ckpt = torch.load(str(path), map_location="cpu")
+    # weights_only=False: these are the published Play Fair checkpoints, which store non-tensor
+    # objects that PyTorch >= 2.6 refuses to unpickle by default
+    ckpt = torch.load(str(path), map_location="cpu", weights_only=False)
     state_dict = ckpt["state_dict"] if "state_dict" in ckpt else ckpt.get("model", ckpt)
     module.load_state_dict(state_dict)
 

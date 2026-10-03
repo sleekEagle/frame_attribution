@@ -143,7 +143,9 @@ class TRNOfficial(nn.Module):
         new_fc = nn.Linear(1024, self.IMG_FEATURE_DIM)
         consensus = RelationModuleMultiScale(self.IMG_FEATURE_DIM, self.FRAME_COUNT, class_count)
 
-        ckpt = torch.load(str(backbone_checkpoint), map_location="cpu")
+        # weights_only=False: published TRN-pytorch checkpoint (non-tensor objects; PyTorch >= 2.6
+        # refuses to unpickle those by default)
+        ckpt = torch.load(str(backbone_checkpoint), map_location="cpu", weights_only=False)
         state_dict = ckpt["state_dict"] if "state_dict" in ckpt else ckpt
         # original keys look like "module.base_model.conv1_7x7_s2.weight" / "module.new_fc.weight" /
         # "module.consensus.fc_fusion_scales.0.1.weight" -- strip the leading "module." (DataParallel).

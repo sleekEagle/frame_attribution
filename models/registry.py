@@ -12,19 +12,20 @@ frames for r3d (see models/r3d_ucf101.py) -- matches how each model's data was p
 
 Construction is lazy and expensive (weights are loaded from disk/HF), so instances are cached
 by name; pass cache=False or any extra kwarg to force a fresh instance.
-"""
-from models.ssv2 import VJEPA2
-from models.trn import TRN
-from models.trn_official import TRNOfficial
-from models.r3d_ucf101 import R3DUCF101
-from models.videomae_ucf101 import VideoMAEUCF101
 
+Wrapper modules are also imported lazily, only when their model is requested: the TRN wrappers
+load play-fair/src at import time and r3d pulls in func.py's dependencies, so importing them
+all up front would make e.g. vjepa2 unusable on a machine without play-fair/ (such as Colab).
+"""
+import importlib
+
+# name -> (module, class)
 _REGISTRY = {
-    "vjepa2": VJEPA2,
-    "trn": TRN,
-    "trn_official": TRNOfficial,
-    "r3d": R3DUCF101,
-    "videomae": VideoMAEUCF101,
+    "vjepa2": ("models.ssv2", "VJEPA2"),
+    "trn": ("models.trn", "TRN"),
+    "trn_official": ("models.trn_official", "TRNOfficial"),
+    "r3d": ("models.r3d_ucf101", "R3DUCF101"),
+    "videomae": ("models.videomae_ucf101", "VideoMAEUCF101"),
 }
 
 # the dataset each model is evaluated on -- lets get_dataloader() be inferred from the model
@@ -46,7 +47,8 @@ def get_model(name: str, cache: bool = True, **kwargs):
         raise ValueError(f"Unknown model {name!r}. Available: {sorted(_REGISTRY)}")
     if cache and not kwargs and key in _cache:
         return _cache[key]
-    model = _REGISTRY[key](**kwargs)
+    module_name, class_name = _REGISTRY[key]
+    model = getattr(importlib.import_module(module_name), class_name)(**kwargs)
     if hasattr(model, "eval"):
         model.eval()
     if cache and not kwargs:

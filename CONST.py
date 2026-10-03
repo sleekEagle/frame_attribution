@@ -1,3 +1,5 @@
+import os
+
 import torch
 
 UCF_AVG_PRED = torch.tensor([-4.4024e-01, -4.0674e-02,  7.1152e-01, -3.1609e-01,  3.2655e-01,
@@ -45,10 +47,13 @@ SSV2_AVG_PRED = torch.tensor([[-1.0778,  0.6990,  0.0568, -1.1150, -0.6463,  0.0
          -0.6229, -1.2692,  0.4388, -0.3283, -1.1532,  0.1642]])
 UCF_INP_SHAPE = (3, 16, 112, 112)
 SSV2_INP_SHAPE = (3, 16, 256, 256)
-SSV2_PATH = r'D:\datasets\SSV2\s2s_test'
+# dataset roots; each can be overridden with an environment variable of the same name
+# (e.g. on Colab: os.environ["SSV2_PATH"] = "/content/ssv2" before importing anything)
+# SSv2 videos, one dir per class name, one .webm per clip
+SSV2_PATH = os.environ.get("SSV2_PATH", r'D:\datasets\SSV2\s2s_test')
 # raw UCF101 videos, one dir per class, one .avi per clip
-UCF101_PATH = r'D:\datasets\UCF-101'
+UCF101_PATH = os.environ.get("UCF101_PATH", r'D:\datasets\UCF-101')
 # official train/test split lists (trainlist0N.txt/testlist0N.txt/classInd.txt); R3D's
 # checkpoint (models/r3d/ucf101.json's annotation_path: ucf101_01.json) was fine-tuned and
 # evaluated on split 1
-UCF101_SPLITS_PATH = r'D:\datasets\UCF101-splits'
+UCF101_SPLITS_PATH = os.environ.get("UCF101_SPLITS_PATH", r'D:\datasets\UCF101-splits')
