@@ -74,21 +74,26 @@ def videomae_pos_embed(model, n_frames: int):
 
 
 def predict(model_name: str, model, frames: torch.Tensor) -> int:
+    return logits(model_name, model, frames).argmax(-1).item()
+
+
+def logits(model_name: str, model, frames: torch.Tensor) -> torch.Tensor:
+    """(1, num_classes) logits for a (N, C, H, W) uint8 frame tensor."""
     with torch.no_grad():
         if model_name == "r3d":
-            logits = model.model(model.preprocess(frames).to(model.device))
+            out = model.model(model.preprocess(frames).to(model.device))
         elif model_name == "videomae":
             tubelet = model.model.config.tubelet_size
             if frames.shape[0] % tubelet:  # only hit for N=1 with the default frame list
                 frames = frames.repeat_interleave(tubelet, dim=0)
             with videomae_pos_embed(model, frames.shape[0]):
-                logits = model.model(model.preprocess(frames).to(model.device)).logits
+                out = model.model(model.preprocess(frames).to(model.device)).logits
         elif model_name == "vjepa2":
             inputs = model.processor(frames, return_tensors="pt").to(model.device)
-            logits = model.model(**inputs).logits
+            out = model.model(**inputs).logits
         else:
             raise ValueError(model_name)
-    return logits.argmax(-1).item()
+    return out
 
 
 def support_note(model_name: str, model, n: int) -> str:
