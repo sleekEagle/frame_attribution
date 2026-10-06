@@ -814,14 +814,15 @@ def attr_gradcam(model: ClipModel, bank: FrameBank, layout, cls):
 
 
 def attr_playfair(model: ClipModel, bank: FrameBank, layout, cls, prior, approximate: bool,
-                  max_samples: int = 1024, seed: int = 0, batch_size: int = 16):
+                  max_samples: int = 1024, seed: int = 0, batch_size: int = 16, fp16: bool = False):
     """Play Fair ESVs with the OFFICIAL attributor (run_playfair.py / play-fair/src): frames are
-    DROPPED (variable-length path), f = softmax, f(empty) = prior."""
+    DROPPED (variable-length path), f = softmax, f(empty) = prior. fp16 runs the model evaluations
+    under torch.autocast, as the Evaluator does for the other perturbation methods."""
     import run_playfair as rp
     set_all_seeds(seed)
     frames_pp = bank.clip(layout)
     priors = torch.from_numpy(prior.astype(np.float32)).to(model.device)[None]
-    char_fn = rp.CharacteristicFn(model, frames_pp, priors, batch_size, fp16=False)
+    char_fn = rp.CharacteristicFn(model, frames_pp, priors, batch_size, fp16=fp16)
     dev = torch.device(model.device)
     sampler = (rp.ConstructiveRandomSamplerPy311(max_samples=max_samples, device=dev) if approximate
                else rp.ExhaustiveSubsetSampler(device=dev))
@@ -864,8 +865,9 @@ def run_method(method: str, model: ClipModel, bank: FrameBank, ev: Evaluator, la
         return attr_gradcam(model, bank, layout, cls), 1
     elif method == "playfair":
         n = len(layout["content"])
+        # same precision and batch size as the Evaluator (--fp16, --batch-size)
         s, n_ev = attr_playfair(model, bank, layout, cls, prior, approximate=n > exact_max,
-                                max_samples=pf_max_samples, seed=seed)
+                                max_samples=pf_max_samples, seed=seed, batch_size=ev.bs, fp16=ev.fp16)
         return s, n_ev
     else:
         raise ValueError(method)
