@@ -98,15 +98,58 @@ Exact copies.
 
 ## Drop-based methods and Play Fair
 
-Here removed frames are **dropped**, so clips get shorter. R3D accepts any length, but its accuracy is normal only at **9–16 frames**. A frame sweep on 500 test videos shows a second structural cliff: 36.4% at 8 frames vs 64.8% at 9, and only 15.6% at 1 frame. At ≤ 8 frames, layer3 already reduces time to a single position. Shapley-type methods weight every subset size equally, so about half their weight falls on subsets in that degraded regime.
+Here removed frames are **deleted**, so the model is evaluated on inputs of 1–16 frames. Two measurements on the same 500 test videos show how R3D's output depends on input length.
+
+**Accuracy against input length (`eval_frame_count.py`).** The video is resampled to k frames, so content and length change together. Accuracy is normal only at **9–16 frames**: 36.4% at 8 frames against 64.8% at 9, and 15.6% at 1 frame. At ≤ 8 frames, layer3 already reduces time to a single position.
+
+**Accuracy at fixed content (`eval_length_fixed_content.py`).** For each k, the same k distinct frames are evaluated in two ways:
+- as a k-frame input (*native*);
+- each repeated in consecutive slots to form a 16-frame input (*repeated*).
+
+| k distinct frames | 1 | 2 | 4 | 6 | 8 | 9 | 10 | 12 | 14 | 16 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| accuracy, k-frame input (%) | 15.6 | 17.4 | 25.6 | 35.0 | 36.4 | 64.8 | 66.8 | 71.8 | 74.4 | 79.4 |
+| accuracy, same frames repeated to 16 (%) | 63.8 | 72.8 | 78.4 | 77.6 | 77.6 | 79.0 | 79.8 | 79.8 | 79.2 | 79.4 |
+| same prediction, native vs repeated (%) | 17.6 | 20.0 | 29.0 | 37.0 | 39.4 | 73.6 | 75.4 | 80.8 | 87.6 | 100 |
+
+What the two measurements show:
+- **The accuracy lost with fewer input frames is almost entirely an effect of input length, not of information content.** With the content fixed, the 16-frame presentation is 41–52 pp more accurate than the k-frame presentation for k ≤ 8, and 2–14 pp more accurate for k = 9–15.
+- **The step between 8 and 9 frames is caused by the architecture.** It is present in the k-frame inputs (+28.4 pp) and absent in the repeated inputs (77.6% → 79.0%).
+- **R3D's classifications depend mainly on the appearance of individual frames.** A single frame repeated 16 times is classified correctly in 63.8% of videos, and from k = 3 distinct frames on, accuracy is within 3 pp of the 16-frame value.
+
+**Consequence.** Shapley-type methods weight every subset size equally, so about half the weight of Shapley-drop and Play Fair falls on subsets of ≤ 8 frames. R3D classifies those inputs 41–52 pp worse than the same frames presented at full length. The marginal contribution of a copy under deletion therefore contains a large component that depends on input length and not on the copy's content. The freeze-based methods evaluate 16-frame inputs of the *repeated* type, in which this component is absent.
 
 **Settings:**
 - **Shapley-drop:** 64 orderings × 2 seeds, 120 videos.
 - **LOO-drop:** 120 videos.
 - **Play Fair:** the official attributor via `run_playfair.py`, constructive sampler with **256** samples per size, **seed 0 only**, first **20** videos (27 targets).
 
-**Play Fair and Shapley-drop agree.** Both compute Shapley values of the same game: frames dropped, softmax confidence, uniform prior for the empty set.
-- **Per-slot score correlation:** median **0.79** over 328 shared conditions. That's higher than Shapley-drop's correlation with itself across seeds (0.65), so the differences are sampling noise.
+**Play Fair and Shapley-drop agree within sampling noise.** Both compute Shapley values of the same value function: frames removed by deletion, softmax probability of the predicted class, uniform class prior for the empty set. They differ only in the Monte Carlo sampler (random orderings vs a fixed number of subsets per size), and are therefore unbiased estimators of the same Element Shapley Values. To test whether their estimates differ by more than sampling error, Play Fair (seed 0) is compared with Shapley-drop seed 0 **on identical conditions and targets**. Shapley-drop seed 1 vs seed 0 serves as the noise reference: those two differ only by sampling. Computed with `motivation/e1_compare_estimators.py`.
+
+*Per-slot agreement* (164 shared conditions per copy type; near-duplicates agree within 0.002):
+
+| | Play Fair vs Shapley-drop seed 0 | Shapley-drop seed 1 vs seed 0 (noise reference) |
+|---|---|---|
+| median correlation of slot attributions | **0.790** | 0.648 |
+| median relative RMS difference ‖a − b‖ / ‖b‖ | **0.252** | 0.372 |
+| conditions where Play Fair is closer to seed 0 than seed 1 is | **91%** | – |
+
+*E1 metrics, paired on the same 27 targets* (target condition, exact copies; near-duplicates agree within 0.01):
+
+| quantity | median paired difference, Play Fair − seed 0 [95% CI] | median paired difference, seed 1 − seed 0 [95% CI] | median absolute paired difference: Play Fair vs seed 0 / seed 1 vs seed 0 |
+|---|---|---|---|
+| per-copy ratio, m = 4 | −0.015 [−0.113, +0.006] | −0.040 [−0.066, +0.052] | 0.050 / 0.084 |
+| per-copy ratio, m = 6 | −0.045 [−0.095, +0.045] | −0.038 [−0.116, +0.032] | 0.095 / 0.117 |
+| per-copy ratio, m = 8 | −0.046 [−0.130, +0.019] | −0.054 [−0.165, +0.074] | 0.066 / 0.140 |
+| total ratio, m = 4 | −0.030 [−0.226, +0.013] | −0.080 [−0.131, +0.104] | 0.099 / 0.168 |
+| total ratio, m = 6 | −0.134 [−0.285, +0.136] | −0.113 [−0.349, +0.096] | 0.285 / 0.351 |
+| total ratio, m = 8 | −0.184 [−0.518, +0.075] | −0.215 [−0.661, +0.296] | 0.263 / 0.562 |
+| β | −0.059 [−0.116, +0.028] | −0.067 [−0.126, +0.046] | 0.082 / 0.113 |
+
+What the comparison shows:
+- **No systematic difference.** Every 95% confidence interval for the paired difference Play Fair − Shapley-drop contains 0, and each median paired difference is about the same as the difference between Shapley-drop's two seeds.
+- **Play Fair is closer to Shapley-drop than Shapley-drop is to itself.** This holds per slot (in 91% of conditions) and per target, for every metric. That's expected: Play Fair's run used more model evaluations per condition (256 subsets per size, about 2,650 evaluations) than one Shapley-drop seed (64 orderings, about 1,000), so its estimates have less sampling error.
+- **The unpaired medians mislead.** On these 27 targets, the median β is −0.206 for Play Fair, −0.008 for Shapley-drop seed 0 and −0.044 for seed 1. With few targets whose values are widely spread, the sample median moves considerably under small per-target differences, so the gap between medians (≈ 0.2) is much larger than the typical per-target difference (median paired difference −0.059). The same applies to the per-copy ratio at m = 8 (medians 0.769 vs 0.954; median paired difference −0.046). Estimators should therefore be compared with paired differences, not with differences between medians.
 
 | method | target β, exact [95% CI] | control β | per-copy, m = 4 / 6 / 8 | total across copies, m = 4 / 6 / 8 |
 |---|---|---|---|---|
@@ -116,7 +159,7 @@ Here removed frames are **dropped**, so clips get shorter. R3D accepts any lengt
 | LOO-freeze (for comparison) | −1.38 [−1.91, −1.07] | −0.11 | 0.05 / −0.02 / −0.05 | 0.10 / −0.05 / −0.19 |
 | **LOO-drop** | **−0.27** [−0.72, −0.15] | +0.17 | 0.33 / 0.16 / 0.01 | 0.65 / 0.49 / 0.02 |
 
-Noisy copies give the same β to within 0.07. The model's reliance on the target (I_t ratio) is 0.95 / 1.18 / 1.28.
+Noisy copies give the same β to within 0.07. The model's reliance on the target (I_t ratio) is 0.95 / 1.18 / 1.28. The Play Fair row covers the first 20 videos only, while the Shapley-drop row covers all 120, so the two rows' medians aren't computed on the same targets; the paired comparison above is the like-for-like comparison.
 
 **Reading:**
 - **Shapley-drop and Play Fair barely dilute each copy** (0.77–0.96), so **the duplicated content's total credit grows about in proportion to m**: about 3× at m = 8, against the model's 1.28×. The control stays at about 1.0–1.2. With frames dropped, both treat copies as nearly independent contributors and **over-credit duplicated content**.
@@ -151,7 +194,7 @@ With near-duplicates (Gaussian noise, σ = 2/255), the dilution slopes agree wit
 
 **5. Drop-based methods, including Play Fair, can't be evaluated reliably on R3D.**
 
-Play Fair and Shapley-drop compute Shapley values of the same value function, and their attributions agree (median per-slot correlation 0.79). Under deletion, however, R3D's output depends strongly on input length (accuracy 36.4% at 8 frames and 64.8% at 9). The resulting attributions therefore combine the effect of the frames' content with the effect of input length. Their behaviour under duplication (per-copy ratio 0.77–0.96, total ratio about 3 at m = 8) can't be attributed to Play Fair alone, and should be evaluated on a model whose output doesn't depend on input length.
+Play Fair and Shapley-drop compute Shapley values of the same value function, and their estimates agree within sampling noise: on identical targets, the paired differences between them are no larger than those between two seeds of Shapley-drop, with no systematic shift (median paired difference in β −0.059 [−0.116, +0.028], against −0.067 between seeds). Under deletion, however, R3D's output depends strongly on input length when the content is held fixed: the same k ≤ 8 frames are classified correctly in 25–36% of videos as a k-frame input, and in 73–80% as a 16-frame input with repeated frames. The resulting attributions therefore combine the effect of the frames' content with the effect of input length. Their behaviour under duplication (per-copy ratio 0.77–0.96, total ratio about 3 at m = 8) can't be attributed to Play Fair alone, and should be evaluated on a model whose output doesn't depend on input length.
 
 ## Limitations
 
@@ -184,6 +227,8 @@ Play Fair and Shapley-drop compute Shapley values of the same value function, an
 | `r3d_attributions.jsonl` | per-slot scores for every attributed condition, method and seed |
 | `r3d_rows.csv`, `r3d_slopes.csv`, `r3d_summary.csv`, `r3d_beta.csv` | metrics: per row, per-target slopes, per method × m, and β with CIs |
 | `r3d_build.log`, `r3d_attribute.log` | run logs |
+| `../frame_count_r3d_*.csv`, `../frame_count_r3d_short_*.csv` | accuracy against input length (uniform resampling), k = 1–24 |
+| `../length_fixed_content_r3d_*.csv` | accuracy at fixed content: k-frame vs repeated-to-16 inputs, k = 1–16 |
 | `r3d_insert_pilot/`, `r3d_realloc_pilot/`, `r3d_realloc500_m48/` | superseded earlier runs |
 
 Reproduce:
@@ -195,6 +240,12 @@ python motivation/e1_attribute.py --model r3d --limit 120 --methods shapley_drop
 python motivation/e1_attribute.py --model r3d --limit 20 --methods playfair --seeds 0 --pf-max-samples 256
 python motivation/e1_metrics.py attr --model r3d
 
+# Play Fair vs Shapley-drop, paired on identical conditions (seed 1 of Shapley-drop as noise reference)
+python motivation/e1_compare_estimators.py --model r3d
+
 # R3D accuracy at 1-11 frames (the 8/9-frame cliff)
 python eval_frame_count.py --models r3d --frames 1 2 3 4 5 6 7 8 9 10 11 --limit 500 --datasets r3d=ucf101_test --out results/frame_count_r3d_short
+
+# R3D accuracy at fixed content: k frames as a k-frame input vs repeated to 16 frames
+python eval_length_fixed_content.py --models r3d --datasets r3d=ucf101_test --ks 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 --limit 500 --out results/length_fixed_content_r3d
 ```

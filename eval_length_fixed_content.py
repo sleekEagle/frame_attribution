@@ -38,7 +38,7 @@ from eval_frame_count import frame_indices, logits
 from models.registry import MODEL_DATASET, get_model
 
 DEFAULT_KS = [1, 2, 4, 6, 8, 10, 12, 14, 16]
-MODELS = ["r3d", "vjepa2", "videomae"]
+MODELS = ["r3d", "vjepa2", "videomae", "mc3_18", "r3d_18"]
 FIELDS = ["model", "dataset", "path", "gt", "k", "variant", "pred", "p_gt"]
 
 

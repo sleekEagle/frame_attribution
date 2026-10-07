@@ -39,16 +39,16 @@ from models.registry import MODEL_DATASET, get_model
 from models.video_utils import sample_segment_centers
 
 DEFAULT_FRAMES = [16, 14, 12, 10, 8, 6, 4, 2, 1]
-MODELS = ["r3d", "vjepa2", "videomae"]
+MODELS = ["r3d", "vjepa2", "videomae", "mc3_18", "r3d_18"]
 
 
 # ---------------------------------------------------------------------------------------------
 # frame sampling -- each model's own protocol, generalised to N frames
 # ---------------------------------------------------------------------------------------------
 def frame_indices(model_name: str, n_total: int, n: int) -> list:
-    if model_name == "vjepa2":
-        # models/ssv2.py's VJEPA2.sample_frames uses linspace(0, L-1, 16); for N=1 that would
-        # always pick frame 0, so take the centre frame instead
+    if model_name in ("vjepa2", "mc3_18", "r3d_18"):
+        # models/ssv2.py's VJEPA2.sample_frames and the mc3_18 / r3d_18 publisher's predictor use
+        # linspace(0, L-1, 16); for N=1 that would always pick frame 0, so take the centre frame
         if n == 1:
             return [n_total // 2]
         return np.linspace(0, n_total - 1, n, dtype=int).tolist()
@@ -80,7 +80,7 @@ def predict(model_name: str, model, frames: torch.Tensor) -> int:
 def logits(model_name: str, model, frames: torch.Tensor) -> torch.Tensor:
     """(1, num_classes) logits for a (N, C, H, W) uint8 frame tensor."""
     with torch.no_grad():
-        if model_name == "r3d":
+        if model_name in ("r3d", "mc3_18", "r3d_18"):  # (1, 3, T, H, W) input, logits output
             out = model.model(model.preprocess(frames).to(model.device))
         elif model_name == "videomae":
             tubelet = model.model.config.tubelet_size

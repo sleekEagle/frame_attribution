@@ -82,6 +82,15 @@ MODEL_SPECS: Dict[str, dict] = {
                          removal="late", dataset="ssv2_sampled", gradcam_layer=None),
     "trn_official": dict(design="realloc", slots=8,  tubelet=1, ms=[2, 4],
                          removal="late", dataset="ssv2_sampled", gradcam_layer=None),
+    # torchvision UCF101 checkpoints (models/torchvision_ucf101.py). MC3-18 keeps the temporal
+    # resolution after its first stage: accuracy is flat from 3 to 24 frames and input length has
+    # no effect at fixed content, so insertion + deletion are valid (results/frame_count_tv_*,
+    # length_fixed_content_tv_*). R3D-18 halves time at stages 2-4 and shows steps at 4/5, 8/9 and
+    # 16/17 frames, and up to +30 pp for the same frames at length 16 -> realloc + freeze, as r3d.
+    "mc3_18":       dict(design="insert",  slots=16, tubelet=1, ms=[1, 3, 5, 9],
+                         removal="drop", dataset="ucf101_test", gradcam_layer="layer3"),
+    "r3d_18":       dict(design="realloc", slots=16, tubelet=1, ms=[2, 4, 6, 8],
+                         removal="late", dataset="ucf101_test", gradcam_layer="layer2"),
     # synthetic, for smoke tests (max-pool over time -> exact copies are perfect substitutes)
     "toy":          dict(design="insert",  slots=16, tubelet=1, ms=[1, 2, 4, 8],
                          removal="drop", dataset="toy", gradcam_layer=None),
@@ -196,6 +205,47 @@ class R3DClip(ClipModel):
         h = n.relu(n.bn1(n.conv1(h)))
         if not n.no_max_pool:
             h = n.maxpool(h)
+        feats = None
+        for lname in ["layer1", "layer2", "layer3", "layer4"]:
+            h = getattr(n, lname)(h)
+            if lname == layer:
+                feats = h
+        logits = n.fc(torch.flatten(n.avgpool(h), 1))
+        s = x.shape[1]
+
+        def to_slots(cam):  # cam: (B,T',H',W') -> (B,S)
+            per_t = cam.sum(dim=(2, 3))  # (B,T')
+            return F.interpolate(per_t[:, None], size=s, mode="linear", align_corners=False)[:, 0]
+        return logits, feats, "channels_first", to_slots
+
+
+class TorchvisionVideoClip(ClipModel):
+    """torchvision VideoResNet checkpoints fine-tuned on UCF101 (models/torchvision_ucf101.py):
+    mc3_18 and r3d_18. Frames are sampled as the publisher's predictor does (linspace)."""
+
+    def __init__(self, name):
+        super().__init__(name)
+        from models.registry import get_model
+        self.m = get_model(name)
+        self.net = self.m.model.to(self.device).eval()
+        self.label2id = self.m.label2id
+        self.num_classes = len(self.label2id)
+
+    def frame_indices(self, n_total):
+        return self.m.frame_indices(n_total, self.spec["slots"])
+
+    def preprocess(self, frames_u8):
+        return self.m.preprocess(frames_u8)[0].permute(1, 0, 2, 3).contiguous()  # (T,3,H,W)
+
+    def forward_clips(self, x, grad=False):
+        with torch.set_grad_enabled(grad):
+            return self.net(x.to(self.device).permute(0, 2, 1, 3, 4))
+
+    def forward_with_features(self, x):
+        """torchvision VideoResNet forward, exposing the chosen layer's activation (B,C,T',H',W')."""
+        n = self.net
+        layer = self.spec["gradcam_layer"]
+        h = n.stem(x.to(self.device).permute(0, 2, 1, 3, 4))
         feats = None
         for lname in ["layer1", "layer2", "layer3", "layer4"]:
             h = getattr(n, lname)(h)
@@ -410,7 +460,7 @@ class ToyClip(ClipModel):
 
 ADAPTERS = {"r3d": R3DClip, "vjepa2": VJEPA2Clip, "videomae": VideoMAEClip, "trn": TRNClip,
             "trn_official": TRNOfficialClip, "toy": ToyClip, "toy_realloc": ToyClip,
-            "toy_replace": ToyClip}
+            "toy_replace": ToyClip, "mc3_18": TorchvisionVideoClip, "r3d_18": TorchvisionVideoClip}
 
 
 def load_clip_model(name: str) -> ClipModel:

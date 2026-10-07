@@ -26,6 +26,8 @@ _REGISTRY = {
     "trn_official": ("models.trn_official", "TRNOfficial"),
     "r3d": ("models.r3d_ucf101", "R3DUCF101"),
     "videomae": ("models.videomae_ucf101", "VideoMAEUCF101"),
+    "mc3_18": ("models.torchvision_ucf101", "MC3_18UCF101"),
+    "r3d_18": ("models.torchvision_ucf101", "R3D18UCF101"),
 }
 
 # the dataset each model is evaluated on -- lets get_dataloader() be inferred from the model
@@ -36,6 +38,8 @@ MODEL_DATASET = {
     "trn_official": "ssv2",
     "r3d": "ucf101",
     "videomae": "ucf101",
+    "mc3_18": "ucf101",
+    "r3d_18": "ucf101",
 }
 
 _cache = {}
