@@ -3,6 +3,8 @@
 __pycache__/
 .vscode/*
 results/*
+!results/design_choice_report.md
+!results/figures/
 !results/e1/
 results/e1/*
 !results/e1/R3D_E1_summary.md
