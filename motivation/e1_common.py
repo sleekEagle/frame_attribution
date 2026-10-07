@@ -72,7 +72,8 @@ MODEL_SPECS: Dict[str, dict] = {
     "r3d":          dict(design="realloc", slots=16, tubelet=1, ms=[2, 4, 8],
                          removal="late", dataset="ucf101_test", gradcam_layer="layer2"),
     "vjepa2":       dict(design="insert",  slots=16, tubelet=2, ms=[1, 3, 5, 9],
-                         removal="drop", dataset="ssv2_sampled", gradcam_layer=-1),
+                         removal="drop", dataset="ssv2_sampled", gradcam_layer=-1,
+                         sampling="linspace"),
     # replace, not realloc: in the x2 reference every tubelet holds two identical frames, which
     # changes VideoMAE's prediction in 63% of videos (results/e1/videomae_diag); inputs shorter
     # than 16 frames carry no accuracy penalty at fixed content, so removal is by deletion
@@ -88,9 +89,11 @@ MODEL_SPECS: Dict[str, dict] = {
     # length_fixed_content_tv_*). R3D-18 halves time at stages 2-4 and shows steps at 4/5, 8/9 and
     # 16/17 frames, and up to +30 pp for the same frames at length 16 -> realloc + freeze, as r3d.
     "mc3_18":       dict(design="insert",  slots=16, tubelet=1, ms=[1, 3, 5, 9],
-                         removal="drop", dataset="ucf101_test", gradcam_layer="layer3"),
+                         removal="drop", dataset="ucf101_test", gradcam_layer="layer3",
+                         sampling="linspace"),
     "r3d_18":       dict(design="realloc", slots=16, tubelet=1, ms=[2, 4, 6, 8],
-                         removal="late", dataset="ucf101_test", gradcam_layer="layer2"),
+                         removal="late", dataset="ucf101_test", gradcam_layer="layer2",
+                         sampling="linspace"),
     # synthetic, for smoke tests (max-pool over time -> exact copies are perfect substitutes)
     "toy":          dict(design="insert",  slots=16, tubelet=1, ms=[1, 2, 4, 8],
                          removal="drop", dataset="toy", gradcam_layer=None),
@@ -123,6 +126,24 @@ def _segment_centers(n_total: int, n: int) -> List[int]:
     return np.clip(idx, 0, n_total - 1).tolist()
 
 
+def frame_indices_for(name: str, n_total: int) -> List[int]:
+    """The frames model `name` reads from a video of n_total frames, without loading the model.
+    The adapters below use it, and so does code that must see the same frames as the model
+    (e.g. the DINOv2 frame clustering, compute_frame_hierarchies.py --model).
+      "centers"  (default): centre of each of `slots` equal segments, the TSN/TRN protocol
+                 (models/video_utils.sample_segment_centers; r3d, videomae, trn, trn_official)
+      "linspace": linspace(0, n_total - 1, slots) truncated to int (models/ssv2.py for vjepa2,
+                 models/torchvision_ucf101.py for mc3_18 and r3d_18)"""
+    spec = MODEL_SPECS[name]
+    n = spec["slots"]
+    sampling = spec.get("sampling", "centers")
+    if sampling == "linspace":
+        return np.linspace(0, n_total - 1, n).astype(int).tolist()
+    if sampling == "centers":
+        return _segment_centers(n_total, n)
+    raise ValueError(f"unknown sampling {sampling!r} for {name}")
+
+
 def _decode(path, idx: List[int]) -> torch.Tensor:
     from torchcodec.decoders import VideoDecoder
     dec = VideoDecoder(str(path))
@@ -148,7 +169,7 @@ class ClipModel:
 
     # -- data --
     def frame_indices(self, n_total: int) -> List[int]:
-        return _segment_centers(n_total, self.spec["slots"])
+        return frame_indices_for(self.name, n_total)
 
     def load_frames(self, path) -> Tuple[torch.Tensor, List[int]]:
         idx = self.frame_indices(_n_frames(path))
@@ -230,9 +251,6 @@ class TorchvisionVideoClip(ClipModel):
         self.net = self.m.model.to(self.device).eval()
         self.label2id = self.m.label2id
         self.num_classes = len(self.label2id)
-
-    def frame_indices(self, n_total):
-        return self.m.frame_indices(n_total, self.spec["slots"])
 
     def preprocess(self, frames_u8):
         return self.m.preprocess(frames_u8)[0].permute(1, 0, 2, 3).contiguous()  # (T,3,H,W)
@@ -318,9 +336,6 @@ class VJEPA2Clip(_ViTClip):
         self.hf = self.m.model.to(self.device).eval()
         self.label2id = self.m.label2id
         self.num_classes = int(self.hf.config.num_labels)
-
-    def frame_indices(self, n_total):  # models/ssv2.py: linspace(0, L-1, frames_per_clip)
-        return np.linspace(0, n_total - 1, self.spec["slots"], dtype=int).tolist()
 
     def preprocess(self, frames_u8):
         return self.m.processor(frames_u8, return_tensors="pt")["pixel_values_videos"][0]
@@ -975,6 +990,23 @@ def run_method(method: str, model: ClipModel, bank: FrameBank, ev: Evaluator, la
 # --------------------------------------------------------------------------------------------
 # JSONL helpers
 # --------------------------------------------------------------------------------------------
+def resolve_video_path(path: str) -> str:
+    """A video path stored in a conditions file, made openable on this machine. Conditions built
+    on one machine (e.g. D:/datasets/UCF-101/<class>/<file>.avi on Windows) are attributed on another
+    (Colab): if `path` doesn't exist, look for <class>/<file> under CONST.UCF101_PATH and
+    CONST.SSV2_PATH (both datasets are one folder per class). Callers keep the ORIGINAL path as
+    the record key, so attributions still join to their conditions."""
+    if os.path.exists(path):
+        return path
+    import CONST
+    parts = path.replace("\\", "/").split("/")
+    for root in (CONST.UCF101_PATH, CONST.SSV2_PATH):
+        cand = os.path.join(root, *parts[-2:])
+        if os.path.exists(cand):
+            return cand
+    raise FileNotFoundError(f"{path} (also not found as <class>/<file> under UCF101_PATH or SSV2_PATH)")
+
+
 def read_jsonl(path) -> List[dict]:
     if not os.path.exists(path):
         return []

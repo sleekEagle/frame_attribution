@@ -7,6 +7,7 @@ matrix), so every cut of the resulting tree is a valid contiguous segmentation o
 from n_frames singleton frames (finest) up to one cluster covering the whole clip (coarsest).
 
     Z, embeddings = frame_hierarchy("some_video.mp4")
+    Z, embeddings = frame_hierarchy("some_video.mp4", indices=[0, 5, 10])  # the model's frames
     from scipy.cluster.hierarchy import dendrogram, cut_tree
     dendrogram(Z)                     # visualize the merge tree
     cut_tree(Z, n_clusters=[3, 5])    # frame->cluster labels at chosen granularities
@@ -15,6 +16,8 @@ import numpy as np
 from scipy.cluster.hierarchy import cut_tree
 from scipy.sparse import csr_matrix
 from sklearn.cluster import AgglomerativeClustering
+
+from torchcodec.decoders import VideoDecoder
 
 from models.dinov2 import DINOv2
 from models.video_utils import sample_frames
@@ -36,8 +39,14 @@ def _adjacent_connectivity(n: int) -> csr_matrix:
     return csr_matrix((np.ones(len(rows)), (rows, cols)), shape=(n, n))
 
 
-def frame_hierarchy(video_path, n_frames: int = 16, linkage: str = "ward"):
+def frame_hierarchy(video_path, n_frames: int = 16, linkage: str = "ward", indices=None):
     """video_path -> (Z, embeddings).
+
+    The frames are those at `indices` if given, else n_frames segment centres
+    (models/video_utils.sample_frames). Clusters only mean something for a model if they're
+    built on the frames that model reads: pass motivation/e1_common.frame_indices_for(model, n)
+    (compute_frame_hierarchies.py --model does this). R3D, VideoMAE and TRN use segment centres;
+    V-JEPA2, MC3-18 and R3D-18 use linspace.
 
     Z is a (n_frames-1, 4) scipy linkage matrix [merge_a, merge_b, distance, count]: the full
     merge tree from connectivity-constrained agglomerative clustering (adjacent frames only),
@@ -49,7 +58,15 @@ def frame_hierarchy(video_path, n_frames: int = 16, linkage: str = "ward"):
     similarity (||a-b||^2 = 2 - 2*cos_sim) -- this makes the default "ward" linkage usable
     (sklearn restricts it to euclidean) while still ranking frame pairs by cosine similarity.
     """
-    frames = sample_frames(video_path, n_frames)
+    if indices is None:
+        frames = sample_frames(video_path, n_frames)
+    else:
+        frames = VideoDecoder(str(video_path)).get_frames_at(indices=list(indices)).data
+    return frame_hierarchy_from_frames(frames, linkage)
+
+
+def frame_hierarchy_from_frames(frames, linkage: str = "ward"):
+    """frames: (T,C,H,W) uint8 RGB, already decoded -> (Z, embeddings), as frame_hierarchy()."""
     embeddings = _get_dino().embed_frames(frames)
     n = len(embeddings)
 

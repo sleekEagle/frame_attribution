@@ -31,7 +31,7 @@ import time
 from pathlib import Path
 
 from e1_common import (MODEL_SPECS, STOCHASTIC, Evaluator, FrameBank, append_jsonl,
-                       load_clip_model, load_prior, read_jsonl, run_method)
+                       load_clip_model, load_prior, read_jsonl, resolve_video_path, run_method)
 
 DEFAULT_METHODS = {
     "insert": ["shapley_drop", "playfair", "loo_drop", "occlusion", "ig", "gradcam"],
@@ -82,7 +82,7 @@ def main():
     for vi, rec in enumerate(records):
         path = rec["video"]
         prior = load_prior(model, args.prior or rec.get("prior"))
-        frames, _ = model.load_frames(path)
+        frames, _ = model.load_frames(resolve_video_path(path))  # path stays the record key
         cframes = frames[0::2] if rec["design"] == "realloc" else frames
         cls = rec["pred"]
         banks, evs = {}, {}

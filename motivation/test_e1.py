@@ -13,6 +13,8 @@ model, no datasets or checkpoints).  Run (from anywhere):  python motivation/tes
 4. Exact Shapley == permutation Shapley (many permutations) on a small clip.
 5. Integrated Gradients completeness: sum of per-slot IG == logit(x) - logit(0).
 6. End-to-end: build conditions -> attribute -> metrics on the toy model.
+7. Frame sampling: frame_indices_for() matches each model wrapper's own sampling (skipped if
+   torchcodec / torchvision aren't installed).
 """
 import random
 import shutil
@@ -217,7 +219,29 @@ def test_end_to_end():
         shutil.rmtree(tmp)
 
 
+def test_frame_indices():
+    """frame_indices_for() (used by the adapters and the DINOv2 clustering) must pick the same
+    frames as each wrapper's own predict_from_path, for short, exact and long videos."""
+    try:
+        from models.video_utils import sample_segment_centers
+        from models.torchvision_ucf101 import TorchvisionUCF101
+    except ImportError as e:
+        print(f"frame indices skipped ({e})")
+        return
+    for n_total in (5, 8, 16, 17, 37, 300):
+        for name in ("r3d", "videomae", "trn", "trn_official"):
+            want = sample_segment_centers(n_total, E.MODEL_SPECS[name]["slots"]).tolist()
+            assert E.frame_indices_for(name, n_total) == want, (name, n_total)
+        for name in ("mc3_18", "r3d_18"):
+            assert E.frame_indices_for(name, n_total) == TorchvisionUCF101.frame_indices(n_total, 16), (name, n_total)
+        # models/ssv2.py VJEPA2.sample_frames: np.linspace(0, L - 1, frames_per_clip=16, dtype=int)
+        want = np.linspace(0, n_total - 1, 16, dtype=int).tolist()
+        assert E.frame_indices_for("vjepa2", n_total) == want, n_total
+    print("frame indices ok")
+
+
 if __name__ == "__main__":
+    test_frame_indices()
     test_layouts()
     test_removal()
     test_theory()
