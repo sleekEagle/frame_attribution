@@ -3,7 +3,8 @@ test_e1.py -- sanity tests for the E1 pipeline. Needs only torch/numpy (uses the
 model, no datasets or checkpoints).  Run (from anywhere):  python motivation/test_e1.py
 
 1. Layouts: insertion lengths/copies, tubelet alignment, spread-control length match,
-   reallocation slot counts and identical losers in target vs recipient control.
+   reallocation slot counts and identical losers in target vs recipient control; replacement
+   blocks (contiguous, tubelet-aligned, same loser slots in target and control).
 2. Removal operators: drop / past / future / late.
 3. Theory check on a max-pool toy model (exact copies are perfect substitutes):
      - exact Shapley gives every copy of the target the same value (symmetry),
@@ -59,6 +60,30 @@ def test_layouts():
             if tub == 2 and al:
                 pairs = [t["content"][i:i + 2] for i in range(0, 16, 2)]
                 assert [2, 2] in pairs
+    # replacement: reference = original clip; the target's copies replace m-1 neighbours
+    for tub in (1, 2):
+        for target, recipient in [(5, 12), (0, 15), (14, 1), (7, 8)]:
+            for m in (2, 4, 6, 8):
+                rng = random.Random(m)
+                t, c, losers, al = E.replacement_layouts(16, target, m, recipient, tub, rng)
+                if t is None:  # no block can contain the target and avoid the recipient
+                    assert tub == 2 and target // 2 == recipient // 2, (target, recipient, m)
+                    continue
+                assert len(t["content"]) == len(c["content"]) == 16
+                assert t["content"].count(target) == m and c["content"].count(target) == 1
+                assert c["content"].count(recipient) == m and len(losers) == m - 1
+                for j in losers:  # losers are gone from both clips; same slots in both
+                    assert j not in t["content"] and j not in c["content"]
+                block = [s for s in range(16) if t["content"][s] == target]
+                assert block == list(range(block[0], block[0] + m))  # one contiguous block
+                assert [s for s in range(16) if c["content"][s] == recipient and s != recipient] \
+                    == [s for s in block if s != target]  # control copies sit in the loser slots
+                for s in range(16):  # everything outside the block is unchanged
+                    if s not in block:
+                        assert t["content"][s] == s and c["content"][s] == s
+                assert t["copy"][target] == 0 and c["copy"][recipient] == 0  # originals keep copy 0
+                if tub == 2:
+                    assert al and block[0] % 2 == 0  # whole tubelets
     print("layouts ok")
 
 
@@ -173,13 +198,13 @@ def test_vit_adapters():
 def test_end_to_end():
     tmp = Path(tempfile.mkdtemp())
     try:
-        for model in ("toy", "toy_realloc"):
+        for model in ("toy", "toy_realloc", "toy_replace"):
             run = lambda *a: subprocess.run([sys.executable, str(HERE / a[0]), *a[1:], "--out", str(tmp)], cwd=HERE,  # noqa: E731
                                             check=True, capture_output=True, text=True)
             run("e1_build_conditions.py", "--model", model, "--limit", "3", "--include-wrong",
                 "--dup-types", "exact", "noise")
-            methods = (["shapley_drop", "loo_drop", "occlusion", "ig"] if model == "toy"
-                       else ["shapley_freeze", "loo_freeze", "occlusion", "ig"])
+            methods = (["shapley_freeze", "loo_freeze", "occlusion", "ig"] if model == "toy_realloc"
+                       else ["shapley_drop", "loo_drop", "occlusion", "ig"])
             run("e1_attribute.py", "--model", model, "--methods", *methods, "--seeds", "0", "1",
                 "--n-perm", "16")
             run("e1_metrics.py", "gate", "--model", model)

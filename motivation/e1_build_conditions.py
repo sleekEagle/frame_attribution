@@ -9,9 +9,10 @@ duplication conditions + controls, and the sensitivity gate (model outputs only,
     python motivation/e1_build_conditions.py --model toy --limit 5             # smoke test, no data needed
 
 Per video (one JSONL line in <out>/<model>_conditions.jsonl; re-running resumes):
-  1. Load the model's standard frames. Insertion design (vjepa2): the 16 frames are the
-     K=16 contents, reference = original clip (m=1). Reallocation design (r3d, videomae, trn): every
-     other frame -> K = slots/2 contents, reference = each content x2 (m=2).
+  1. Load the model's standard frames. Insertion design (vjepa2) and replacement design
+     (videomae): the 16 frames are the K=16 contents, reference = original clip (m=1).
+     Reallocation design (r3d, trn): every other frame -> K = slots/2 contents, reference = each
+     content x2 (m=2).
   2. Predicted class c* on the reference (videos the model gets wrong are skipped unless
      --include-wrong). Everything below explains c*.
   3. Content importance I(c) = P(c*|ref) - P(c*|ref with ALL copies of c removed); removal =
@@ -21,7 +22,7 @@ Per video (one JSONL line in <out>/<model>_conditions.jsonl; re-running resumes)
      MID target (random among ranks 3..K/2 with I > tau). The content with the smallest |I| (not a
      target) is the RECIPIENT used by the reallocation control.
   5. For every duplicate type (exact / noise / shift) and every m: the target condition and its
-     control (spread control for insertion, recipient control for reallocation), each with
+     control (spread control for insertion, recipient control for reallocation and replacement), each with
      prediction statistics vs. that duplicate type's reference (the sensitivity gate) and, unless
      --no-cond-importance, content importance of every content in that condition, I^(m)(c),
      which e1_metrics.py uses to validate rank inversions.
@@ -38,7 +39,7 @@ import numpy as np
 from e1_common import (MODEL_SPECS, Evaluator, FrameBank, append_jsonl, content_importance,
                        get_videos, insertion_layout, load_clip_model, load_prior, make_layout,
                        pred_stats, read_jsonl, realloc_layouts, reference_layout,
-                       spread_control_layout, stable_seed)
+                       replacement_layouts, spread_control_layout, stable_seed)
 
 
 def pick_targets(I: dict, K: int, tau: float, rng: random.Random):
@@ -80,7 +81,7 @@ def main():
     spec = model.spec
     design, tub, slots = spec["design"], spec["tubelet"], spec["slots"]
     removal = spec["removal"]
-    m_ref = 1 if design == "insert" else 2
+    m_ref = 2 if design == "realloc" else 1
     ms = [m for m in (args.ms or spec["ms"]) if m != m_ref]
     prior = load_prior(model, args.prior)
 
@@ -106,10 +107,10 @@ def main():
             append_jsonl(skip_path, {"video": path, "reason": f"got {len(frames)} frames"})
             continue
 
-        if design == "insert":
-            cframes, cidx, K = frames, fidx, slots
-        else:
+        if design == "realloc":
             cframes, cidx, K = frames[0::2], fidx[0::2], slots // 2
+        else:  # insert / replace: every sampled frame is a content, reference = original clip
+            cframes, cidx, K = frames, fidx, slots
         ref = reference_layout(design, K)
 
         bank = FrameBank(model, cframes, "exact", vseed)
@@ -170,9 +171,10 @@ def main():
                         if recipient is None:
                             continue
                         lrng = random.Random(stable_seed(path, tc, m, "losers"))
-                        lay, ctrl, losers, aligned = realloc_layouts(K, tc, m, recipient, tub, lrng)
+                        layouts_fn = realloc_layouts if design == "realloc" else replacement_layouts
+                        lay, ctrl, losers, aligned = layouts_fn(K, tc, m, recipient, tub, lrng)
                         if lay is None:
-                            continue  # not enough other frames to give up slots
+                            continue  # no valid set of slots for the target's copies
                         add("target", lay, target=tc, tier=tier, m=m, aligned=aligned, losers=losers)
                         add("control_recipient", ctrl, target=tc, tier=tier, m=m, aligned=aligned,
                             losers=losers, recipient=recipient)

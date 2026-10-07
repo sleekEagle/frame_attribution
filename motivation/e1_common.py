@@ -60,6 +60,10 @@ os.chdir(REPO_ROOT)
 # design:  "insert"  -> variable-length model, extra copies are INSERTED (clip gets longer)
 #          "realloc" -> fixed-length model, K = slots/2 distinct frames, reference = each x2,
 #                       extra copies of the target take slots from other frames (x2 -> x1)
+#          "replace" -> fixed-length model, K = slots distinct frames, reference = the original
+#                       clip (each x1); the target's copies REPLACE m-1 neighbouring frames, which
+#                       disappear from the clip (the control replaces the same frames with the
+#                       recipient). For models that the x2 reference takes out of distribution.
 # removal: how a content is removed for content importance I(c) and for Shapley/LOO
 #          ("drop" shortens the clip; "late" = mean of freeze-past and freeze-future)
 MODEL_SPECS: Dict[str, dict] = {
@@ -69,8 +73,11 @@ MODEL_SPECS: Dict[str, dict] = {
                          removal="late", dataset="ucf101_test", gradcam_layer="layer2"),
     "vjepa2":       dict(design="insert",  slots=16, tubelet=2, ms=[1, 3, 5, 9],
                          removal="drop", dataset="ssv2_sampled", gradcam_layer=-1),
-    "videomae":     dict(design="realloc", slots=16, tubelet=2, ms=[2, 4, 8],
-                         removal="late", dataset="ucf101_test", gradcam_layer=-1),
+    # replace, not realloc: in the x2 reference every tubelet holds two identical frames, which
+    # changes VideoMAE's prediction in 63% of videos (results/e1/videomae_diag); inputs shorter
+    # than 16 frames carry no accuracy penalty at fixed content, so removal is by deletion
+    "videomae":     dict(design="replace", slots=16, tubelet=2, ms=[2, 4, 6, 8],
+                         removal="drop", dataset="ucf101_test", gradcam_layer=-1),
     "trn":          dict(design="realloc", slots=8,  tubelet=1, ms=[2, 4],
                          removal="late", dataset="ssv2_sampled", gradcam_layer=None),
     "trn_official": dict(design="realloc", slots=8,  tubelet=1, ms=[2, 4],
@@ -80,6 +87,8 @@ MODEL_SPECS: Dict[str, dict] = {
                          removal="drop", dataset="toy", gradcam_layer=None),
     "toy_realloc":  dict(design="realloc", slots=16, tubelet=2, ms=[2, 4, 8],
                          removal="late", dataset="toy", gradcam_layer=None),
+    "toy_replace":  dict(design="replace", slots=16, tubelet=2, ms=[1, 2, 4, 8],
+                         removal="drop", dataset="toy", gradcam_layer=None),
 }
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -400,7 +409,8 @@ class ToyClip(ClipModel):
 
 
 ADAPTERS = {"r3d": R3DClip, "vjepa2": VJEPA2Clip, "videomae": VideoMAEClip, "trn": TRNClip,
-            "trn_official": TRNOfficialClip, "toy": ToyClip, "toy_realloc": ToyClip}
+            "trn_official": TRNOfficialClip, "toy": ToyClip, "toy_realloc": ToyClip,
+            "toy_replace": ToyClip}
 
 
 def load_clip_model(name: str) -> ClipModel:
@@ -457,7 +467,7 @@ def make_layout(content: Sequence[int]) -> dict:
 
 
 def reference_layout(design: str, n_contents: int) -> dict:
-    if design == "insert":
+    if design in ("insert", "replace"):
         return make_layout(range(n_contents))
     return make_layout([c for c in range(n_contents) for _ in range(2)])
 
@@ -542,6 +552,43 @@ def realloc_layouts(K: int, target: int, m: int, recipient: int, tubelet: int, r
         counts[receiver] = 2 + (m - 2)
         return make_layout([c for c in range(K) for _ in range(counts[c])])
     aligned = aligned and (m % tubelet == 0)
+    return build(target), build(recipient), losers, aligned
+
+
+def replacement_layouts(K: int, target: int, m: int, recipient: int, tubelet: int, rng: random.Random):
+    """Fixed-length design over K slots. Reference = the original clip, content c in slot c (each
+    x1). Target condition: a block of m consecutive slots containing the target's slot is filled
+    with the target; the other m-1 contents in the block (the losers) disappear from the clip.
+    Recipient control: the SAME loser slots are filled with the recipient instead, and the target
+    keeps its single slot, so both clips lose the same contents and contain the same number of
+    extra copies. The block is chosen at random (rng) among the blocks that contain the target's
+    slot and not the recipient's; with tubelet=2 and even m only tubelet-aligned blocks are used,
+    so the target's copies fill whole tubelets. Copy index 0 marks each content's original slot.
+    Returns (target_layout, control_layout, losers, aligned); (None, None, None, False) if no block
+    fits."""
+    aligned = m % tubelet == 0
+    step = tubelet if aligned else 1
+    starts = [s for s in range(0, K - m + 1, step)
+              if s <= target < s + m and not (s <= recipient < s + m)]
+    if not starts:
+        return None, None, None, False
+    s0 = rng.choice(starts)
+    block = list(range(s0, s0 + m))
+    losers = [c for c in block if c != target]
+
+    def build(receiver):
+        content = list(range(K))
+        for slot in losers:
+            content[slot] = receiver
+        n_extra = {}
+        copy = []
+        for slot, c in enumerate(content):
+            if slot == c:  # the content's original frame
+                copy.append(0)
+            else:
+                n_extra[c] = n_extra.get(c, 0) + 1
+                copy.append(n_extra[c])
+        return {"content": content, "copy": copy}
     return build(target), build(recipient), losers, aligned
 
 
@@ -843,7 +890,8 @@ def run_method(method: str, model: ClipModel, bank: FrameBank, ev: Evaluator, la
                ig_steps: int = 32, ig_batch: int = 2, pf_max_samples: int = 1024) -> Tuple[np.ndarray, int]:
     """Returns (per-slot scores, number of model evaluations used)."""
     n0 = ev.n_evals
-    variable = model.spec["design"] == "insert"
+    # insert and replace remove frames by deletion by design (the model accepts shorter inputs)
+    variable = model.spec["design"] in ("insert", "replace")
     # r3d is realloc only because it breaks ABOVE 16 frames; dropping frames makes clips shorter,
     # which it accepts (results/design_choice_report.md)
     if method in ("shapley_drop", "loo_drop", "playfair") and not variable and model.name not in ("videomae", "r3d"):

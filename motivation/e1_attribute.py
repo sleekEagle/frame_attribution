@@ -36,6 +36,8 @@ from e1_common import (MODEL_SPECS, STOCHASTIC, Evaluator, FrameBank, append_jso
 DEFAULT_METHODS = {
     "insert": ["shapley_drop", "playfair", "loo_drop", "occlusion", "ig", "gradcam"],
     "realloc": ["shapley_freeze", "loo_freeze", "occlusion", "ig", "gradcam"],
+    # deletion-based like insert; Play Fair is opt-in (--methods playfair) because of its cost
+    "replace": ["shapley_drop", "loo_drop", "occlusion", "ig", "gradcam"],
 }
 
 
@@ -81,7 +83,7 @@ def main():
         path = rec["video"]
         prior = load_prior(model, args.prior or rec.get("prior"))
         frames, _ = model.load_frames(path)
-        cframes = frames if rec["design"] == "insert" else frames[0::2]
+        cframes = frames[0::2] if rec["design"] == "realloc" else frames
         cls = rec["pred"]
         banks, evs = {}, {}
         t_vid = time.time()
