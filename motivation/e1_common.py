@@ -1008,10 +1008,24 @@ def resolve_video_path(path: str) -> str:
 
 
 def read_jsonl(path) -> List[dict]:
+    """Records of a JSONL file. Lines that aren't valid JSON are skipped with a warning: a write
+    cut off by a crash or a Colab disconnect (common on Google Drive, which can leave NUL bytes)
+    leaves a broken line, and the resuming scripts then simply redo that record."""
     if not os.path.exists(path):
         return []
-    with open(path, encoding="utf-8") as f:
-        return [json.loads(line) for line in f if line.strip()]
+    out, bad = [], 0
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            line = line.replace("\x00", "").strip()
+            if not line:
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                bad += 1
+    if bad:
+        print(f"[warn] {path}: skipped {bad} unreadable line(s); those records will be redone")
+    return out
 
 
 def append_jsonl(path, record: dict) -> None:

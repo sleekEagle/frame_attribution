@@ -129,7 +129,8 @@ def main():
                         "content": cond["layout"]["content"], "copy": cond["layout"]["copy"],
                         "n_evals": int(n_ev), "secs": round(time.time() - t0, 3)})
                     done.add(key)
-        print(f"[{vi + 1}/{len(records)}] {Path(path).name} done ({time.time() - t_vid:.1f}s)")
+        name = path.replace("\\", "/").split("/")[-1]  # Windows paths too, on Linux
+        print(f"[{vi + 1}/{len(records)}] {name} done ({time.time() - t_vid:.1f}s)")
     print(f"[e1] wrote {out_path}")
 
 
