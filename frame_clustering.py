@@ -68,9 +68,13 @@ def frame_hierarchy(video_path, n_frames: int = 16, linkage: str = "ward", indic
 def frame_hierarchy_from_frames(frames, linkage: str = "ward"):
     """frames: (T,C,H,W) uint8 RGB, already decoded -> (Z, embeddings), as frame_hierarchy()."""
     embeddings = _get_dino().embed_frames(frames)
-    n = len(embeddings)
+    return hierarchy_from_embeddings(embeddings, linkage), embeddings
 
-    normalized = embeddings.numpy()
+
+def hierarchy_from_embeddings(embeddings, linkage: str = "ward"):
+    """(T, D) per-frame embeddings (tensor or array) -> Z, the adjacent-only merge tree."""
+    normalized = np.asarray(embeddings, dtype=np.float64)
+    n = len(normalized)
     normalized = normalized / np.linalg.norm(normalized, axis=1, keepdims=True)
 
     clustering = AgglomerativeClustering(
@@ -85,7 +89,7 @@ def frame_hierarchy_from_frames(frames, linkage: str = "ward"):
     for i, (a, b) in enumerate(clustering.children_):
         counts[i] = sum(1 if child < n else counts[child - n] for child in (a, b))
     Z = np.column_stack([clustering.children_, clustering.distances_, counts]).astype(float)
-    return Z, embeddings
+    return Z
 
 
 def hierarchy_groups(Z, n_frames: int) -> dict:
