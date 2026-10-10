@@ -1,165 +1,194 @@
-# E1 summary: TRN (multi-scale TRN, BN-Inception, Something-Something v2)
+# E1 summary: TRN on Something-Something v2
 
-**Status:** run complete for `trn_official` with 5 attribution methods (Shapley-freeze, leave-one-out-freeze, occlusion, Integrated Gradients, Grad-CAM), on all kept videos. **Play Fair's TRN (`trn`) could not be run:** its checkpoints (`trn.pth`, `trn_8_frames.pth`) have been deleted from the authors' Dropbox, and the local copies are the Dropbox "File Deleted" HTML pages. **Play Fair itself was not run on `trn_official`** (see [Pending](#pending)).
+## In short
 
-**Question.** When a frame the model relies on appears m times in a clip, do frame-attribution methods still assign that content the attribution that the model's own behaviour supports?
+We tested what attribution methods do when an important frame appears several times in a clip, on TRN, a model that combines frames through "relation" modules.
 
-## Setup
+TRN takes exactly 8 frames, so the only test possible is the target appearing 4 times instead of 2 (m = 4).
 
-| item | value |
-|---|---|
-| model | `trn_official`: the original TRN-pytorch multi-scale checkpoint (`TRN_something_RGB_BNInception_TRNmultiscale_segment8_best.pth.tar`), BN-Inception per-frame features, relation heads over 2–8 frames, 174 SSv2 classes, **fixed 8-frame input** |
-| data | `ssv2_sampled`: 1,044 SSv2 videos (6 per class × 174 classes, `dataloaders/ssv2_paths.txt`), all screened |
-| design | **reallocation**: the clip has a fixed 8 slots. K = 4 contents (every other of the 8 sampled frames); the reference presents each content in two slots (m_ref = 2). The target t is given m slots, freed by m − 2 other contents (*losers*) being reduced to one slot. The **control** gives the same freed slots to the content with the smallest model-based importance (the *recipient*), and t keeps two slots. Insertion isn't possible because the relation heads require exactly 8 inputs. |
-| m | 2 (reference) and **4**, the only level the 8-slot design permits (m ≤ K). At m = 4 the target clip contains t × 4, the recipient × 2, and the two remaining contents × 1 each. |
-| copy types | `exact` (identical) and `noise` (Gaussian, σ = 2/255) |
-| frame removal | `late` freeze: a removed slot is filled with the nearest remaining frame before it and, in a second input, the nearest after it; the model's probabilities on the two inputs are averaged. Every input therefore has 8 frames. |
-| determinism | The relation module's random subsampling of frame subsets is fixed by the E1 adapter (numpy seed 0 around each call), so repeated evaluations of the same input give identical outputs. |
-| targets | Selected by the **model-based importance** I(c): the decrease in the predicted-class probability when every copy of content c is removed. One *high* target (top 2) and, where available, one *mid* target (rank 3–4), both with I(c) > 0.01. No attribution method is involved. |
-| gate | A target–control pair is analysed only if **both** clips produce the reference prediction. |
-| methods | Shapley (freeze), computed **exactly** over the 8 slots (single seed: a second seed would give identical values); leave-one-out (freeze); whole-frame occlusion; Integrated Gradients (32 steps, zero baseline); Grad-CAM on the per-frame features |
+The model relies on the duplicated frame at least as much as before (1.32 times, in the pairs we used). But the attribution methods change:
+- **Shapley** splits the credit exactly evenly between the copies. Each copy looks half as important as before.
+- **Leave-one-out** gives each copy almost no credit (2% of before).
+- **Occlusion** roughly splits the credit evenly.
+- **Integrated Gradients** barely lowers the credit per copy, so the total grows to 1.68 times.
+- **Grad-CAM** keeps the credit per copy, so the total nearly doubles.
 
-## Sample
+In the control clips, the target's credit doesn't change. So duplication causes these changes. And no method matches the model on both the credit per copy and the total.
 
-| stage | count |
+## 1. The question
+
+When a frame the model relies on appears m times in a clip, does an attribution method still give it the right amount of credit?
+
+"The right amount" is judged against the model itself. We measure how much the model relies on the frame before and after duplication (the I_t ratio). If the model relies on it as much as before, the frame's credit shouldn't change just because it's repeated.
+
+## 2. How the test works
+
+**Model.** `trn_official`: the original multi-scale TRN checkpoint from the TRN authors (`TRN_something_RGB_BNInception_TRNmultiscale_segment8_best.pth.tar`). It computes features for each frame with BN-Inception, then combines them with relation modules over 2 to 8 frames. It has 174 SSv2 classes, and it takes **exactly 8 frames**.
+
+**Data.** `ssv2_sampled`: 1,044 SSv2 videos, 6 per class. We screened all of them.
+
+**Clips.** We use the *reallocation* design. The clip always has 8 slots:
+- We pick 4 frames from the video (every other one of 8 sampled frames). We call them *contents*.
+- **Reference clip:** each content appears twice, in two neighbouring slots (m = 2).
+- **Target clip:** the target t gets 4 slots. To make room, the two other contents (the *losers*) drop from two copies to one.
+- **Control clip:** the same losers drop to one copy, but the freed slots go to the least important content (the *recipient*). The target keeps its two copies.
+
+So at m = 4, the target clip has t four times, the recipient twice, and the two other contents once each. **m = 4 is the only level the 8 slots allow.** Adding copies (making the clip longer) isn't possible, because the relation modules need exactly 8 frames.
+
+Each copy is either exact, or has a little random noise added (σ = 2/255).
+
+**Removing frames.** A removed slot is filled with the nearest remaining frame before it, and, in a second clip, with the nearest one after it. The model's two outputs are averaged (`late` freeze). So every clip has 8 frames.
+
+**Fixed randomness.** TRN's relation modules pick random subsets of frames. Our code fixes that randomness, so the same clip always gives the same output.
+
+**Choosing the target.** We measure how much the model needs each content: we remove every copy of it and see how much the predicted class's probability drops. This is the content's *importance* I. One target is picked from the top 2 contents, and a second from ranks 3–4 when available. Both need I > 0.01. No attribution method is used to choose them.
+
+**The per-pair gate.** A target clip and its control are used only if both give the reference prediction.
+
+**Methods:**
+- Shapley (freeze), computed **exactly** over the 8 slots, so one seed is enough;
+- leave-one-out (freeze);
+- occlusion (one frame replaced by a blank frame);
+- Integrated Gradients (32 steps, blank baseline);
+- Grad-CAM on the per-frame features.
+
+## 3. Which videos were used
+
+| step | number |
 |---|---|
 | videos screened | 1,044 |
-| excluded: misclassified on the reference clip | 778 |
-| excluded: no content with I(c) > 0.01 | 21 |
-| **kept** | **245 videos, 375 targets** (245 high, 130 mid) |
-| target–control pairs passing the gate | **202 / 375 (53.9%)** exact; 200 / 375 near-duplicate |
-| videos contributing at least one passing pair | 166 (exact), 165 (near-duplicate) |
-| passing pairs by tier (exact) | high 158 / 245 (64%), mid 44 / 130 (34%) |
+| left out: the model got them wrong | 778 |
+| left out: no single content mattered enough (I ≤ 0.01) | 21 |
+| **kept** | **245 videos, 375 targets** (245 top, 130 middle) |
+| target–control pairs that passed the gate | **202 of 375 (54%)** with exact copies; 200 with noisy copies |
+| videos with at least one passing pair | 166 (exact), 165 (noisy) |
+| passing pairs, by target | top 158 of 245 (64%), middle 44 of 130 (34%) |
 
-The model classifies about 30% of these videos correctly: 30.0% on a 60-video check, 33.6% on the full SSv2 folder in `eval_accuracy.py`. This is why most screened videos are excluded.
+The model gets only about 30% of these videos right: 30.0% in a 60-video check, and 33.6% on the full SSv2 test folder. That's why most videos are left out.
 
-## Gate: how much does reallocation change the model's output?
+## 4. Does duplication change the model?
 
-All 375 targets, exact copies. Near-duplicates agree to within 0.5 pp.
+All 375 targets, exact copies. Noisy copies are within 0.5 percentage points.
 
-| condition | agreement (%) | mean ΔP(pred) | median I_t ratio |
+| clip | same prediction as the reference | change in the predicted class's probability | how much the model relies on the target (I_t ratio) |
 |---|---|---|---|
-| original 8 distinct frames vs reference (4 contents × 2) | 87.8 | −0.047 | – |
-| target, m = 4 | **72.3** | −0.142 | 1.00 |
-| control, m = 4 | **60.0** | −0.241 | 0.58 |
+| original 8 frames vs the reference clip | 87.8% | −0.047 | – |
+| target clip, m = 4 | **72.3%** | −0.142 | 1.00 |
+| control clip, m = 4 | **60.0%** | −0.241 | 0.58 |
 
-The I_t ratio is the model-based importance of t in the condition divided by its importance in the reference.
-- **The reference representation itself changes the prediction in 12.2% of videos** (6% for R3D). TRN combines frame features in temporal order through its relation heads, so presenting 4 contents in consecutive pairs instead of 8 distinct frames affects it more.
-- **At m = 4 the perturbation is large.** Half of the non-target content is reduced to a single slot. In the control, the least important content occupies 4 of the 8 slots, which explains why the control is perturbed more than the target.
-- **The model's dependence on t is unchanged in the target condition** (I_t ratio 1.00 over all targets). In the analysed pairs it is **1.32** in the target condition and 0.98 in the control.
-- **Because only one duplication level exists, the gate can't be relaxed by restricting m.** The per-pair rule is applied as for R3D, retaining 54% of pairs.
+What this shows:
+- **Showing each content twice already changes the prediction in 12% of videos** (6% for R3D-50). TRN combines frames in order through its relation modules, so showing 4 contents in pairs, instead of 8 different frames, affects it more.
+- **At m = 4 the clip changes a lot.** Half of the other content drops to a single slot. In the control, the least important content fills 4 of the 8 slots. That's why the control changes the prediction even more often than the target clip.
+- **The model relies on the target as much as before** (I_t ratio 1.00 over all targets). In the pairs used for attribution, it's **1.32** in the target clip and 0.98 in the control.
+- **With only one level of m, we can't drop the harder levels.** So we use the per-pair gate, as for R3D, which keeps 54% of pairs.
 
-## Results
+## 5. Results
 
-### Quantities
+### 5.1 Credit per copy and credit in total
 
-For each method, let the target's attribution be computed for each of its copies; each quantity is relative to the same method's value for t in the reference clip.
-- **Per-copy ratio:** the mean attribution of one copy of t. Under exact division of a fixed total among the copies it equals 2/m = **0.50**.
-- **Total ratio:** the summed attribution of all copies of t. It equals 1 if the total is preserved, and m/2 = 2 if each copy keeps its reference value.
-- **β = log(per-copy ratio) / log(m/2).** With a single level m = 4, β is a transformed per-copy ratio, not a slope fitted across several m: β = −1 corresponds to 0.50, and β = 0 to 1.0.
+- **per-copy ratio:** the credit of one copy, divided by its credit in the reference. If the credit is split evenly between the copies, it's 2/m = **0.50**.
+- **total ratio:** the credit of all copies added up, divided by the total in the reference. It stays at 1 if the credit is split evenly, and becomes m/2 = 2 if each copy keeps its full credit.
+- **best copy:** the credit of the copy with the highest credit.
+- **β:** with only one level, β is just the per-copy ratio on a log scale: β = log(per-copy ratio) / log(2). β = −1 means 0.50 (split evenly), and β = 0 means 1.0 (each copy keeps its credit).
 
-### 1. Per-copy and total attribution
+Exact copies, medians over the 202 pairs used. Noisy copies are within 0.03 (per copy) and 0.06 (β).
 
-Exact copies, medians over the 202 analysed pairs. Near-duplicates agree to within 0.03 (per-copy) and 0.06 (β).
-
-| method | per-copy ratio | max over copies (ratio) | total ratio | target β [95% CI] | control per-copy ratio | control β |
+| method | per-copy ratio | best copy | total ratio | β, target [95% range] | control per-copy ratio | β, control |
 |---|---|---|---|---|---|---|
-| **Shapley (freeze)** | **0.50** | 0.56 | **0.99** | −0.94 [−1.11, −0.81] | 0.98 | −0.03 |
-| **Leave-one-out (freeze)** | **0.02** | 0.08 | 0.04 | −2.60 [−3.19, −2.25] | 1.03 | +0.25 |
-| **Occlusion** | **0.55** | 0.97 | 1.11 | −0.75 [−0.94, −0.52] | 1.09 | +0.17 |
+| (credit split evenly) | 0.50 | | 1.00 | −1 | | |
+| **(how much the model relies on t)** | | | **1.32** | | | |
+| Shapley | **0.50** | 0.56 | **0.99** | −0.94 [−1.11, −0.81] | 0.98 | −0.03 |
+| Leave-one-out | **0.02** | 0.08 | 0.04 | −2.60 [−3.19, −2.25] | 1.03 | +0.25 |
+| Occlusion | **0.55** | 0.97 | 1.11 | −0.75 [−0.94, −0.52] | 1.09 | +0.17 |
 | Integrated Gradients | 0.84 | 1.05 | 1.68 | −0.21 [−0.28, −0.16] | 0.97 | −0.02 |
 | Grad-CAM | 0.96 | 0.96 | **1.92** | −0.05 [−0.07, −0.02] | 1.00 | −0.00 |
 
-n for β (targets with a positive reference attribution): Shapley 200, IG 192, Grad-CAM 182, LOO 180, occlusion 170. For leave-one-out, β values below −1 reflect per-copy attributions close to zero rather than a meaningful rate; the per-copy ratio is the appropriate measure.
+Notes:
+- β only uses targets whose reference credit is positive: Shapley 200, Integrated Gradients 192, Grad-CAM 182, leave-one-out 180, occlusion 170.
+- For leave-one-out, β below −1 just means the credit went to almost 0. The per-copy ratio describes it better.
 
-### 2. Ranking metrics
+### 5.2 What each method does
 
-Exact copies.
-- **Validated inversion:** the share of contents that the method ranked clearly below t in the reference and ranks above t in the condition, counted only where the model's own importance still ranks t higher.
-- **Top-1 loss:** among cases where t was the method's highest-ranked content in the reference, the share where it is no longer highest-ranked. All methods here are deterministic, so the seed-noise floor is 0.
+- **Shapley splits the credit exactly evenly.** Each copy gets 0.50 of its reference credit, and the total stays at 0.99. So each copy looks half as important as before, while the model relies on the target slightly more (1.32).
+- **Leave-one-out gives each copy almost no credit** (2% of the reference). Removing one copy leaves the others in the clip, so the output barely changes. A content the model needs is reported as unimportant.
+- **Occlusion roughly splits the credit evenly** (0.55 per copy, total 1.11). The control doesn't change in the same way.
+- **Integrated Gradients barely lowers the credit per copy** (0.84). So the total grows to 1.68 times the reference, more than the model's 1.32.
+- **Grad-CAM keeps the credit per copy** (0.96), so the total nearly doubles (1.92).
 
-| method | validated inversion, target | validated inversion, control | top-1 loss, target (n) | top-1 loss, control |
+In the control clips, the target's credit stays the same for every method (0.97 to 1.09). So the changes above are caused by duplicating the target.
+
+### 5.3 Does duplication change the ranking of frames?
+
+- **Inversion:** a content ranked clearly below the target in the reference is ranked above it after duplication, while the model still ranks the target higher.
+- **Top-1 loss:** the target was the method's top content in the reference, but isn't any more. All methods here give the same result every time, so random noise adds nothing.
+
+Exact copies:
+
+| method | inversions, target | inversions, control | top-1 loss, target (number of cases) | top-1 loss, control |
 |---|---|---|---|---|
-| Shapley (freeze) | **36.4%** | 7.8% | **0.61** (105) | 0.31 |
-| Leave-one-out (freeze) | **39.0%** | 17.4% | **0.83** (102) | 0.57 |
+| Shapley | **36.4%** | 7.8% | **0.61** (105) | 0.31 |
+| Leave-one-out | **39.0%** | 17.4% | **0.83** (102) | 0.57 |
 | Occlusion | 16.7% | 14.6% | 0.43 (69) | 0.19 |
 | Integrated Gradients | 9.5% | 10.4% | 0.19 (69) | 0.16 |
 | Grad-CAM | 14.6% | 5.7% | 0.25 (68) | 0.16 |
 
-The control's top-1 losses are not zero because the control clip also differs from the reference: the losers are reduced and the recipient is duplicated.
+The control's top-1 loss isn't 0, because the control clip also differs from the reference: the losers drop to one copy, and the recipient gets more.
 
-## Comparison with R3D
+What this shows:
+- **Duplication pushes the target down Shapley's ranking.** Inversions rise to 36% (8% in the control), and the target loses Shapley's top rank in 61% of cases.
+- **Leave-one-out pushes it down the most** (39% inversions, top-1 loss 0.83).
 
-Per-copy ratio at m = 4 (exact copies). The value under exact division is 0.50.
+## 6. Conclusions
 
-| method | R3D | TRN | consistent across models? |
-|---|---|---|---|
-| Shapley (freeze) | 0.76 | 0.50 | no: partial division (R3D) vs exact division (TRN) |
-| Integrated Gradients | 0.54 | 0.84 | no: near-exact division (R3D) vs slight reduction (TRN) |
-| Leave-one-out (freeze) | 0.05 | 0.02 | yes: approximately zero |
-| Occlusion | 0.69, not duplication-specific | 0.55, duplication-specific | no |
-| Grad-CAM | 0.91 | 0.96 | yes: little change per copy, so the total increases |
+1. **Duplication changes a content's credit, although the model relies on it at least as much as before.** In the pairs used, the model relies on the target 1.32 times as much as in the reference. Yet Shapley, leave-one-out and occlusion give each copy far less credit. In the control clips, the target's credit doesn't change (0.97–1.09). So duplication causes the change.
 
-## Conclusions
+2. **Each method changes the credit in its own way.**
+   - Shapley: splits it exactly evenly, so each copy looks half as important. Duplication also pushes the target down its ranking.
+   - Leave-one-out: almost no credit per copy. A content the model needs looks unimportant.
+   - Occlusion: roughly splits it evenly.
+   - Integrated Gradients: little change per copy, so too much in total (1.68 against 1.32).
+   - Grad-CAM: no change per copy, so the total nearly doubles.
 
-**1. Duplication changes the attribution of a content although the model's dependence on that content is unchanged.**
+3. **No method matches the model on both measures.** Either the credit per copy falls far below the reference (Shapley, leave-one-out, occlusion), or the total is higher than the model's reliance (Integrated Gradients, Grad-CAM). So a content's credit depends on how often it appears, not only on how much the model uses it.
 
-In the analysed pairs, the model-based importance of t in the target condition is 1.32 times its reference value, so the model depends on t at least as much as before. For Shapley, leave-one-out and occlusion, the attribution of each copy of t falls well below its reference value. In the matched control conditions, where an unimportant content is duplicated and t keeps two slots, the attribution of t is essentially unchanged (control per-copy ratios 0.97–1.09). The reductions are therefore caused by the duplication of t.
+4. **How a method fails depends on the model.** Grad-CAM inflates the total on every model we tested, and leave-one-out collapses on every model except V-JEPA2. But Shapley splits the credit exactly evenly on TRN, and only partly on R3D-50 (0.76 per copy at m = 4). Integrated Gradients does the opposite: close to an even split on R3D-50 (0.54), little change on TRN (0.84). So a method's behaviour under duplication can't be judged from one model. `results/E1_report.md` compares all five models.
 
-**2. The methods differ in how duplication changes the attribution.**
+5. **Noisy copies give the same results as exact copies** (per-copy ratios within 0.03).
 
-- **Shapley (freeze) divides a fixed total equally among the copies.** The per-copy ratio equals 2/m (0.50), and the total is preserved (0.99). Each copy is reported as half as important as in the reference, while the model's dependence on t has slightly increased. Duplication also displaces t in Shapley's ranking: validated inversions rise to 36% (8% in the control), and t loses the top rank in 61% of cases.
-- **Leave-one-out (freeze) assigns approximately zero attribution to each copy** (2% of the reference value). When one copy is removed, the remaining copies are still present, so the output is almost unchanged. A content the model depends on is reported as unimportant. It has the highest inversion rate (39%) and top-1 loss (0.83).
-- **Occlusion approximately divides the total among the copies** (per-copy 0.55, total 1.11), with no comparable change in the control.
-- **Integrated Gradients reduces the per-copy attribution only slightly** (0.84), so the total attribution of the content increases to 1.68 times its reference value. That exceeds the model's dependence (1.32).
-- **Grad-CAM leaves the per-copy attribution essentially unchanged** (0.96), so the total approximately doubles (1.92).
+## 7. Limitations
 
-**3. None of the methods is consistent with the model on both measures.**
-
-Either the per-copy attribution falls well below its reference value (Shapley, leave-one-out, occlusion), or the total attribution exceeds the model's dependence (Integrated Gradients, Grad-CAM). The attribution assigned to a content therefore depends on how many times it occurs in the input, not only on how much the model depends on it.
-
-**4. The direction of the distortion depends on the model, not only on the method.**
-
-Across R3D and TRN, leave-one-out consistently assigns approximately zero attribution to copies, and Grad-CAM consistently inflates the total. For Shapley, Integrated Gradients and occlusion, however, the magnitude of the per-copy reduction differs substantially between the two models (table above). A method's behaviour under duplication can therefore not be characterised independently of the model it explains.
-
-**5. The effects don't depend on the copies being pixel-identical.**
-
-Near-duplicates (σ = 2/255) give the same per-copy ratios to within 0.03.
-
-## Limitations
-
-- **One duplication level (m = 4).** The 8-slot design admits no other level, so the results are single ratios, not slopes across several m.
+- **Only one level (m = 4).** The 8 slots allow no other level, so the results are single ratios, not trends across several m.
 - **Strong selection.**
-  - Only 245 of 1,044 videos are correctly classified and contain an important content.
-  - Of their 375 target–control pairs, only 54% keep the reference prediction in both clips, and mid-tier targets pass less often (34%) than high-tier targets (64%).
-  - The analysed pairs are therefore those whose prediction survives a large perturbation.
-- **The reference is not the original clip.** It contains 4 contents, each in two consecutive slots; it changes TRN's prediction in 12% of videos.
-- **The control is strongly perturbed** (60% agreement): in the control clip the least important content occupies half the slots.
-- **Only `trn_official`.** Play Fair's TRN checkpoint is no longer available.
-- **No Play Fair or drop-based methods.** The E1 adapter requires exactly 8 inputs.
+  - Only 245 of 1,044 videos are classified correctly and have an important content.
+  - Only 54% of their target–control pairs keep the reference prediction in both clips. Middle-ranked targets pass less often (34%) than top-ranked ones (64%).
+  - So the pairs used are those whose prediction survives a large change to the clip.
+- **The reference isn't the original clip.** It shows 4 contents, each in two neighbouring slots. It changes TRN's prediction in 12% of videos.
+- **The control changes the clip a lot** (60% keep the prediction): the least important content fills half the slots.
+- **Only the official TRN.** Play Fair's own TRN can't be tested: its files (`trn.pth`, `trn_8_frames.pth`) were deleted from the authors' Dropbox, and our local copies are just "File Deleted" web pages.
+- **No Play Fair or methods that delete frames.** Our code needs exactly 8 frames for this model.
 
-## Pending
+## 8. Still to do (optional)
 
-1. **Play Fair on `trn_official`.** Play Fair evaluates a subset of k frames with the relation head for k frames; `trn_official` has heads for 2–8 frames. This requires a new subset-evaluation path in the E1 adapter. It would also require a check of the model's accuracy as a function of k, analogous to the input-length check for R3D, because the attributions would then depend on the behaviour of the smaller-scale heads.
-2. **`trn` (Play Fair's TRN),** if copies of `trn.pth` and `trn_8_frames.pth` can be obtained (e.g. from the Play Fair authors). Place them in `play-fair/checkpoints/backbones/` and `play-fair/checkpoints/features/`; the commands below then apply with `--model trn`.
+1. **Play Fair on the official TRN.** Play Fair scores a subset of k frames with the relation module for k frames, and this model has modules for 2 to 8 frames. This needs a new way to evaluate subsets in our code. It would also need a check of the model's accuracy for each k, like the clip-length check for R3D, because the scores would then depend on the smaller modules.
+2. **Play Fair's own TRN**, if copies of `trn.pth` and `trn_8_frames.pth` can be found (for example from the Play Fair authors). Put them in `play-fair/checkpoints/backbones/` and `play-fair/checkpoints/features/`; the commands below then work with `--model trn`.
 
-## Files (`results/e1/`)
+## 9. Files and how to reproduce
 
-| file | contents |
+Files in `results/e1/`:
+
+| file | what it contains |
 |---|---|
-| `trn_official_conditions.jsonl`, `trn_official_skipped.jsonl` | conditions and model statistics for the 245 kept videos; excluded videos with reasons |
-| `trn_official_gate.csv` | gate report |
-| `trn_official_attributions.jsonl` | per-slot attributions for every analysed condition and method |
-| `trn_official_rows.csv`, `trn_official_slopes.csv`, `trn_official_summary.csv`, `trn_official_beta.csv` | metrics: per row, per target, per method × condition, and β with bootstrap CIs |
+| `trn_official_conditions.jsonl`, `trn_official_skipped.jsonl` | the clips built for the 245 kept videos, and the videos left out |
+| `trn_official_gate.csv` | the gate check (section 4) |
+| `trn_official_attributions.jsonl` | the per-frame scores for every clip and method |
+| `trn_official_rows.csv`, `trn_official_slopes.csv`, `trn_official_summary.csv`, `trn_official_beta.csv` | the measures, and β with 95% ranges |
 | `trn_official_build.log`, `trn_official_attribute.log` | run logs |
 
-## Reproduce
-
-From the repo root, in `tc_env`. To start fresh, move existing `results/e1/trn_official_*` files away first, because every step resumes from existing output.
+Commands (from the repo root, in `tc_env`). Every step resumes from existing output, so to start fresh, move the old `results/e1/trn_official_*` files away first.
 ```
 python motivation/e1_build_conditions.py --model trn_official      # all 1,044 videos (~6 min)
 python motivation/e1_metrics.py gate --model trn_official
 python motivation/e1_attribute.py --model trn_official --seeds 0   # ~2 h
 python motivation/e1_metrics.py attr --model trn_official
 ```
-Requires `weights_only=False` in `models/trn_official.py` (PyTorch ≥ 2.6) and the TRN-pytorch checkpoint in `play-fair/checkpoints/backbones/`.
+This needs `weights_only=False` in `models/trn_official.py` (PyTorch 2.6 or later) and the TRN checkpoint in `play-fair/checkpoints/backbones/`.
