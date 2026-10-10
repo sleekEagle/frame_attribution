@@ -173,7 +173,7 @@ So the alphabetical order is correct.
 | I_t ratio, target / control | 1.02 / 0.95 | 1.17 / 0.91 | 1.33 / 0.86 |
 | pairs passing the per-pair gate | 95.2% | 94.9% | 91.8% |
 
-**Decision: usable, with reallocation and the methods that fill in removed frames (m = 2, 4, 6, 8).** The reference is classified like the original clip. Duplication keeps the prediction for about 95% of targets. The model relies on the target about as much as before. R3D-18 is a check that the R3D-50 results hold in a different implementation. The attribution run is still to do.
+**Decision: usable, with reallocation and the methods that fill in removed frames (m = 2, 4, 6, 8).** The reference is classified like the original clip. Duplication keeps the prediction for about 95% of targets. The model relies on the target about as much as before. R3D-18 is a check that the R3D-50 results hold in a different implementation. The attribution run (120 videos) repeats the R3D-50 results; see `results/e1/R3D18_E1_summary.md`.
 
 ---
 
@@ -220,7 +220,7 @@ So the alphabetical order is correct.
 
 **What this means for judging the methods.** For MC3-18, a correct method should *not* leave the target's credit unchanged. It should follow the model. In total, the copies should get about 2.0, 2.6 and 3.2 times the reference credit at m = 3, 5 and 9. Per copy, that's about 0.67, 0.51 and 0.35 (the I_t ratio divided by m). For comparison, an even split of a fixed total would give 0.33, 0.20 and 0.11 per copy.
 
-**Decision: usable, with insertion and the methods that delete frames, including Play Fair (m = 1, 3, 5, 9).** MC3-18 is the UCF101 model where Play Fair can be tested without R3D's clip-length problem. The methods must be judged against the model's higher reliance on the target. The attribution run is still to do (see section 12 for a speed problem).
+**Decision: usable, with insertion and the methods that delete frames, including Play Fair (m = 1, 3, 5, 9).** MC3-18 is the UCF101 model where Play Fair can be tested without R3D's clip-length problem. The methods must be judged against the model's higher reliance on the target. The attribution run (265 videos, Play Fair on 20) is done; see `results/e1/MC3_18_E1_summary.md`.
 
 ![torchvision UCF101 models](figures/fig4_torchvision_length.png)
 
@@ -363,8 +363,7 @@ Play Fair's own TRN files were stored on the authors' Dropbox. These include the
 
 ## 12. Still to do
 
-1. **MC3-18 and R3D-18 attribution.** The clips and gates are ready.
-   - **Speed problem with MC3-18:** when 16 clips of 18 frames or more are processed together in full precision, one batch takes 1.3–9 seconds, against 0.18 seconds at 17 frames. That makes Shapley-drop at m = 9 about 20 times slower than expected. Smaller batches don't have this problem. We need to choose a fix (for example, a limit on frames per batch) before the full run.
+1. **MC3-18 and R3D-18 attribution: done** (see their summaries in `results/e1/`). Both ran in fp16 on Colab. The MC3-18 slowdown we saw on the laptop (batches of 18 or more frames in full precision) didn't occur there.
 2. **V-JEPA2:** run the official Play Fair code, to compare it directly with Shapley-drop. Use more videos if there's time.
 3. **VideoMAE:** not usable. Optional: try duplicating whole frame pairs instead of single frames.
 4. **Play Fair's TRN:** not available.

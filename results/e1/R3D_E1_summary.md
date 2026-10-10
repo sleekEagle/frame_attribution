@@ -260,7 +260,7 @@ What this shows:
    ```
 2. **Figures** for these results.
 
-The other models are covered in their own summaries (`TRN_E1_summary.md`, `VJEPA2_E1_summary.md`, `VIDEOMAE_E1_summary.md`) and in `results/design_choice_report.md`.
+The other models are covered in their own summaries (`R3D18_E1_summary.md`, `MC3_18_E1_summary.md`, `TRN_E1_summary.md`, `VJEPA2_E1_summary.md`, `VIDEOMAE_E1_summary.md`) and in `results/design_choice_report.md`. R3D-18 repeats these results. MC3-18 is the UCF101 model where the methods that delete frames, including Play Fair, can be judged without the clip-length problem.
 
 ## 10. Files and how to reproduce
 
