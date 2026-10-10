@@ -40,7 +40,7 @@
     "batchnorm_sync": false,
     "n_epochs": 200,
     "n_val_samples": 3,
-    "resume_path": "models\\r3d\\ckpt\\save_200.pth",
+    "resume_path": "models/r3d/ckpt/save_200.pth",
     "no_train": true,
     "no_val": true,
     "inference": true,
