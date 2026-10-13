@@ -873,6 +873,29 @@ def attr_shapley(ev, layout, cls, prior, removal, exact_max=12, n_perm=64, seed=
     return shapley_permutation(n, fn, n_perm, seed)
 
 
+def group_shapley(ev, layout, groups, cls, prior, removal, exact_max=12, n_perm=64, seed=0):
+    """Shapley values over GROUPS of slots: each group is one player, so a coalition keeps or
+    removes whole groups. groups: list of slot lists that partition the clip. Returns one value
+    per group (same order). v(S) as in attr_shapley (P(cls), removed slots handled by `removal`,
+    v(empty) = prior). If all copies of a content are in one group and the model's output on
+    every group coalition doesn't depend on how many copies there are, the group's value doesn't
+    either (copy invariance)."""
+    n = len(layout["content"])
+    k = len(groups)
+    member = np.zeros((k, n), bool)
+    for j, g in enumerate(groups):
+        member[j, g] = True
+    assert member.sum(0).tolist() == [1] * n, "groups must partition the slots"
+
+    def fn(gkeeps):  # (M, k) group masks -> slot masks -> values
+        gk = np.atleast_2d(gkeeps)
+        keeps = (gk[:, :, None] & member[None]).any(axis=1)
+        return ev.value(layout, keeps, removal, cls, prior)
+    if k <= exact_max:
+        return shapley_exact(k, fn)
+    return shapley_permutation(k, fn, n_perm, seed)
+
+
 def attr_loo(ev, layout, cls, prior, removal):
     n = len(layout["content"])
     keeps = np.ones((n + 1, n), bool)
@@ -1004,7 +1027,7 @@ def resolve_video_path(path: str) -> str:
         cand = os.path.join(root, *parts[-2:])
         if os.path.exists(cand):
             return cand
-    raise FileNotFoundError(f"{path} (also not found as <class>/<file> under UCF101_PATH or SSV2_PATH)")
+    return path  # not a file anywhere (e.g. the toy model's synthetic names): the loader decides
 
 
 def read_jsonl(path) -> List[dict]:

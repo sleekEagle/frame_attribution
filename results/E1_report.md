@@ -6,11 +6,18 @@ This report brings together the E1 results for all models. Each model also has i
 
 We duplicated an important frame in a video clip and checked how attribution methods change its credit. We did this on five video models: R3D-50, R3D-18 and MC3-18 on UCF101, and V-JEPA2 and TRN on Something-Something v2.
 
-**Main result.** On every model, duplicating a frame changes the credit that methods give it by much more than it changes how much the model relies on that frame. The methods fail in two ways:
-- **Credit per copy too low.** Each copy looks less important than the frame did before. Leave-one-out does this on every model: each copy gets almost no credit. Integrated Gradients, occlusion and Shapley do it on some models.
-- **Credit in total too high.** All copies together get more credit than the model's reliance supports. Grad-CAM does this on every model. Shapley does it on four of the five models.
+**What we mean by attribution dilution.** When the evidence for a prediction is spread over several frames that can stand in for each other, a frame-level method divides the credit among them. Each frame then looks unimportant, and the content can rank below content shown in fewer frames, even when the model relies on it as much or more. This doesn't require the credits to add up wrongly: Shapley's credits always add up, and dividing them is exactly what makes each copy look small.
 
-**No method gets both right on any model.** So a frame's credit depends on how often it appears in the clip, not only on how much the model uses it. Real videos often contain repeated or near-identical frames (static shots, slow motion, densely sampled clips). This is the "attribution dilution" problem.
+**Main result: dilution happens on every model.** Duplicating a frame barely changes how much the model relies on it (0.87–1.32 times as much, on four models). But every method gives each copy less credit than the frame had before:
+- **Shapley:** each copy keeps only 0.16–0.62 of the frame's credit at the highest level of duplication. Play Fair gives the same values.
+- **Leave-one-out:** each copy keeps 0.13 or less of the frame's credit on four of the five models (0.30 on V-JEPA2).
+- **Integrated Gradients and occlusion:** less credit per copy on most models.
+
+**Dilution changes which frame looks most important.** With Shapley, the duplicated frame loses its top rank in 75% of cases on R3D-18 and 61% on TRN (noise alone: 38% and 0%), and frames the model relies on less overtake it 23% and 36% of the time (8–9% in the control clips). Leave-one-out changes the ranking on every model.
+
+**A second, separate failure: too much credit in total.** Added up, the copies get more credit than the model's reliance supports: Grad-CAM on every model, Shapley on four of the five. So no method gets both the per-copy credit and the total right.
+
+**Real videos.** E2/E3 (`results/e23/E23_summary.md`) show the same dilution with the near-identical frames that real videos already contain: when the more important part of a clip is spread over many frames, a user reading Shapley's frame scores ranks it below a less important, shorter part significantly more often (on V-JEPA2, 42% against 25%).
 
 **Play Fair** gives the same values as Shapley with deleted frames (Shapley-drop), within random noise. We checked this on two models. So the Shapley-drop results apply to Play Fair.
 
@@ -188,11 +195,11 @@ These numbers rest on fewer cases, so we treat them as extra evidence. Exact cop
 
 ## 5. Conclusions
 
-1. **Duplicating a frame changes its credit much more than it changes the model.** On R3D-50, R3D-18, V-JEPA2 and TRN, the model relies on the duplicated frame 0.87 to 1.32 times as much as before. Yet the methods' credit per copy falls (to 0.16–0.62 for Shapley, and to about 0 for leave-one-out), or their total grows to 1.9–6.7 times the reference (Grad-CAM). In the control clips, the target's credit stays the same for Shapley and leave-one-out on every model. So duplication causes the change.
+1. **Attribution dilution happens on every model.** On R3D-50, R3D-18, V-JEPA2 and TRN, the model relies on the duplicated frame 0.87 to 1.32 times as much as before. Yet each copy gets clearly less credit than the frame had: 0.16–0.62 of it for Shapley, about 0 for leave-one-out. In the control clips, the target's credit stays the same for Shapley and leave-one-out on every model, so duplication causes the drop.
 
-2. **Every method is wrong in at least one direction, on every model.**
-   - Too little credit per copy: leave-one-out (all models), Integrated Gradients and occlusion (some models), Shapley on TRN.
-   - Too much credit in total: Grad-CAM (all models), Shapley and Play Fair on R3D-50, R3D-18, MC3-18 and V-JEPA2, Integrated Gradients on R3D-18, MC3-18 and TRN.
+2. **Dilution changes which frame looks most important.** With Shapley, the duplicated frame loses its top rank in 75% of cases on R3D-18 and 61% on TRN, well above what noise alone gives, and less important frames overtake it 23% and 36% of the time (8–9% in the controls). Leave-one-out changes the ranking on every model.
+
+   A second, separate failure is **too much credit in total**: Grad-CAM on every model, Shapley and Play Fair on R3D-50, R3D-18, MC3-18 and V-JEPA2, and Integrated Gradients on R3D-18, MC3-18 and TRN. So no method gets both the per-copy credit and the total right, on any model.
 
 3. **How a method fails depends on the model.** Shapley splits the credit exactly evenly on TRN, but only partly on R3D-50. Integrated Gradients splits it evenly on R3D-50, but inflates the total on MC3-18. So a method's behaviour under duplication can't be judged from one model.
 
@@ -200,7 +207,7 @@ These numbers rest on fewer cases, so we treat them as extra evidence. Exact cop
 
 5. **The effect doesn't need identical frames.** Copies with a little noise give the same results.
 
-**For the paper.** In a video with repeated or near-identical frames, a frame's credit depends on how many similar frames surround it. Leave-one-out and occlusion can make repeated evidence invisible. Shapley-type methods, including Play Fair, make each copy look less important, and on some models the repeated frame loses its rank. E1 shows this with frames we duplicated ourselves. E2 and E3 test whether the same happens with the similar frames that real videos already contain.
+**For the paper.** In a video with repeated or near-identical frames, a frame's credit depends on how many similar frames surround it. Shapley-type methods, including Play Fair, divide the content's credit among its copies, so each copy looks less important and, on some models, the content loses its rank. Leave-one-out and occlusion can make repeated evidence invisible. E1 shows this with frames we duplicated ourselves. E2/E3 (`results/e23/E23_summary.md`) show the same dilution in real videos: when the more important part of a clip is spread over many frames, Shapley's frame scores rank it below a less important, shorter part significantly more often on V-JEPA2, R3D-50 and R3D-18.
 
 ## 6. Limitations
 
@@ -223,6 +230,7 @@ These numbers rest on fewer cases, so we treat them as extra evidence. Exact cop
 | `results/e1/VJEPA2_E1_summary.md` | V-JEPA2 |
 | `results/e1/TRN_E1_summary.md` | TRN (official) |
 | `results/e1/VIDEOMAE_E1_summary.md` | why VideoMAE is excluded |
+| `results/e23/E23_summary.md` | E2/E3: dilution in natural videos |
 | `results/figures/fig5_e1_credit.png`, `fig6_e1_beta.png` | Figures 5 and 6 |
 | `results/e1/<model>_summary.csv`, `<model>_beta.csv` | the numbers behind the tables (not in git) |
 

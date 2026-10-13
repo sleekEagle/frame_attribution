@@ -10,7 +10,29 @@ video so their scores add up to P(c*|clip) - prior, which makes their ratios com
 Each method is compared with I(G) under its own removal (drop for *_drop and Play Fair, late
 freeze for *_freeze, the model's E1 removal for the others).
 
-E2: credit per frame vs group size  -> <model>_e2_rows.csv, _e2_bins.csv, _e2_slopes.csv
+E2 main readouts: how redundant are natural clips, and how do methods respond?
+  -> <model>_e2_visibility.csv, _e2_redundancy.csv, _e2_method_vs_R.csv
+  visibility (per video, model only; videos with P(c*|clip) - prior > 0.05)
+    sum_loo_share   sum of the single-frame importances I({i}) / (P(c*|clip) - prior): how much
+                    of the clip's importance single-frame removal can see. ~0 = the frames can
+                    all stand in for each other.
+    max_loo_share   the most important single frame / (P(c*|clip) - prior)
+    left_after_k    share of P(c*|clip) - prior left after removing the top-k frames (k = 1, 2,
+                    4) in each deletion order (each method, cluster orders, random)
+  redundancy of a group (model only), for groups with I(G) > --tau and 2 <= |G| <= n/2:
+    R(G) = 1 - sum_{i in G} I({i}) / I(G). R ~ 1: no single frame of G is needed (they stand
+    in for each other); R ~ 0: each frame adds its own part. By size and grouping (DINOv2
+    nodes vs fixed windows), with the mean DINOv2 similarity inside the group.
+  method vs redundancy: for the same groups, per method (seed 0) and R bin, the median of
+    r_sum = sum_{i in G} s_i / I(G) (does the method keep the group's importance?) and of
+    best x |G| / I(G) (the best frame's credit relative to an even share of I(G)).
+
+E2 first readouts (kept for the record; CONFOUNDED, don't interpret the slopes):
+  -> <model>_e2_rows.csv, _e2_bins.csv, _e2_slopes.csv
+  The slope of r_max on |G| also depends on how I(G) grows with |G|: a fixed window holds more
+  distinct content as it grows, so its I(G) grows and r_max falls even without any sharing of
+  credit, while a run of similar frames gains little importance with size. So the "dino -
+  window" slope difference measures how importance scales, not dilution.
   For every group G with I(G) > --tau and 1 <= |G| <= n/2, in two groupings:
     dino    the nodes of the DINOv2 tree (runs of similar frames)
     window  fixed windows of 2, 4, 8 frames (control: same sizes, similarity ignored)
@@ -32,10 +54,38 @@ E3: can the method find the important part?  -> _e3_hits.csv, _e3_inversions.csv
                 does the method rank B above A? "max" compares the best frame of each cluster
                 (frame-level detection), "sum" the summed scores. By size ratio |A| / |B|.
                 Dilution predicts more max-inversions when A is the LARGER cluster, and few
-                sum-inversions.
+                sum-inversions. CONFOUNDED by size: the best of more frames is larger by chance
+                alone, and I(G) grows with size, so pairs with a larger A are biased towards
+                fewer max-inversions. Read hits and inversions with this in mind.
   deletion      normalised area under P(c*) after removing the top-k frames, k = 1..n:
                 mean_k (v_k - prior) / (v_0 - prior). Lower = the order finds the important
                 frames sooner. By order (each method, cluster order at a level, random).
+
+Dilution tests (needs <model>_e23_group.jsonl from e23_group.py)
+  -> <model>_dil_pairs.csv, _dil_contrast.csv, _dil_top.csv
+  Dilution: the evidence is spread over frames that stand in for each other, so a frame-level
+  method divides the credit, each frame looks unimportant, and the content can rank below
+  content shown in fewer frames. The yardstick is the group Shapley value phi(G) of each
+  segment of a tree cut with k segments: how much the segment matters as a unit, with no
+  division inside it. The frame scores are read as a user would: credit per frame, best frame
+  per segment, and the top-ranked frames. Rankings only, so no unit conversion is needed.
+    pairs     segments A, B at the same level with phi(A) > --tau and phi(A) - phi(B) > --delta.
+              inv_mean: B's frames have a higher AVERAGE score than A's (each frame of the more
+              important segment looks less important; the main readout for dilution).
+              inv_max: the best frame of B outscores the best frame of A. inv_sum: B's summed
+              scores beat A's. By size ratio |A|/|B|.
+              chance: the same comparisons with the frame scores rotated by every offset (so
+              they keep their smoothness over time but are no longer aligned with the segments).
+              For max, chance is lower when A is larger (the best of more frames wins more often
+              by chance alone), so max must be read against its chance level; for mean, chance
+              is about 0.5 at every size ratio.
+    contrast  gain = chance - observed inversion rate (how much better than chance the method
+              ranks the more important segment). gain difference = gain when A is at least twice
+              as large as B, minus gain when A and B have the same size (within a factor 2); 95%
+              CI from resampling videos. Dilution predicts a negative gain difference.
+    top       the most important segment G* (largest phi, > --tau): is the method's top frame
+              in G* (chance |G*|/n)? is any of its top 4 frames in G* (chance
+              1 - C(n-|G*|, 4)/C(n, 4))? median rank of G*'s best frame. By |G*|.
 
 Swap test  -> _swap.csv
   For neighbouring frames (i, i+1): mean |change in P(c*)| when one replaces the other, vs
@@ -146,6 +196,84 @@ def groups_with_I(rec, removal):
 
 
 # --------------------------------------------------------------------------------------------
+R_BINS = [(-math.inf, 0.25, "R < 0.25"), (0.25, 0.5, "0.25-0.5"), (0.5, 0.75, "0.5-0.75"),
+          (0.75, math.inf, "R >= 0.75")]
+
+
+def _bin_size(s):
+    return "2" if s == 2 else "3-4" if s <= 4 else "5-8" if s <= 8 else ">8"
+
+
+def e2_redundancy(recs, args):
+    """The main E2 readouts: visibility per video, redundancy R(G), and method vs R."""
+    vis = []
+    for rec in recs:
+        n, rem = rec["n"], rec["removal"]
+        total = rec["v_all"][rem] - rec["prior_pred"]
+        if total <= 0.05:
+            continue
+        leaf = np.asarray(rec["importance"][rem]["nodes"][:n], float)
+        row = {"video": rec["video"], "total": total, "sum_loo_share": float(leaf.sum() / total),
+               "max_loo_share": float(leaf.max() / total)}
+        for d in rec["deletion"]:
+            for k in (1, 2, 4):
+                row[f"left_after_{k}|{d['order']}"] = float((d["values"][k] - rec["prior_pred"]) / total)
+        vis.append(row)
+    _write_csv(Path(args.out) / f"{args.model}_e2_visibility.csv", vis)
+
+    groups, mrows = [], []
+    for rec in recs:
+        n = rec["n"]
+        sim = np.asarray(rec["sim"], float)
+        # model-only redundancy, under the model's E1 removal
+        rem = rec["removal"]
+        leaf = rec["importance"][rem]["nodes"][:n]
+        for grouping, g, I, _ in groups_with_I(rec, rem):
+            if not (2 <= len(g) <= n // 2):
+                continue
+            sub = sim[np.ix_(g, g)]
+            groups.append({"video": rec["video"], "grouping": grouping, "size": len(g), "I": I,
+                           "mean_sim": float((sub.sum() - len(g)) / (len(g) * (len(g) - 1))),
+                           "R": float(1 - sum(leaf[i] for i in g) / I) if I > args.tau else float("nan")})
+        # method vs redundancy, each method under its own removal
+        for a in rec["attributions"]:
+            if a["seed"] != 0:
+                continue
+            s, removal = method_scores(rec, a)
+            if removal not in rec["importance"]:
+                continue
+            leaf_m = rec["importance"][removal]["nodes"][:n]
+            for grouping, g, I, _ in groups_with_I(rec, removal):
+                if not (2 <= len(g) <= n // 2) or I <= args.tau:
+                    continue
+                mrows.append({"method": a["method"], "R": 1 - sum(leaf_m[i] for i in g) / I,
+                              "r_sum": float(s[g].sum() / I), "best_share": float(s[g].max() / I * len(g))})
+
+    red = []
+    for b in ("2", "3-4", "5-8"):
+        for gp in ("dino", "window"):
+            rs = [x for x in groups if _bin_size(x["size"]) == b and x["grouping"] == gp]
+            ks = [x for x in rs if x["I"] > args.tau]
+            if not rs:
+                continue
+            red.append({"size": b, "grouping": gp, "n_groups": len(rs), "n_important": len(ks),
+                        "median_mean_sim": float(np.median([x["mean_sim"] for x in rs])),
+                        "median_R": float(np.median([x["R"] for x in ks])) if ks else float("nan"),
+                        "share_R_above_half": float(np.mean([x["R"] > 0.5 for x in ks])) if ks else float("nan")})
+    _write_csv(Path(args.out) / f"{args.model}_e2_redundancy.csv", red)
+
+    mvr = []
+    for meth in sorted({x["method"] for x in mrows}):
+        for lo, hi, lab in R_BINS:
+            xs = [x for x in mrows if x["method"] == meth and lo <= x["R"] < hi]
+            if xs:
+                mvr.append({"method": meth, "R_bin": lab, "n": len(xs),
+                            "median_r_sum": float(np.median([x["r_sum"] for x in xs])),
+                            "median_best_share": float(np.median([x["best_share"] for x in xs]))})
+    _write_csv(Path(args.out) / f"{args.model}_e2_method_vs_R.csv", mvr)
+    return vis, red, mvr
+
+
 def e2(recs, args):
     rows = []
     for rec in recs:
@@ -314,6 +442,105 @@ def e3(recs, args):
 
 
 # --------------------------------------------------------------------------------------------
+def _ratio_bin(x):
+    return "A smaller" if x <= -1 else "same size" if x < 1 else "A 2-3x" if x < 2 else "A >=4x"
+
+
+def dilution(recs, grp, args):
+    """Dilution tests against group Shapley values (see the module docstring)."""
+    by_video = {g["video"]: g for g in grp}
+    pairs, tops = [], []
+    for rec in recs:
+        g = by_video.get(rec["video"])
+        if g is None:
+            continue
+        n = rec["n"]
+        for k, lv in g["levels"].items():
+            groups, phi = lv["groups"], np.asarray(lv["phi"], float)
+            j_top = int(np.argmax(phi))
+            for a in rec["attributions"]:
+                s = np.asarray(a["scores"], float)
+                rots = [np.roll(s, o) for o in range(1, n)]  # chance: scores no longer aligned with segments
+                key = dict(video=rec["video"], method=a["method"], seed=a["seed"], level=int(k))
+                for ia, A in enumerate(groups):
+                    if phi[ia] <= args.tau:
+                        continue
+                    for ib, B in enumerate(groups):
+                        if ia == ib or phi[ia] - phi[ib] <= args.delta:
+                            continue
+                        pairs.append({**key, "log2_ratio": math.log2(len(A) / len(B)),
+                                      "inv_max": int(s[B].max() > s[A].max()),
+                                      "inv_mean": int(s[B].mean() > s[A].mean()),
+                                      "inv_sum": int(s[B].sum() > s[A].sum()),
+                                      "chance_max": float(np.mean([x[B].max() > x[A].max() for x in rots])),
+                                      "chance_mean": float(np.mean([x[B].mean() > x[A].mean() for x in rots]))})
+                if phi[j_top] > args.tau:
+                    G = groups[j_top]
+                    order = np.argsort(-s, kind="stable")
+                    rank = int(min(np.flatnonzero(np.isin(order, G)))) + 1
+                    gs = len(G)
+                    tops.append({**key, "size_top": gs, "hit1": int(order[0] in G), "chance1": gs / n,
+                                 "top4": int(rank <= 4),
+                                 "chance4": 1 - math.comb(n - gs, 4) / math.comb(n, 4) if n - gs >= 4 else 1.0,
+                                 "rank": rank})
+
+    out_p = []
+    cell = defaultdict(list)
+    for p in pairs:
+        cell[(p["method"], p["seed"], p["level"], _ratio_bin(p["log2_ratio"]))].append(p)
+    for (m, sd, k, b), ps in sorted(cell.items()):
+        out_p.append({"method": m, "seed": sd, "level": k, "size_ratio": b, "n_pairs": len(ps),
+                      "n_videos": len({p["video"] for p in ps}),
+                      "inv_rate_max": float(np.mean([p["inv_max"] for p in ps])),
+                      "chance_max": float(np.mean([p["chance_max"] for p in ps])),
+                      "inv_rate_mean": float(np.mean([p["inv_mean"] for p in ps])),
+                      "chance_mean": float(np.mean([p["chance_mean"] for p in ps])),
+                      "inv_rate_sum": float(np.mean([p["inv_sum"] for p in ps]))})
+    _write_csv(Path(args.out) / f"{args.model}_dil_pairs.csv", out_p)
+
+    out_c = []
+    by_msk = defaultdict(lambda: defaultdict(list))
+    for p in pairs:
+        by_msk[(p["method"], p["seed"], p["level"])][p["video"]].append(p)
+
+    def gain(vs, readout, which):
+        """mean over pairs of (chance - observed) inversion rate: how much better than chance the
+        method ranks the more important segment. which: "larger" (A >= 2x B) or "same" (within 2x)."""
+        sel = (lambda p: p["log2_ratio"] >= 1) if which == "larger" else (lambda p: abs(p["log2_ratio"]) < 1)
+        x = [p[f"chance_{readout}"] - p[f"inv_{readout}"] for v in vs for p in v if sel(p)]
+        return float(np.mean(x)) if x else float("nan")
+
+    def rate(vs, col, which):
+        sel = (lambda p: p["log2_ratio"] >= 1) if which == "larger" else (lambda p: abs(p["log2_ratio"]) < 1)
+        x = [p[col] for v in vs for p in v if sel(p)]
+        return float(np.mean(x)) if x else float("nan")
+    for (m, sd, k), byv in sorted(by_msk.items()):
+        vs = list(byv.values())
+        for readout in ("mean", "max"):
+            diff = lambda w: gain(w, readout, "larger") - gain(w, readout, "same")  # noqa: E731
+            lo, hi = _boot(byv, diff, args.boot)
+            out_c.append({"method": m, "seed": sd, "level": k, "readout": readout,
+                          "inv_A_larger": rate(vs, f"inv_{readout}", "larger"),
+                          "chance_A_larger": rate(vs, f"chance_{readout}", "larger"),
+                          "inv_same_size": rate(vs, f"inv_{readout}", "same"),
+                          "chance_same_size": rate(vs, f"chance_{readout}", "same"),
+                          "gain_A_larger": gain(vs, readout, "larger"), "gain_same_size": gain(vs, readout, "same"),
+                          "gain_difference": diff(vs), "ci_lo": lo, "ci_hi": hi})
+    _write_csv(Path(args.out) / f"{args.model}_dil_contrast.csv", out_c)
+
+    out_t = []
+    cell = defaultdict(list)
+    for t in tops:
+        cell[(t["method"], t["seed"], t["level"], _size_bin(t["size_top"]))].append(t)
+    for (m, sd, k, b), ts in sorted(cell.items()):
+        out_t.append({"method": m, "seed": sd, "level": k, "size_top": b, "n": len(ts),
+                      "hit1": float(np.mean([t["hit1"] for t in ts])), "chance1": float(np.mean([t["chance1"] for t in ts])),
+                      "top4": float(np.mean([t["top4"] for t in ts])), "chance4": float(np.mean([t["chance4"] for t in ts])),
+                      "median_rank": float(np.median([t["rank"] for t in ts]))})
+    _write_csv(Path(args.out) / f"{args.model}_dil_top.csv", out_t)
+    return out_p, out_c, out_t
+
+
 def swap(recs, args):
     pairs = []
     for rec in recs:
@@ -367,11 +594,48 @@ def main():
     print(f"[e23] {args.model}: {len(recs)} videos")
     if not recs:
         return
+    vis, red, mvr = e2_redundancy(recs, args)
     slopes = e2(recs, args)
     hits, invs, dels = e3(recs, args)
     sw = swap(recs, args)
+    grp = read_jsonl(Path(args.out) / f"{args.model}_e23_group.jsonl")
+    dil = dilution(recs, grp, args) if grp else None
 
-    print("\nE2  slope of log(readout) on log|G|  (-1 = credit shared equally, 0 = one frame carries it)")
+    if dil:
+        dp, dc, dt = dil
+        print(f"\nDILUTION ({len(grp)} videos with group values)")
+        print("  inversion: a frame-level reading ranks the LESS important segment above the more important one")
+        print("  'mean' = average credit per frame (each frame of A looks less important); 'max' = best frame")
+        print("  gain = chance - observed inversion rate (chance: frame scores rotated, so no longer aligned with segments)")
+        print("  dilution predicts a smaller gain when the more important segment A is the larger one (gain diff < 0)")
+        print(f"  {'method':15s} {'seed':>4s} {'k':>2s} {'readout':7s} {'A >=2x larger: inv/chance':>26s} {'same size: inv/chance':>22s} {'gain diff [95% CI]':>22s}")
+        for r in dc:
+            print(f"  {r['method']:15s} {str(r['seed']):>4s} {r['level']:2d} {r['readout']:7s} "
+                  f"{r['inv_A_larger']:>15.2f} / {r['chance_A_larger']:.2f} {r['inv_same_size']:>13.2f} / {r['chance_same_size']:.2f}"
+                  f"   {r['gain_difference']:+.2f} [{r['ci_lo']:+.2f}, {r['ci_hi']:+.2f}]")
+        print("  most important segment G*: top frame in G* (chance) | top-4 includes G* (chance) | median rank of G*'s best frame")
+        for r in dt:
+            print(f"  {r['method']:15s} {str(r['seed']):>4s} k={r['level']:<2d} |G*|={r['size_top']:4s} n={r['n']:4d}  "
+                  f"{r['hit1']:.2f} ({r['chance1']:.2f}) | {r['top4']:.2f} ({r['chance4']:.2f}) | {r['median_rank']:.0f}")
+
+    print(f"\nE2  visibility ({len(vis)} videos with P(c*|clip) - prior > 0.05), medians:")
+    print(f"  single-frame importances added up / clip importance : {np.median([v['sum_loo_share'] for v in vis]):.3f}")
+    print(f"  most important single frame / clip importance       : {np.median([v['max_loo_share'] for v in vis]):.3f}")
+    for k in (1, 2, 4):
+        cols = [c for c in vis[0] if c.startswith(f"left_after_{k}|")]
+        best = np.median([min(v[c] for c in cols if not c.endswith("random") and "cluster" not in c) for v in vis])
+        rnd = np.median([v[f"left_after_{k}|random"] for v in vis])
+        print(f"  share of clip importance left after removing the top {k} frames: best method {best:.2f}, random {rnd:.2f}")
+    print("\nE2  redundancy R(G) = 1 - sum of single-frame importances / I(G), groups with I(G) > tau")
+    print(f"  {'size':5s} {'grouping':8s} {'groups':>7s} {'I>tau':>6s} {'mean sim':>9s} {'median R':>9s} {'R>0.5':>6s}")
+    for r in red:
+        print(f"  {r['size']:5s} {r['grouping']:8s} {r['n_groups']:7d} {r['n_important']:6d} {r['median_mean_sim']:9.3f} "
+              f"{r['median_R']:9.2f} {r['share_R_above_half']:6.2f}")
+    print("\nE2  method vs redundancy: median r_sum (sum of the group's credit / I(G)) [best frame x |G| / I(G)]")
+    for r in mvr:
+        print(f"  {r['method']:15s} {r['R_bin']:10s} n={r['n']:5d}  r_sum {r['median_r_sum']:6.2f}  [{r['median_best_share']:6.2f}]")
+
+    print("\nE2  (confounded, for the record) slope of log(readout) on log|G|")
     print(f"{'method':15s} {'seed':>4s} {'readout':7s} {'grouping':13s} {'n':>6s} {'slope':>7s}   95% CI")
     for r in slopes:
         print(f"{r['method']:15s} {str(r['seed']):>4s} {r['readout']:7s} {r['grouping']:13s} "

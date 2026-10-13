@@ -9,3 +9,6 @@ results/*
 !results/e1/
 results/e1/*
 !results/e1/*_E1_summary.md
+!results/e23/
+results/e23/*
+!results/e23/E23_summary.md

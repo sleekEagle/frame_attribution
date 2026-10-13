@@ -8,7 +8,10 @@ clustering only (no datasets, checkpoints or DINOv2).  Run:  python motivation/t
    pixel clustering recovers every run as a tree node; within a run, exact Shapley gives every
    copy the same value; leave-one-out of a copy is 0 (the others stand in for it) while the run's
    group importance is not; e23_metrics' r_loo is therefore 0 and r_max = r_sum / |run|.
-3. End-to-end: e23_run.py -> e23_metrics.py on the toy model.
+3. group_shapley: singleton groups give frame-level Shapley; the values add up to
+   v(all) - v(empty); copy invariance (a run's group value doesn't change when the run gets
+   longer, while the frame-level credit per copy is divided).
+4. End-to-end: e23_run.py -> e23_metrics.py on the toy model.
 """
 import shutil
 import subprocess
@@ -77,6 +80,41 @@ def test_runs_known_answer():
           " Shapley per copy =", [round(float(phi[rf[0]]), 4) for rf in run_frames], ")")
 
 
+def test_group_shapley():
+    """group_shapley: singletons == frame-level Shapley; values add up to v(all) - v(empty);
+    copy invariance on the toy max-pool model (exact copies are perfect substitutes)."""
+    model = E.load_clip_model("toy")
+    g = torch.Generator().manual_seed(5)
+    distinct = torch.randint(0, 256, (4, 3, model.size, model.size), generator=g, dtype=torch.uint8)
+    prior = E.uniform_prior(model.num_classes)
+
+    def setup(runs):
+        frames = torch.cat([distinct[j][None].repeat(r, 1, 1, 1) for j, r in enumerate(runs)])
+        bank = E.FrameBank(model, frames, "exact", 0)
+        ev = E.Evaluator(model, bank)
+        n = sum(runs)
+        b = np.cumsum([0] + runs)
+        return ev, E.make_layout(range(n)), [list(range(b[j], b[j + 1])) for j in range(len(runs))]
+
+    ev, lay, groups = setup([1, 2, 1, 3])
+    cls = int(ev.logits([lay])[0].argmax())
+    n = len(lay["content"])
+    phi_f = E.attr_shapley(ev, lay, cls, prior, "drop", exact_max=12)
+    phi_s = E.group_shapley(ev, lay, [[i] for i in range(n)], cls, prior, "drop")
+    assert np.allclose(phi_f, phi_s, atol=1e-6), "singleton groups must equal frame-level Shapley"
+    phi_g = E.group_shapley(ev, lay, groups, cls, prior, "drop")
+    v_all = ev.value(lay, np.ones((1, n), bool), "drop", cls, prior)[0]
+    assert abs(phi_g.sum() - (v_all - prior[cls])) < 1e-6, "efficiency"
+    # copy invariance: lengthen run 1 (2 -> 5 copies); its group value must not change
+    ev2, lay2, groups2 = setup([1, 5, 1, 3])
+    phi_g2 = E.group_shapley(ev2, lay2, groups2, cls, prior, "drop")
+    assert np.allclose(phi_g, phi_g2, atol=1e-6), f"copy invariance failed: {phi_g} vs {phi_g2}"
+    # ... while the frame-level credit per copy of that run is divided
+    phi_f2 = E.attr_shapley(ev2, lay2, cls, prior, "drop", exact_max=12)
+    print("group shapley ok  (group value of the run:", round(float(phi_g[1]), 4), "with 2 or 5 copies;",
+          "frame-level credit per copy:", round(float(phi_f[1]), 4), "->", round(float(phi_f2[1]), 4), ")")
+
+
 def test_end_to_end():
     tmp = Path(tempfile.mkdtemp())
     try:
@@ -96,5 +134,6 @@ def test_end_to_end():
 if __name__ == "__main__":
     test_tree()
     test_runs_known_answer()
+    test_group_shapley()
     test_end_to_end()
     print("\nall E2/E3 tests passed")
