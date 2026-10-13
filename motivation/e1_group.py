@@ -22,6 +22,8 @@ Re-running resumes. Analysis: e1_group_metrics.py.
     python motivation/e1_group.py --model r3d_18 --fp16
     python motivation/e1_group.py --model mc3_18 --fp16 --limit 60
     python motivation/e1_group.py --model vjepa2 --fp16 --dup-types exact --n-perm 32
+    # split over 2 GPUs: --shard 0 --num-shards 2 and --shard 1 --num-shards 2 write
+    # <model>_group_attributions.shard0.jsonl / .shard1.jsonl; concatenate them afterwards
 """
 import argparse
 import time
@@ -67,13 +69,19 @@ def main():
     ap.add_argument("--n-perm", type=int, default=64)
     ap.add_argument("--batch-size", type=int, default=16)
     ap.add_argument("--fp16", action="store_true")
+    ap.add_argument("--shard", type=int, default=None, help="with --num-shards: only videos i with i %% num-shards == shard")
+    ap.add_argument("--num-shards", type=int, default=1)
     ap.add_argument("--out", default="results/e1")
     args = ap.parse_args()
 
     out_dir = Path(args.out)
     recs = read_jsonl(out_dir / f"{args.model}_conditions.jsonl")[:args.limit]
+    suffix = ""
+    if args.shard is not None:  # split the videos over several GPUs; merge the files afterwards
+        recs = [r for i, r in enumerate(recs) if i % args.num_shards == args.shard]
+        suffix = f".shard{args.shard}"
     attributed = {(a["video"], a["cond_id"]) for a in read_jsonl(out_dir / f"{args.model}_attributions.jsonl")}
-    out_path = out_dir / f"{args.model}_group_attributions.jsonl"
+    out_path = out_dir / f"{args.model}_group_attributions{suffix}.jsonl"
     done = {(r["video"], r["cond_id"], r["grouping"]) for r in read_jsonl(out_path)}
     model = load_clip_model(args.model)
     print(f"[e1 group] {args.model}: {len(recs)} videos, groupings={args.groupings}")

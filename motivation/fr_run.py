@@ -26,6 +26,7 @@ Analysis: motivation/fr_metrics.py.
 
     python motivation/fr_run.py --model mc3_18 --limit 150 --fp16
     python motivation/fr_run.py --model vjepa2 --dataset ssv2 --limit 80 --fp16 --n-perm 32
+    # split over 2 GPUs with --shard 0/1 --num-shards 2 (files <model>_fr.shard0.jsonl etc.)
 """
 import argparse
 import time
@@ -67,17 +68,22 @@ def main():
     ap.add_argument("--prior", default="uniform")
     ap.add_argument("--batch-size", type=int, default=16)
     ap.add_argument("--fp16", action="store_true")
+    ap.add_argument("--shard", type=int, default=None, help="with --num-shards: only videos i with i %% num-shards == shard")
+    ap.add_argument("--num-shards", type=int, default=1)
     ap.add_argument("--out", default="results/fr")
     args = ap.parse_args()
+    suffix = f".shard{args.shard}" if args.shard is not None else ""
 
     model = load_clip_model(args.model)
     assert model.spec["design"] == "insert", "the frame-rate test needs a model that accepts other lengths (insertion design)"
     prior = load_prior(model, args.prior)
     S = args.n_seg
-    out_path = Path(args.out) / f"{args.model}_fr.jsonl"
-    skip_path = Path(args.out) / f"{args.model}_fr_skipped.jsonl"
+    out_path = Path(args.out) / f"{args.model}_fr{suffix}.jsonl"
+    skip_path = Path(args.out) / f"{args.model}_fr_skipped{suffix}.jsonl"
     done = {r["video"] for r in read_jsonl(out_path)} | {r["video"] for r in read_jsonl(skip_path)}
     videos = get_videos(model, args.dataset, args.limit, args.seed)
+    if args.shard is not None:  # split the videos over several GPUs; merge the files afterwards
+        videos = [v for i, v in enumerate(videos) if i % args.num_shards == args.shard]
     print(f"[fr] {args.model}: {len(videos)} videos ({len(done)} done), densities={args.densities}, methods={args.methods}")
 
     for vi, (cls_name, path) in enumerate(videos):
