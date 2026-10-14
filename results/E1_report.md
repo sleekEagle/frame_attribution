@@ -231,6 +231,7 @@ These numbers rest on fewer cases, so we treat them as extra evidence. Exact cop
 | `results/e1/TRN_E1_summary.md` | TRN (official) |
 | `results/e1/VIDEOMAE_E1_summary.md` | why VideoMAE is excluded |
 | `results/e23/E23_summary.md` | E2/E3: dilution in natural videos |
+| `results/group_attribution_summary.md` | group values on the E1 clips (dilution removed), and the frame-rate test |
 | `results/figures/fig5_e1_credit.png`, `fig6_e1_beta.png` | Figures 5 and 6 |
 | `results/e1/<model>_summary.csv`, `<model>_beta.csv` | the numbers behind the tables (not in git) |
 
