@@ -12,6 +12,9 @@ clustering only (no datasets, checkpoints or DINOv2).  Run:  python motivation/t
    v(all) - v(empty); copy invariance (a run's group value doesn't change when the run gets
    longer, while the frame-level credit per copy is divided).
 4. End-to-end: e23_run.py -> e23_metrics.py on the toy model.
+5. e1_group.pair_groups: the target's copies form one group, the other contents form neighbouring
+   pairs that never span the target, the groups partition the clip, and reference, target and
+   control clips get the same partition of contents.
 """
 import shutil
 import subprocess
@@ -115,6 +118,35 @@ def test_group_shapley():
           "frame-level credit per copy:", round(float(phi_f[1]), 4), "->", round(float(phi_f2[1]), 4), ")")
 
 
+def test_pair_groups():
+    """pair_groups on insertion-design layouts like V-JEPA2's (16 contents)."""
+    from e1_group import pair_groups
+
+    def contents(lay, groups):
+        return sorted(tuple(sorted({lay["content"][i] for i in g})) for g in groups)
+
+    ref = {"content": list(range(16))}
+    for t in (0, 9, 10, 15):
+        tgt = {"content": list(range(t + 1)) + [t] * 8 + list(range(t + 1, 16))}  # m = 9
+        ctl = {"content": list(range(16)) + [14, 15]}  # control: extra copies of other contents
+        per = []
+        for lay in (ref, tgt, ctl):
+            groups = pair_groups(lay, t)
+            n = len(lay["content"])
+            assert sorted(i for g in groups for i in g) == list(range(n)), "groups must partition the clip"
+            t_slots = [i for i, c in enumerate(lay["content"]) if c == t]
+            assert t_slots in groups, "the target's copies must form one group"
+            for g in groups:
+                cs = {lay["content"][i] for i in g}
+                assert len(cs) <= 2 and (cs == {t} or t not in cs), cs
+                assert not (min(cs) < t < max(cs)), f"a pair spans the target: {cs}"
+            assert len(groups) <= 10
+            per.append(contents(lay, groups))
+        assert per[0] == per[1] == per[2], "reference, target and control must group contents alike"
+    print("pair groups ok  (16 contents ->", len(pair_groups(ref, 10)), "groups for target 10,",
+          len(pair_groups(ref, 9)), "for target 9)")
+
+
 def test_end_to_end():
     tmp = Path(tempfile.mkdtemp())
     try:
@@ -135,5 +167,6 @@ if __name__ == "__main__":
     test_tree()
     test_runs_known_answer()
     test_group_shapley()
+    test_pair_groups()
     test_end_to_end()
     print("\nall E2/E3 tests passed")

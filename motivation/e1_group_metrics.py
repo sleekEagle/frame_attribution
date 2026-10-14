@@ -12,7 +12,9 @@ reference clip of the same copy type:
   frame total      summed scores of t's copies / the same in the reference
   group <g>        group Shapley value of the group holding t (its first original slot) /
                    the same in the reference, for grouping g = oracle (one group per content),
-                   dino (DINOv2, same number of groups), dino_half (DINOv2, half as many)
+                   dino (DINOv2, same number of groups), dino_half (DINOv2, half as many),
+                   pairs (the target's copies, the other contents in neighbouring pairs; the
+                   reference uses the grouping built for the same target)
 Only targets with a positive reference value are used for each readout (as in E1).
   beta             slope of log(ratio) on log(m / m_ref), through 0, per target: 0 = the
                    readout doesn't change with m, -1 = it falls as 1/m (credit divided evenly)
@@ -32,7 +34,8 @@ import numpy as np
 from e1_common import read_jsonl
 
 SHAPLEY = {"realloc": "shapley_freeze", "insert": "shapley_drop", "replace": "shapley_drop"}
-READOUTS = ["I_t", "frame_per_copy", "frame_total", "group_oracle", "group_dino", "group_dino_half"]
+GROUPINGS = ["oracle", "dino", "dino_half", "pairs"]
+READOUTS = ["I_t", "frame_per_copy", "frame_total"] + [f"group_{g}" for g in GROUPINGS]
 
 
 def _write_csv(path, rows):
@@ -84,7 +87,8 @@ def main():
             if a["method"] == sh and a["seed"] == 0}
     grp = defaultdict(dict)
     for g in read_jsonl(d / f"{args.model}_group_attributions.jsonl"):
-        grp[(g["video"], g["cond_id"])][g["grouping"]] = g
+        key = g["grouping"] if g.get("for_target") is None else f'{g["grouping"]}@{g["for_target"]}'
+        grp[(g["video"], g["cond_id"])][key] = g
     videos = sorted({v for v, _ in grp})
 
     rows = []
@@ -112,15 +116,16 @@ def main():
                 row["frame_top_ref"] = int(top_content_frame(sr, ref["layout"], t))
                 row["frame_top_cond"] = int(top_content_frame(sc, c["layout"], t))
             s_c, s_r = first_slot(c["layout"], t), first_slot(ref["layout"], t)
-            for gname in ("oracle", "dino", "dino_half"):
-                gc, gr = grp[(v, c["id"])].get(gname), grp[(v, ref["id"])].get(gname)
+            for gname in GROUPINGS:
+                key = f"{gname}@{t}" if gname == "pairs" else gname
+                gc, gr = grp[(v, c["id"])].get(key), grp[(v, ref["id"])].get(key)
                 if not (gc and gr):
                     continue
                 vr = group_value_of(gr, s_r)
                 row[f"group_{gname}"] = group_value_of(gc, s_c) / vr if vr > 0 else float("nan")
                 row[f"group_{gname}_top_ref"] = int(top_group(gr, s_r))
                 row[f"group_{gname}_top_cond"] = int(top_group(gc, s_c))
-                if gname != "oracle":
+                if gname in ("dino", "dino_half"):
                     row[f"group_{gname}_recovered"] = gc.get("recovered")
             rows.append(row)
     _write_csv(d / f"{args.model}_group_rows.csv", rows)
@@ -151,7 +156,7 @@ def main():
                                 beta_hi=float(np.percentile(bs, 97.5)), n_beta=len(betas))
                 summ.append(line)
             # top-1 loss
-            for ro in ("frame", "group_oracle", "group_dino", "group_dino_half"):
+            for ro in ["frame"] + [f"group_{g}" for g in GROUPINGS]:
                 line = {"dup": dup, "kind": kind, "readout": f"top1_loss_{ro}"}
                 for m in ms:
                     x = [1 - r[f"{ro}_top_cond"] for r in rows if r["dup"] == dup and r["kind"] == kind

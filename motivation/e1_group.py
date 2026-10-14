@@ -11,17 +11,23 @@ For every attributed clip (reference, target, control), compute e1_common.group_
              ("dino_half", coarser groups that may merge the target with similar neighbours).
              For each DINOv2 grouping we record whether the target's copies form exactly one
              group of their own ("recovered").
+  pairs      the target's copies form one group (as in oracle), and the other contents are joined
+             into neighbouring pairs, never across the target. With 16 contents (insertion
+             design) this gives 9 groups instead of 16, so exact Shapley replaces sampled
+             orderings. The grouping depends on the target, so a reference clip gets one record
+             per target ("for_target"); target and control clips use their own target.
 Same class (the reference prediction), removal and prior as E1. Exact Shapley for up to
 --exact-max groups, otherwise --n-perm sampled orderings (seeded per video and clip).
 
-Writes <out>/<model>_group_attributions.jsonl, one line per (video, condition, grouping):
+Writes <out>/<model>_group_attributions.jsonl, one line per (video, condition, grouping[, target]):
     {"video", "cond_id", "grouping", "groups": [[slots], ...], "contents": [[content ids], ...],
-     "values": [...], "recovered": bool | null, "n_evals"}
+     "values": [...], "recovered": bool | null, "for_target": int | null, "n_evals"}
 Re-running resumes. Analysis: e1_group_metrics.py.
 
     python motivation/e1_group.py --model r3d_18 --fp16
     python motivation/e1_group.py --model mc3_18 --fp16 --limit 60
     python motivation/e1_group.py --model vjepa2 --fp16 --dup-types exact --n-perm 32
+    python motivation/e1_group.py --model vjepa2 --fp16 --dup-types exact --groupings pairs
     # split over 2 GPUs: --shard 0 --num-shards 2 and --shard 1 --num-shards 2 write
     # <model>_group_attributions.shard0.jsonl / .shard1.jsonl; concatenate them afterwards
 """
@@ -44,6 +50,21 @@ def oracle_groups(layout):
     for slot, c in enumerate(layout["content"]):
         by_c.setdefault(c, []).append(slot)
     return sorted(by_c.values(), key=lambda g: g[0])
+
+
+def pair_groups(layout, target):
+    """The target's slots as one group; the other contents joined into neighbouring pairs (by
+    content order, separately on each side of the target, so no pair spans it). Each group holds
+    every slot of its contents. Ordered by first slot."""
+    by_c = {}
+    for slot, c in enumerate(layout["content"]):
+        by_c.setdefault(c, []).append(slot)
+    contents = sorted(by_c)
+    sides = [[c for c in contents if c < target], [c for c in contents if c > target]]
+    units = [[target]] if target in by_c else []
+    for side in sides:
+        units += [side[i:i + 2] for i in range(0, len(side), 2)]
+    return sorted((sorted(s for c in u for s in by_c[c]) for u in units), key=lambda g: g[0])
 
 
 def slot_frames_u8(layout, cframes, dup, bank_seed):
@@ -82,7 +103,7 @@ def main():
         suffix = f".shard{args.shard}"
     attributed = {(a["video"], a["cond_id"]) for a in read_jsonl(out_dir / f"{args.model}_attributions.jsonl")}
     out_path = out_dir / f"{args.model}_group_attributions{suffix}.jsonl"
-    done = {(r["video"], r["cond_id"], r["grouping"]) for r in read_jsonl(out_path)}
+    done = {(r["video"], r["cond_id"], r["grouping"], r.get("for_target")) for r in read_jsonl(out_path)}
     model = load_clip_model(args.model)
     print(f"[e1 group] {args.model}: {len(recs)} videos, groupings={args.groupings}")
 
@@ -90,7 +111,16 @@ def main():
         path = rec["video"]
         conds = [c for c in rec["conditions"] if (path, c["id"]) in attributed
                  and (not args.dup_types or c["dup"] in args.dup_types)]
-        todo = [(c, g) for c in conds for g in args.groupings if (path, c["id"], g) not in done]
+        todo = []
+        for c in conds:
+            for g in args.groupings:
+                if g != "pairs":
+                    fts = [None]
+                elif c["kind"] == "reference":  # one grouping per target of this copy type
+                    fts = sorted({x["target"] for x in conds if x["dup"] == c["dup"] and x["kind"] != "reference"})
+                else:
+                    fts = [c["target"]]
+                todo += [(c, g, ft) for ft in fts if (path, c["id"], g, ft) not in done]
         if not todo:
             continue
         t0 = time.time()
@@ -98,7 +128,7 @@ def main():
         frames, _ = model.load_frames(resolve_video_path(path))
         cframes = frames[0::2] if rec["design"] == "realloc" else frames
         banks, evs, emb_cache, val_cache = {}, {}, {}, {}
-        for cond, grouping in todo:
+        for cond, grouping, for_target in todo:
             dup, layout = cond["dup"], cond["layout"]
             if dup not in banks:
                 banks[dup] = FrameBank(model, cframes, dup, rec["bank_seed"])
@@ -109,6 +139,8 @@ def main():
             recovered = None
             if grouping == "oracle":
                 groups = orc
+            elif grouping == "pairs":
+                groups = pair_groups(layout, for_target)
             else:
                 key = (dup, tuple(layout["content"]), tuple(layout["copy"]))
                 if key not in emb_cache:
@@ -130,7 +162,7 @@ def main():
             append_jsonl(out_path, {
                 "model": args.model, "video": path, "cond_id": cond["id"], "grouping": grouping,
                 "groups": groups, "contents": [[layout["content"][i] for i in g] for g in groups],
-                "values": [float(v) for v in vals], "recovered": recovered,
+                "values": [float(v) for v in vals], "recovered": recovered, "for_target": for_target,
                 "n_evals": ev.n_evals - n0})
         name = path.replace("\\", "/").split("/")[-1]
         print(f"[{vi + 1}/{len(recs)}] {name}: {len(todo)} group attributions ({time.time() - t0:.1f}s)")
