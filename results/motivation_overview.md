@@ -66,18 +66,23 @@ Dilution doesn't need the credits to add up wrongly. Shapley's credits always ad
 - **β:** how fast the per-copy credit falls with m. β = 0 means no change, and β = −1 means the credit is split evenly among the copies.
 - **Ranking:** top-1 loss and inversions.
 
-**Main numbers** (Shapley, exact copies, highest m):
+**Main numbers** (exact copies, highest m; LOO = leave-one-out):
 
 | | R3D-50 (×4) | R3D-18 (×4) | MC3-18 (×9) | V-JEPA2 (×9) | TRN (×2) |
 |---|---|---|---|---|---|
 | model's reliance (I_t ratio) | 1.28 | 1.30 | 3.22 | 0.87 | 1.32 |
 | Shapley, credit of one copy | 0.62 | 0.52 | 0.48 | 0.16 | 0.50 |
 | Shapley, all copies added up | 2.47 | 2.07 | 4.33 | 1.45 | 0.99 |
-| β, target (control) | −0.37 (−0.01) | −0.47 (+0.03) | −0.31 (−0.12) | −0.71 (−0.02) | −0.94 (−0.03) |
-| top-1 loss, target vs noise alone | 0.71 vs 0.47 | 0.75 vs 0.38 | 0.24 vs 0.62 | too few cases | 0.61 vs 0 |
+| Shapley, β, target (control) | −0.37 (−0.01) | −0.47 (+0.03) | −0.31 (−0.12) | −0.71 (−0.02) | −0.94 (−0.03) |
+| LOO, credit of one copy | −0.05 | −0.02 | 0.13 | 0.30 | 0.02 |
+| LOO, β, target (control) | −1.38 (−0.11) | −1.55 (−0.09) | −0.77 (−0.14) | −0.48 (−0.05) | −2.60 (+0.25) |
+| Shapley, top-1 loss, target vs noise alone | 0.71 vs 0.47 | 0.75 vs 0.38 | 0.24 vs 0.62 | too few cases | 0.61 vs 0 |
 
 **What it shows:**
-- **Every method dilutes, and duplication causes it.** For Shapley and leave-one-out, the target's β is clearly negative on all five models, and the control's is near 0.
+- **Shapley and leave-one-out dilute on all five models, and duplication causes it.** The target's β is clearly negative, and far below the control's. The controls are near 0, except on MC3-18 (−0.12 to −0.14, following the model's own change of −0.14 in the longer control clip) and LOO on TRN (+0.25).
+- **Integrated Gradients and occlusion dilute on most models.** The exceptions are occlusion on R3D-50, which shows no effect specific to duplication, and Integrated Gradients on V-JEPA2, whose credit also falls in the control.
+- **Grad-CAM barely dilutes.** Its credit per copy changes little, and on three models the control changes as much. Its problem is too much credit in total (below).
+- β below −1 means the credit fell to almost 0. LOO does this on three models.
 - **Leave-one-out gives copies almost no credit** (0.13 or less per copy on four models). Removing one copy leaves the others, so the output barely changes.
 - **Dilution changes rankings.** With Shapley, the duplicated target loses its top rank in 75% of cases on R3D-18 and 61% on TRN.
 - **A second, separate failure: too much credit in total.** Grad-CAM on every model, and Shapley on four models, give the copies together more credit than the model's reliance supports.
