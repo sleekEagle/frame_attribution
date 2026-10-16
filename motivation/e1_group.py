@@ -16,22 +16,33 @@ For every attributed clip (reference, target, control), compute e1_common.group_
              design) this gives 9 groups instead of 16, so exact Shapley replaces sampled
              orderings. The grouping depends on the target, so a reference clip gets one record
              per target ("for_target"); target and control clips use their own target.
+  practical  groupings chosen without knowing which frames are copies (e23_run.practical_groups):
+             dino_k<K> (the DINOv2 tree cut into K groups), dino_thr (cut at the merge height
+             tau of <out>/dino_tau.json, from calibrate_tau.py; between --min-groups and
+             --max-groups groups), dinoavg_* (the same with an average-linkage tree),
+             win_k<K> (K equal windows) and win_w<W> (windows of W frames). For these, "info"
+             records the number of groups, whether dino_thr hit the cap, how many groups hold a
+             copy of the target (t_groups) and the share of those groups' slots that are copies
+             of the target (t_purity). Analysis: e1_metrics.py attr --practical.
 Same class (the reference prediction), removal and prior as E1. Exact Shapley for up to
 --exact-max groups, otherwise --n-perm sampled orderings (seeded per video and clip).
 
 Writes <out>/<model>_group_attributions.jsonl, one line per (video, condition, grouping[, target]):
     {"video", "cond_id", "grouping", "groups": [[slots], ...], "contents": [[content ids], ...],
-     "values": [...], "recovered": bool | null, "for_target": int | null, "n_evals"}
+     "values": [...], "recovered": bool | null, "for_target": int | null, "info": {...} | null,
+     "n_evals"}
 Re-running resumes. Analysis: e1_group_metrics.py.
 
     python motivation/e1_group.py --model r3d_18 --fp16
     python motivation/e1_group.py --model mc3_18 --fp16 --limit 60
     python motivation/e1_group.py --model vjepa2 --fp16 --dup-types exact --n-perm 32
     python motivation/e1_group.py --model vjepa2 --fp16 --dup-types exact --groupings pairs
+    python motivation/e1_group.py --model r3d_18 --fp16 --limit 60 --dup-types exact         --groupings dino_k4 dino_k8 dino_thr win_k4 win_k8 win_w4
     # split over 2 GPUs: --shard 0 --num-shards 2 and --shard 1 --num-shards 2 write
     # <model>_group_attributions.shard0.jsonl / .shard1.jsonl; concatenate them afterwards
 """
 import argparse
+import json
 import time
 from pathlib import Path
 
@@ -40,7 +51,7 @@ import numpy as np
 from e1_common import (MODEL_SPECS, Evaluator, FrameBank, append_jsonl, group_shapley,
                        load_clip_model, load_prior, perturb_u8, read_jsonl, resolve_video_path,
                        stable_seed)
-from e23_run import embed, level_groups, tree_nodes
+from e23_run import embed, level_groups, practical_groups, tau_key, tree_linkage, tree_nodes
 from frame_clustering import hierarchy_from_embeddings
 
 
@@ -88,6 +99,9 @@ def main():
     ap.add_argument("--clusterer", default="dinov2", choices=["dinov2", "pixel"])
     ap.add_argument("--exact-max", type=int, default=12)
     ap.add_argument("--n-perm", type=int, default=64)
+    ap.add_argument("--tau-file", default=None, help="default: <out>/dino_tau.json (dino_thr)")
+    ap.add_argument("--max-groups", type=int, default=12, help="cap on the number of dino_thr groups")
+    ap.add_argument("--min-groups", type=int, default=2, help="floor on the number of dino_thr groups")
     ap.add_argument("--batch-size", type=int, default=16)
     ap.add_argument("--fp16", action="store_true")
     ap.add_argument("--shard", type=int, default=None, help="with --num-shards: only videos i with i %% num-shards == shard")
@@ -105,6 +119,13 @@ def main():
     out_path = out_dir / f"{args.model}_group_attributions{suffix}.jsonl"
     done = {(r["video"], r["cond_id"], r["grouping"], r.get("for_target")) for r in read_jsonl(out_path)}
     model = load_clip_model(args.model)
+    taus = {}
+    thr = [g for g in args.groupings if g.endswith("_thr")]
+    if thr:
+        tau_path = Path(args.tau_file) if args.tau_file else out_dir / "dino_tau.json"
+        tau_json = json.loads(tau_path.read_text())
+        taus = {g: tau_json[tau_key(args.model, g)]["tau"] for g in thr}
+        print(f"[e1 group] thresholds {taus} (from {tau_path}), {args.min_groups}-{args.max_groups} groups")
     print(f"[e1 group] {args.model}: {len(recs)} videos, groupings={args.groupings}")
 
     for vi, rec in enumerate(recs):
@@ -127,7 +148,7 @@ def main():
         prior = load_prior(model, rec.get("prior"))
         frames, _ = model.load_frames(resolve_video_path(path))
         cframes = frames[0::2] if rec["design"] == "realloc" else frames
-        banks, evs, emb_cache, val_cache = {}, {}, {}, {}
+        banks, evs, emb_cache, tree_cache, val_cache = {}, {}, {}, {}, {}
         for cond, grouping, for_target in todo:
             dup, layout = cond["dup"], cond["layout"]
             if dup not in banks:
@@ -136,22 +157,35 @@ def main():
             ev = evs[dup]
             orc = oracle_groups(layout)
             target = cond.get("target")
-            recovered = None
+            recovered = info = None
+            n = len(layout["content"])
+            nodes = None
+            linkage = "ward" if grouping in ("dino", "dino_half") else tree_linkage(grouping)
+            if linkage:
+                key = (dup, tuple(layout["content"]), tuple(layout["copy"]))
+                if key not in emb_cache:
+                    emb_cache[key] = embed(slot_frames_u8(layout, cframes, dup, rec["bank_seed"]), args.clusterer)
+                if (key, linkage) not in tree_cache:
+                    tree_cache[(key, linkage)] = tree_nodes(hierarchy_from_embeddings(emb_cache[key], linkage), n)
+                nodes = tree_cache[(key, linkage)]
             if grouping == "oracle":
                 groups = orc
             elif grouping == "pairs":
                 groups = pair_groups(layout, for_target)
-            else:
-                key = (dup, tuple(layout["content"]), tuple(layout["copy"]))
-                if key not in emb_cache:
-                    emb_cache[key] = embed(slot_frames_u8(layout, cframes, dup, rec["bank_seed"]), args.clusterer)
-                n = len(layout["content"])
-                nodes = tree_nodes(hierarchy_from_embeddings(emb_cache[key]), n)
+            elif grouping in ("dino", "dino_half"):
                 k = len(orc) if grouping == "dino" else max(2, len(orc) // 2)
                 groups = level_groups(nodes, n, k)
-                if target is not None and target >= 0:
-                    t_slots = sorted(i for i, c in enumerate(layout["content"]) if c == target)
+            else:
+                groups, info = practical_groups(grouping, n, nodes, taus.get(grouping), args.max_groups,
+                                                args.min_groups)
+            if target is not None and target >= 0:
+                t_slots = sorted(i for i, c in enumerate(layout["content"]) if c == target)
+                if grouping in ("dino", "dino_half"):
                     recovered = any(sorted(g) == t_slots for g in groups)
+                if info is not None:
+                    t_gs = [g for g in groups if set(g) & set(t_slots)]
+                    info.update(t_groups=len(t_gs),
+                                t_purity=len(t_slots) / sum(len(g) for g in t_gs))
             n0 = ev.n_evals
             vkey = (dup, tuple(layout["content"]), tuple(layout["copy"]), tuple(map(tuple, groups)))
             if vkey not in val_cache:  # e.g. DINOv2 found exactly the oracle groups: same values
@@ -163,6 +197,7 @@ def main():
                 "model": args.model, "video": path, "cond_id": cond["id"], "grouping": grouping,
                 "groups": groups, "contents": [[layout["content"][i] for i in g] for g in groups],
                 "values": [float(v) for v in vals], "recovered": recovered, "for_target": for_target,
+                "info": info,
                 "n_evals": ev.n_evals - n0})
         name = path.replace("\\", "/").split("/")[-1]
         print(f"[{vi + 1}/{len(recs)}] {name}: {len(todo)} group attributions ({time.time() - t0:.1f}s)")

@@ -92,6 +92,22 @@ def hierarchy_from_embeddings(embeddings, linkage: str = "ward"):
     return Z
 
 
+def hierarchy_from_distances(D, linkage: str = "average"):
+    """(T, T) precomputed distances -> Z, the adjacent-only merge tree (not Ward, which needs
+    points). With D = sqrt(2 - 2 * cosine similarity) this equals hierarchy_from_embeddings(...,
+    linkage) on the normalized embeddings."""
+    D = np.asarray(D, dtype=np.float64)
+    n = len(D)
+    clustering = AgglomerativeClustering(
+        n_clusters=None, distance_threshold=0, connectivity=_adjacent_connectivity(n),
+        linkage=linkage, metric="precomputed", compute_full_tree=True,
+    ).fit(D)
+    counts = np.zeros(clustering.children_.shape[0])
+    for i, (a, b) in enumerate(clustering.children_):
+        counts[i] = sum(1 if child < n else counts[child - n] for child in (a, b))
+    return np.column_stack([clustering.children_, clustering.distances_, counts]).astype(float)
+
+
 def hierarchy_groups(Z, n_frames: int) -> dict:
     """Z -> {k: [[frame indices], ...]} for every level from k=n_frames (finest, all
     singletons) down to k=1 (coarsest, one group spanning the whole clip). Each level's groups

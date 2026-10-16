@@ -94,6 +94,77 @@ def fixed_windows(n: int, sizes):
 
 
 # --------------------------------------------------------------------------------------------
+# Practical groupings: chosen without knowing which frames are copies (practical_groups)
+# --------------------------------------------------------------------------------------------
+def window_groups(n: int, k: int = None, width: int = None):
+    """Neighbouring-frame windows that partition 0..n-1: k equal windows (np.array_split), or
+    windows of `width` frames (the last one may be shorter)."""
+    if k is not None:
+        return [a.tolist() for a in np.array_split(np.arange(n), min(k, n)) if len(a)]
+    return [list(range(s, min(s + width, n))) for s in range(0, n, width)]
+
+
+def threshold_k(nodes, n: int, tau: float) -> int:
+    """Number of groups when the tree is cut at merge height tau: n minus the number of merges
+    with height <= tau. (Contiguous Ward heights need not grow with every merge; counting them
+    and cutting with level_groups keeps the groups a valid cut of the tree.)"""
+    return n - sum(1 for node in nodes[n:] if node["height"] <= tau)
+
+
+def practical_groups(name: str, n: int, nodes=None, tau: float = None, max_groups: int = None,
+                     min_groups: int = None):
+    """Groups for a practical grouping name (n = slots in the clip):
+      dino_k<K>   the DINOv2 tree cut into K groups
+      dino_thr    the tree cut at merge height tau (between min_groups and max_groups groups)
+      dinoavg_*   the same with an average-linkage tree instead of Ward (the caller passes that
+                  tree; see tree_linkage). Ward's merge height grows with cluster size, so a
+                  longer run of similar frames merges later; average linkage doesn't.
+      win_k<K>    K equal windows
+      win_w<W>    windows of W frames
+    Returns (groups, info) with info = {"k": number of groups, "capped": hit max_groups,
+    "floored": hit min_groups}."""
+    capped = floored = False
+    if name.startswith(("dino_", "dinoavg_")):
+        assert nodes is not None, "dino groupings need the tree"
+        rest = name.split("_", 1)[1]
+        if rest == "thr":
+            k = threshold_k(nodes, n, tau)
+            if max_groups and k > max_groups:
+                k, capped = max_groups, True
+            if min_groups and k < min_groups:
+                k, floored = min_groups, True
+        else:
+            k = int(rest[1:])
+        groups = level_groups(nodes, n, max(1, min(k, n)))
+    elif name.startswith("win_k"):
+        groups = window_groups(n, k=int(name[len("win_k"):]))
+    elif name.startswith("win_w"):
+        groups = window_groups(n, width=int(name[len("win_w"):]))
+    else:
+        raise ValueError(f"unknown practical grouping {name}")
+    return groups, {"k": len(groups), "capped": capped, "floored": floored}
+
+
+def tree_linkage(name: str):
+    """The tree a practical grouping needs: "ward", "average" or None (windows)."""
+    return "average" if name.startswith("dinoavg_") else "ward" if name.startswith("dino_") else None
+
+
+def tau_key(model: str, name: str) -> str:
+    """Key of a grouping's threshold in dino_tau.json."""
+    return f"{model}@average" if tree_linkage(name) == "average" else model
+
+
+def broadcast_scores(groups, values, n: int):
+    """Per-slot scores of a group explanation: every slot shows its group's value (not divided)."""
+    s = np.full(n, np.nan)
+    for g, v in zip(groups, values):
+        s[list(g)] = v
+    assert np.isfinite(s).all(), "groups must cover every slot"
+    return s
+
+
+# --------------------------------------------------------------------------------------------
 # Model-side measurements
 # --------------------------------------------------------------------------------------------
 def group_importance(ev, layout, groups, removal, cls, prior):

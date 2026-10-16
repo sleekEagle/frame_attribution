@@ -20,6 +20,10 @@ Ranking (rankings only, any method):
   inversion      over the other segments B with group value below A's in the clip (by more than
                  --delta): share where B's mean frame score beats A's. Compared with the base clip.
 Writes <out>/<model>_fr_rows.csv and _fr_summary.csv.
+
+--name fr_practical reads <out>/<model>_fr_practical.jsonl (fr_practical.py: broadcast scores of
+practical groupings, "grp_*", next to frame-level Shapley) and writes <model>_fr_practical_*.csv.
+There, segments covered by one group share a score, so top-1 counts a tie for first as top.
 """
 import argparse
 import csv
@@ -55,8 +59,13 @@ def main():
     ap.add_argument("--out", default="results/fr")
     ap.add_argument("--delta", type=float, default=0.01)
     ap.add_argument("--boot", type=int, default=1000)
+    ap.add_argument("--name", default="fr", help="input <model>_<name>.jsonl, output prefix")
     args = ap.parse_args()
-    recs = read_jsonl(Path(args.out) / f"{args.model}_fr.jsonl")
+    recs = read_jsonl(Path(args.out) / f"{args.model}_{args.name}.jsonl")
+    ties = args.name != "fr"
+
+    def is_top(x, j):
+        return x[j] >= max(x) - 1e-12 if ties else int(np.argmax(x)) == j
 
     rows = []
     for r in recs:
@@ -85,11 +94,11 @@ def main():
                 rows.append({**row0, "method": m, "seed": sd,
                              "per_frame": mc[A] / mb[A] if mb[A] > 0 else float("nan"),
                              "total": sc[A] / sb[A] if sb[A] > 0 else float("nan"),
-                             "frame_top_base": int(int(np.argmax(mb)) == A),
-                             "frame_top_clip": int(int(np.argmax(mc)) == A),
+                             "frame_top_base": int(is_top(mb, A)),
+                             "frame_top_clip": int(is_top(mc, A)),
                              "inv_clip": float(np.mean([mc[B] > mc[A] for B in others])) if others else float("nan"),
                              "inv_base": float(np.mean([mb[B] > mb[A] for B in others_b])) if others_b else float("nan")})
-    _write_csv(Path(args.out) / f"{args.model}_fr_rows.csv", rows)
+    _write_csv(Path(args.out) / f"{args.model}_{args.name}_rows.csv", rows)
 
     def beta(rs, col):
         per = defaultdict(list)
@@ -131,7 +140,7 @@ def main():
                     line[f"median_d{d}"] = float(np.mean(v)) if v else float("nan")
                     line[f"n_d{d}"] = len(v)
                 summ.append(line)
-    _write_csv(Path(args.out) / f"{args.model}_fr_summary.csv", summ)
+    _write_csv(Path(args.out) / f"{args.model}_{args.name}_summary.csv", summ)
 
     kept = len({x["video"] for x in rows})
     print(f"\n{args.model}: {len(recs)} videos with a target segment, {kept} with at least one clip passing the gate")

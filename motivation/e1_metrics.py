@@ -32,6 +32,14 @@ Readouts. For a content c in a clip, its slot scores give: per-copy MEAN, MAX ov
                    re-run with seed B.
   I_ratio          I^(m)(t) / I_ref(t): does the MODEL still rely on t?
 
+Practical groupings (--practical)
+  Reads <out>/<model>_group_attributions.jsonl (e1_group.py) and turns every practical grouping
+  (dino_k<K>, dino_thr, win_k<K>, win_w<W>) into per-slot BROADCAST scores: each slot shows the
+  value of its group, not divided (e23_run.broadcast_scores). These are scored like any other
+  method, as "grp_<grouping>", next to frame-level Shapley (all its seeds) on the same clips.
+  Top-1 counts a tie for first as still top (contents in one group share a score). Writes
+  <out>/<model>_practical_{rows,slopes,summary,beta}.csv.
+
 Caveats
   * With EXACT copies, leave-one-out / occlusion give each copy ~0 once m >= 2, so their
     per_copy_ratio is 0 and beta is undefined (NaN): read collapse_rate for those methods.
@@ -146,14 +154,52 @@ def readouts(scores, content):
             {c: v for c, v in by.items()})
 
 
+def _is_top(scores, t, ties):
+    """Is content t the top one? With ties=True, a tie for first counts as top."""
+    if ties:
+        return scores[t] >= max(scores.values()) - 1e-12
+    return max(scores, key=scores.get) == t
+
+
 def _ratio(a, b):
     return a / b if b and abs(b) > 1e-12 else float("nan")
+
+
+PRACTICAL_PREFIXES = ("dino_k", "dino_thr", "dinoavg_", "win_k", "win_w")
+SHAPLEY_OF = {"realloc": "shapley_freeze", "insert": "shapley_drop", "replace": "shapley_drop"}
+
+
+def practical_attributions(out, model, recs):
+    """Broadcast scores of the practical groupings, plus frame-level Shapley on the same clips."""
+    from e23_run import broadcast_scores
+    conds = {(v, c["id"]): c for v, r in recs.items() for c in r["conditions"]}
+    attrs, clips = [], set()
+    for g in read_jsonl(out / f"{model}_group_attributions.jsonl"):
+        if not g["grouping"].startswith(PRACTICAL_PREFIXES):
+            continue
+        c = conds[(g["video"], g["cond_id"])]
+        n = len(c["layout"]["content"])
+        attrs.append({"video": g["video"], "cond_id": g["cond_id"], "method": f"grp_{g['grouping']}",
+                      "seed": 0, "scores": broadcast_scores(g["groups"], g["values"], n).tolist(),
+                      "content": c["layout"]["content"], "n_evals": g["n_evals"], "secs": 0.0})
+        clips.add((g["video"], g["cond_id"]))
+    design = next(iter(recs.values()))["design"]
+    attrs += [a for a in read_jsonl(out / f"{model}_attributions.jsonl")
+              if a["method"] == SHAPLEY_OF[design] and (a["video"], a["cond_id"]) in clips]
+    return attrs
 
 
 def attr(args):
     out = Path(args.out)
     recs = {r["video"]: r for r in read_jsonl(out / f"{args.model}_conditions.jsonl")}
-    attrs = read_jsonl(out / f"{args.model}_attributions.jsonl")
+    if args.practical:
+        attrs = practical_attributions(out, args.model, recs)
+        recs = {v: r for v, r in recs.items() if any(a["video"] == v for a in attrs)}
+        prefix = f"{args.model}_practical"
+    else:
+        attrs = read_jsonl(out / f"{args.model}_attributions.jsonl")
+        prefix = args.model
+    ties = args.practical  # a tie for first counts as still top
     A = {(a["video"], a["cond_id"], a["method"], a["seed"]): a for a in attrs}
     methods = sorted({a["method"] for a in attrs})
     seeds_of = defaultdict(set)
@@ -203,9 +249,9 @@ def attr(args):
                         inv_val = [c_max[t] < c_max[j] for j in valid]
                         # top-1 loss (method's own top at the reference with seed A)
                         top1 = top1_floor = None
-                        if seed == seed_b and max(ra, key=ra.get) == t:
-                            top1 = max(c_max, key=c_max.get) != t
-                            top1_floor = max(rb, key=rb.get) != t
+                        if seed == seed_b and _is_top(ra, t, ties):
+                            top1 = not _is_top(c_max, t, ties)
+                            top1_floor = not _is_top(rb, t, ties)
                         ref_pc = r_mean[t]
                         rows.append({
                             "video": video, "class": rec["class"], "target": t, "tier": c["tier"],
@@ -225,7 +271,7 @@ def attr(args):
                             "top1_loss": top1, "top1_floor": top1_floor,
                             "I_ratio": _ratio(I_c.get(t, float("nan")), I_ref.get(t)) if I_c else None,
                             "n_evals": a["n_evals"], "secs": a["secs"]})
-    _write_csv(out / f"{args.model}_rows.csv", rows)
+    _write_csv(out / f"{prefix}_rows.csv", rows)
 
     # ---- slopes -----------------------------------------------------------------------------
     by_curve = defaultdict(list)
@@ -249,7 +295,7 @@ def attr(args):
         slopes.append({"video": video, "target": t, "tier": tier, "dup": dup, "kind": kind,
                        "method": method, "seed": seed, "beta": beta, "n_points": len(xs) - 1,
                        "n_nonpositive": len(rs) - (len(xs) - 1)})
-    _write_csv(out / f"{args.model}_slopes.csv", slopes)
+    _write_csv(out / f"{prefix}_slopes.csv", slopes)
 
     # ---- aggregation ------------------------------------------------------------------------
     gkeys = ["method", "dup", "kind", "m"] + (["tier"] if args.by_tier else [])
@@ -270,7 +316,7 @@ def attr(args):
                         "top1_loss": _nanmean([float(r["top1_loss"]) for r in t1]),
                         "top1_floor": _nanmean([float(r["top1_floor"]) for r in t1]),
                         "median_I_ratio": _nanmed([r["I_ratio"] for r in rs])})
-    _write_csv(out / f"{args.model}_summary.csv", summary)
+    _write_csv(out / f"{prefix}_summary.csv", summary)
 
     bkeys = ["method", "dup", "kind"] + (["tier"] if args.by_tier else [])
     bgroups = defaultdict(list)
@@ -282,7 +328,7 @@ def attr(args):
         beta_rows.append({**dict(zip(bkeys, key)), "n": len(bs),
                           "n_finite": int(np.isfinite(bs).sum()),
                           "median_beta": med, "ci_lo": lo, "ci_hi": hi})
-    _write_csv(out / f"{args.model}_beta.csv", beta_rows)
+    _write_csv(out / f"{prefix}_beta.csv", beta_rows)
     print(f"\n{'method':<16}{'dup':<7}{'kind':<20}{'n':>5}{'beta':>8}{'95% CI':>18}")
     for b in beta_rows:
         print(f"{b['method']:<16}{b['dup']:<7}{b['kind']:<20}{b['n']:>5}{b['median_beta']:>8.2f}"
@@ -295,6 +341,8 @@ def main():
     ap.add_argument("--model", required=True)
     ap.add_argument("--out", default="results/e1")
     ap.add_argument("--by-tier", action="store_true", help="split summaries by target tier")
+    ap.add_argument("--practical", action="store_true",
+                    help="score the practical groupings of e1_group.py (broadcast scores)")
     args = ap.parse_args()
     gate(args) if args.what == "gate" else attr(args)
 

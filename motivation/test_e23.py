@@ -15,6 +15,10 @@ clustering only (no datasets, checkpoints or DINOv2).  Run:  python motivation/t
 5. e1_group.pair_groups: the target's copies form one group, the other contents form neighbouring
    pairs that never span the target, the groups partition the clip, and reference, target and
    control clips get the same partition of contents.
+6. Practical groupings (e23_run.practical_groups, broadcast_scores): windows partition the clip;
+   dino_thr with a small tau puts a run of exact copies in one group whatever its length, and its
+   broadcast score per copy doesn't change when the run grows; fixed-width windows split the run
+   and divide its credit; broadcast scores of singleton groups equal frame-level Shapley.
 """
 import shutil
 import subprocess
@@ -147,6 +151,57 @@ def test_pair_groups():
           len(pair_groups(ref, 9)), "for target 9)")
 
 
+def test_practical_groups():
+    from e23_run import broadcast_scores, embed, practical_groups, window_groups
+    for n in (8, 16, 18, 24):
+        for gs in (window_groups(n, k=4), window_groups(n, k=8), window_groups(n, width=4)):
+            assert sorted(i for g in gs for i in g) == list(range(n)), "windows must partition the clip"
+            assert all(g == list(range(g[0], g[-1] + 1)) for g in gs), "windows must be contiguous"
+    assert [len(g) for g in window_groups(18, width=4)] == [4, 4, 4, 4, 2]
+    assert [len(g) for g in window_groups(18, k=4)] == [5, 5, 4, 4]
+
+    model = E.load_clip_model("toy")
+    gen = torch.Generator().manual_seed(7)
+    distinct = torch.randint(0, 256, (6, 3, model.size, model.size), generator=gen, dtype=torch.uint8)
+    prior = E.uniform_prior(model.num_classes)
+
+    def clip(run):  # contents 0, 1 (x run), 2, 3, 4, 5
+        frames = torch.cat([distinct[0][None], distinct[1][None].repeat(run, 1, 1, 1), distinct[2:]])
+        bank = E.FrameBank(model, frames, "exact", 0)
+        n = len(frames)
+        nodes = tree_nodes(hierarchy_from_embeddings(embed(frames, "pixel")), n)
+        return E.Evaluator(model, bank), E.make_layout(range(n)), n, nodes, list(range(1, 1 + run))
+
+    per_copy = {}
+    for run in (2, 5):
+        ev, lay, n, nodes, run_slots = clip(run)
+        cls = int(ev.logits([E.make_layout([1])])[0].argmax())  # the class the repeated content drives
+        groups, info = practical_groups("dino_thr", n, nodes, tau=1e-6)
+        assert run_slots in groups, f"dino_thr must keep the run of copies together: {groups}"
+        assert info["k"] == n - (run - 1)
+        vals = E.group_shapley(ev, lay, groups, cls, prior, "drop")
+        b = broadcast_scores(groups, vals, n)
+        per_copy[run] = float(b[run_slots].mean())
+        # singletons: broadcast scores are frame-level Shapley
+        single = [[i] for i in range(n)]
+        phi = E.attr_shapley(ev, lay, cls, prior, "drop", exact_max=12)
+        assert np.allclose(broadcast_scores(single, E.group_shapley(ev, lay, single, cls, prior, "drop"), n), phi, atol=1e-6)
+    assert abs(per_copy[2] - per_copy[5]) < 1e-6, f"dino_thr broadcast must not dilute: {per_copy}"
+    # fixed-width windows split a run of 4 copies into 2 interchangeable windows: credit divided
+    frames = torch.cat([distinct[0][None], distinct[1][None].repeat(4, 1, 1, 1), distinct[2:5]])
+    bank = E.FrameBank(model, frames, "exact", 0)
+    ev, n = E.Evaluator(model, bank), len(frames)
+    lay = E.make_layout(range(n))
+    cls = int(ev.logits([E.make_layout([1])])[0].argmax())
+    wins = [[0], [1, 2], [3, 4], [5], [6], [7]]
+    whole = [[0], [1, 2, 3, 4], [5], [6], [7]]
+    v_w = E.group_shapley(ev, lay, wins, cls, prior, "drop")
+    v_g = E.group_shapley(ev, lay, whole, cls, prior, "drop")
+    assert v_w[1] < v_g[1] - 1e-6 and v_w[2] < v_g[1] - 1e-6, "split windows must divide the run's credit"
+    print("practical groups ok  (dino_thr per-copy score", round(per_copy[2], 4), "with 2 or 5 copies;",
+          "run in one group", round(float(v_g[1]), 4), "vs split windows", round(float(v_w[1]), 4), "+", round(float(v_w[2]), 4), ")")
+
+
 def test_end_to_end():
     tmp = Path(tempfile.mkdtemp())
     try:
@@ -168,5 +223,6 @@ if __name__ == "__main__":
     test_runs_known_answer()
     test_group_shapley()
     test_pair_groups()
+    test_practical_groups()
     test_end_to_end()
     print("\nall E2/E3 tests passed")
