@@ -21,6 +21,8 @@ We duplicated an important frame in a video clip and checked how attribution met
 
 **Play Fair** gives the same values as Shapley with deleted frames (Shapley-drop), within random noise. We checked this on two models. So the Shapley-drop results apply to Play Fair.
 
+**Group values remove the dilution.** A follow-up on the same clips (`results/group_attribution_summary.md`) computes Shapley with all copies of a frame as one group. The group's credit stays at 0.94–1.12 of its reference value on all five models, while frame-level Shapley gives each copy 0.14–0.61.
+
 ## 1. The question
 
 When a frame the model relies on appears m times in a clip, does an attribution method still give it the right amount of credit?
