@@ -11,7 +11,7 @@ This report brings together everything we have tested about attribution dilution
 
 ## In short
 
-1. **Dilution is real, and duplication causes it** (E1). When an important frame is shown several times, the model relies on it about as much as before (0.87–1.32 times, on four of five models). But every attribution method gives each copy less credit: 0.16–0.62 of the frame's earlier credit for Shapley, and about 0 for leave-one-out.
+1. **Dilution is real, and duplication causes it** (E1). When an important frame is shown several times, the model relies on it about as much as before (0.87–1.32 times, on four of five models). But Shapley gives each copy only 0.16–0.62 of the frame's earlier credit, and leave-one-out about 0, on all five models. Integrated Gradients and occlusion do the same on most models.
 2. **Real clips are highly redundant** (E2). Removing frames one at a time reveals almost nothing: the single-frame importances add up to about 0% of what the clip contributes. Removing the 4 top-ranked frames still leaves 75–95% of it.
 3. **Dilution misleads users in real videos** (E3). When the more important part of a clip is spread over many frames, Shapley's frame scores rank it below a less important, shorter part significantly more often. On V-JEPA2: 42% of the time, against 25% for parts of the same size.
 4. **It happens with denser real frames too** (frame-rate test). On V-JEPA2, sampling the most important quarter of a clip twice as densely leaves the model's reliance on it unchanged (0.96). But each of its frames gets 0.67 of its earlier Shapley credit.
@@ -198,7 +198,7 @@ The I_t ratios differ a little from section 3, because this run uses a subset of
 
 ## 8. Overall conclusions
 
-1. **Frame-level attribution dilutes the credit of evidence shown in several frames.** This happens on every model and every method we tested. Duplication causes it, as the control clips show.
+1. **Frame-level attribution dilutes the credit of evidence shown in several frames.** Shapley (and so Play Fair) and leave-one-out do this on every model, and Integrated Gradients and occlusion on most. Duplication causes it, as the control clips show.
 2. **Dilution matters in real videos.** Real clips are highly redundant (E2). When the more important part of a clip is spread over more frames, frame scores rank it wrongly more often (E3). Sampling a part more densely reduces each frame's credit, without changing the model's reliance on it (frame-rate test).
 3. **Removal-based methods have a stronger form of the problem.** Leave-one-out and occlusion can make redundant evidence nearly invisible (E1, E2, frame-rate test).
 4. **A second failure is separate from dilution.** Grad-CAM, and Shapley on most models, give repeated evidence too much credit in total.
