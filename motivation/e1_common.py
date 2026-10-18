@@ -481,6 +481,13 @@ ADAPTERS = {"r3d": R3DClip, "vjepa2": VJEPA2Clip, "videomae": VideoMAEClip, "trn
 def load_clip_model(name: str) -> ClipModel:
     if name not in ADAPTERS:
         raise ValueError(f"unknown model {name!r}; choose from {sorted(ADAPTERS)}")
+    # Real video models on the CPU take many times longer than on a GPU, and a missing GPU (for
+    # example a Kaggle session without an accelerator, or CUDA_VISIBLE_DEVICES naming a GPU that
+    # isn't there) would otherwise go unnoticed. Set ALLOW_CPU=1 to run on the CPU anyway.
+    if DEVICE == "cpu" and not name.startswith("toy") and os.environ.get("ALLOW_CPU") != "1":
+        raise RuntimeError(
+            f"no CUDA GPU visible (CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')!r}); "
+            f"refusing to run {name} on the CPU. Check the accelerator, or set ALLOW_CPU=1.")
     return ADAPTERS[name](name)
 
 
