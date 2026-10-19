@@ -224,7 +224,9 @@ The I_t ratios differ a little from section 3, because this run uses a subset of
 
 TRN, R3D-18 and R3D-50 keep a fixed clip length, so their fixed-width windows are the same as `win_k4`.
 
-**Ranking.** With `dinoavg_thr`, inversions in the E1 target clips fall to 1–8%, against 2–36% for frame Shapley and 6–33% for windows. In the V-JEPA2 frame-rate test, its inversions don't change when the segment gets denser (0.21 → 0.23), while every other method's roughly double (to 0.38–0.42).
+**Ranking** (with 95% confidence intervals from resampling videos). On TRN, R3D-18 and R3D-50, `dinoavg_thr`'s inversions in the E1 target clips fall to 1–4%, against 13–36% for frame Shapley and 25–33% for windows, and the intervals don't overlap. On V-JEPA2's E1 they fall from 19% to 8%, with overlapping intervals. On MC3-18, inversions are rare for every method (2–8%). In the V-JEPA2 frame-rate test, `dinoavg_thr`'s inversions don't rise when the segment gets denser (0.23, against 0.26 in its control), while every other method's rise to 0.38–0.42.
+
+**Resolution and cost.** `dinoavg_thr` uses about 2.5 frames per group, close to 8 windows with 2 frames each, which still dilute; so the coarser resolution isn't what removes dilution. It needs 2–35 times fewer model evaluations than frame-level Shapley, and its values are exact.
 
 **What it shows:**
 - **DINOv2 groups at a fixed average-linkage threshold remove dilution in all 7 tests,** without knowing which frames are redundant. Every DINOv2 grouping puts all copies of the target in one group.

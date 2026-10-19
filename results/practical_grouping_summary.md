@@ -119,24 +119,87 @@ When the control segment is densified instead, the target's score stays near 1 f
 
 On V-JEPA2, the windows' inversions are 0 at the base clip by construction, because `win_k4` there is exactly the 4 test segments.
 
-## 4. Conclusions
+## 4. Resolution, uncertainty and cost
 
-1. **A practical grouping can remove dilution.** DINOv2 similarity with a fixed average-linkage threshold, calibrated once per model on other videos, keeps repeated content's credit at 0.96–1.07 of its earlier value in all 7 tests. It also keeps the ranking where that can be measured (TRN, R3D-18, the V-JEPA2 frame-rate test).
+These three analyses use the existing files only (`motivation/practical_extras.py`).
+
+### 4.1 How coarse the groupings are
+
+Number of groups and frames per group on the clips a user would see: the E1 reference clips, and the frame-rate test base clips.
+
+| | TRN (8 frames) | R3D-18 | R3D-50 | MC3-18 | V-JEPA2 |
+|---|---|---|---|---|---|
+| `dinoavg_thr`: groups, median [10–90%] | 3 [2–4] | 6 [2–8] | 8 [3–8] | 8 [2–8] | 8 [2–8] |
+| `dinoavg_thr`: frames per group | 2.5 | 3.0 | 2.5 | 2.5 | 2.6 |
+| `dino_k8` and `win_k8`: frames per group | 2.0 (K = 4) | 2.0 | 2.0 | 2.0 | – |
+
+**The remedy coarsens the explanation by a factor of about 2.5,** from single frames to about 2.5 frames per group. Windows with 2 frames per group still dilute (section 2). So the coarser resolution alone doesn't explain why `dinoavg_thr` works; what matters is that it puts similar frames together. In 10% of clips, though, it merges a clip into 2–3 groups, which is much coarser. The MC3-18 frame-rate run allowed up to 12 groups, so its median there is 9.
+
+### 4.2 Ranking readouts with 95% confidence intervals
+
+The intervals come from resampling videos (2,000 resamples). Validated inversions in the E1 target clips at the highest number of copies:
+
+| | frame Shapley | `dinoavg_thr` | windows, same K |
+|---|---|---|---|
+| TRN | 0.36 [0.31, 0.42] | **0.01 [0.00, 0.03]** | 0.33 [0.28, 0.39] |
+| R3D-18 | 0.19 [0.14, 0.25] | **0.04 [0.01, 0.08]** | 0.33 [0.26, 0.40] |
+| R3D-50 | 0.13 [0.07, 0.20] | **0.01 [0.00, 0.03]** | 0.25 [0.17, 0.34] |
+| V-JEPA2 | 0.19 [0.13, 0.26] | 0.08 [0.01, 0.18] | 0.26 [0.14, 0.40] |
+| MC3-18 | 0.02 [0.01, 0.03] | 0.08 [0.03, 0.13] | 0.06 [0.03, 0.09] |
+
+Top-1 loss:
+
+| | frame Shapley | `dinoavg_thr` | windows, same K |
+|---|---|---|---|
+| TRN, E1 | 0.61 [0.52, 0.70] | **0.04 [0.01, 0.07]** | 0.46 [0.37, 0.55] |
+| R3D-18, E1 | 0.72 [0.52, 0.88] | **0.03 [0.00, 0.09]** | 0.46 [0.25, 0.67] |
+| V-JEPA2, frame-rate test (d = 3) | 0.71 [0.43, 0.93], 14 cases | **0.00**, 13 cases | 0.71 [0.54, 0.89] |
+
+In the V-JEPA2 frame-rate test at d = 3, the inversions are, target segment densified (control segment densified):
+- frame Shapley: 0.41 [0.28, 0.53] (0.12);
+- `dinoavg_thr`: 0.23 [0.11, 0.37] (0.26);
+- windows: 0.38–0.42 (0.02–0.15).
+
+**What the intervals support:**
+- **TRN, R3D-18 and R3D-50:** `dinoavg_thr` gives clearly fewer inversions than both frame Shapley and windows; the intervals don't overlap. On TRN and R3D-18 it also gives clearly less top-1 loss.
+- **V-JEPA2 frame-rate test:** the intervals overlap. But `dinoavg_thr`'s inversions are the same as in its control, while every other method's rise 3–20-fold above their control. So the supported claim is that densifying doesn't increase its ranking errors, not that it has fewer errors in absolute terms.
+- **V-JEPA2 E1:** fewer inversions (0.08 against 0.19), but the intervals overlap. It's suggestive only.
+- **MC3-18:** not supported. Inversions are rare for every method, and frame Shapley has the fewest. MC3-18's parts matter about equally (see E3), so there's little ranking to get wrong.
+- **R3D-50 top-1 loss** is as high in the control clips as in the target clips (frame Shapley 0.61 and 0.61), so it isn't used.
+
+### 4.3 Cost
+
+Model evaluations per clip (medians):
+
+| | frame Shapley (sampled orderings) | `dinoavg_thr` (exact) | `dino_k8` and `win_k8` (exact) |
+|---|---|---|---|
+| TRN | 510 | 14 | 30 (K = 4) |
+| R3D-18, R3D-50 | 1,662 | 30–62 | 510 |
+| MC3-18 | 1,115 | 255 | 255 |
+| V-JEPA2 | 571 | 255 (frame-rate test: 127) | 255 |
+
+**Group Shapley over the `dinoavg_thr` groups needs about 2–35 times fewer model evaluations than frame-level Shapley,** and its values are exact, while frame-level Shapley's are sampled estimates (64 or 32 orderings). The R3D and TRN counts include a factor of 2, because their removal averages two ways of filling a gap. Embedding the frames with DINOv2 costs one pass over 16 frames, which is small next to the video model's evaluations.
+
+## 5. Conclusions
+
+1. **A practical grouping can remove dilution.** DINOv2 similarity with a fixed average-linkage threshold, calibrated once per model on other videos, keeps repeated content's credit at 0.96–1.07 of its earlier value in all 7 tests. It also gives clearly fewer ranking errors on TRN, R3D-18 and R3D-50 (non-overlapping 95% intervals), and its ranking errors don't increase when a segment of a V-JEPA2 clip is sampled more densely. On MC3-18, ranking errors are rare for every method.
 2. **Fixed windows are not a remedy.** They split repeated content across windows and dilute almost as much as frame-level Shapley. That holds with the same number of groups as DINOv2, and more so with windows of a fixed width. This answers "why not just use windows?"
 3. **The grouping has to adapt to the sampling density.** A fixed number of groups works with copies but not fully with denser sampling. A threshold adapts, but only with a linkage whose merge height doesn't grow with cluster size (average, not Ward).
+4. **The remedy is coarser, but that isn't why it works, and it's cheaper.** It uses about 2.5 frames per group, close to 8 windows with 2 frames each, which still dilute. And it needs 2–35 times fewer model evaluations than frame-level Shapley, with exact values.
 
-## 5. Limitations
+## 6. Limitations
 
 - **The per-copy readout depends on group membership.** For a grouping that adapts to the clip, the target's group in the reference clip can contain different frames from its group in the target clip. On V-JEPA2's E1, `dino_k4` and `dino_thr` drop to 0.60–0.66 when the reference group included neighbouring frames, and to 0.82–0.92 when the target was alone in it. So part of their drop comes from the membership change, not from dilution. `dinoavg_thr` stays at 0.87–0.99 in both cases.
 - **The 8-group cap.** On MC3-18's and V-JEPA2's E1 clips (16–24 frames), the threshold groupings hit the cap in 41–73% of clips, and then behave like `dino_k8`. The cap only limits clips that would have more groups, not the merging of similar frames.
 - **Static clips.** With average linkage, a nearly static clip can merge completely. The floor of 2 groups was reached in 7–18% of clips.
 - **Top-1 loss** rests on few cases on R3D-50, MC3-18 and V-JEPA2.
+- **Ties favour coarse groups.** With broadcast scores, frames in one group share a score, and a tie doesn't count as an inversion. A grouping that merges the target with other frames avoids some inversions by construction. For `dinoavg_thr`, 75–100% of the target's group are its copies, so the effect is limited. A measure that doesn't depend on ties, such as deletion and insertion curves, would settle this.
 - **MC3-18's window results are confounded by clip length.** Insertion makes the clip longer, so the control clips also get more windows, and much of `win_w4`'s drop (−0.18) also appears in the control (−0.14).
 - **Repeated frames at d = 3** in the V-JEPA2 frame-rate test, from short SSv2 videos (see `results/group_attribution_summary.md`).
 - **Group values don't follow a model that counts copies** (MC3-18's I_t ratio is 2.88), as noted in the step-2 summary.
 - **One τ per model**, calibrated for a median of n/2 groups. Other targets would change the resolution of the explanation. We haven't tested how sensitive the results are to τ.
 
-## 6. Files and how to reproduce
+## 7. Files and how to reproduce
 
 | file | what it contains |
 |---|---|
@@ -144,6 +207,7 @@ On V-JEPA2, the windows' inversions are 0 at the base clip by construction, beca
 | `results/e1/<model>_group_attributions.jsonl` | group values per clip, now also for the practical groupings (`info` records the number of groups, the cap and floor, and where the target's copies ended up) |
 | `results/e1/<model>_practical_{rows,slopes,summary,beta}.csv`, `_practical_metrics.log` | E1 readouts |
 | `results/fr/<model>_fr_practical.jsonl`, `_fr_practical_{rows,summary}.csv`, `_metrics.log` | frame-rate test data and readouts |
+| `results/practical_extras_{sizes,ranks,cost}.csv` | section 4: group sizes, ranking readouts with 95% CIs, and evaluations per clip |
 | `results/kaggle_logs/practical_job*` | run logs |
 
 Commands (TRN and the MC3-18 frame-rate test ran on the laptop; the rest on Kaggle, 2 × T4, with `--shard s --num-shards 2`):
@@ -162,5 +226,6 @@ python motivation/fr_practical.py --model vjepa2 --fp16 --max-groups 8
 
 python motivation/e1_metrics.py attr --model <model> --practical
 python motivation/fr_metrics.py --model <model> --name fr_practical
+python motivation/practical_extras.py      # section 4, from the files above; no model runs
 python motivation/test_e23.py
 ```
