@@ -6,7 +6,7 @@ This summary covers the follow-up to `results/group_attribution_summary.md`. The
 
 **Grouping frames by DINOv2 similarity, with a fixed average-linkage threshold (`dinoavg_thr`), removes dilution in all 7 tests.** That's E1 on five models, and the frame-rate test on two. The duplicated or more densely sampled content keeps 0.96–1.07 of its earlier credit, while frame-level Shapley gives it 0.16–0.62.
 
-**Fixed windows don't remove it.** Windows of a fixed width give 0.25–0.66 of the earlier credit, about as diluted as frame-level Shapley. Even with the same number of groups as DINOv2, windows split repeated content across several windows. On R3D-18, 8 DINOv2 groups give 1.07 and 8 windows give 0.58.
+**Fixed windows don't remove it.** With the same number of groups as DINOv2, windows give 0.35–0.66 of the earlier credit (0.83–0.90 on MC3-18). Windows of a fixed width give 0.26–0.65 on the models whose clips get longer. Both are about as diluted as frame-level Shapley. Even with the same number of groups as DINOv2, windows split repeated content across several windows. On R3D-18, 8 DINOv2 groups give 1.07 and 8 windows give 0.58.
 
 **The choice of clustering matters:**
 - **A fixed number of DINOv2 groups** works with copies, but not fully when a segment is sampled more densely. On V-JEPA2: 0.79–0.89.

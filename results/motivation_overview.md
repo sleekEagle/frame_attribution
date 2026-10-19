@@ -1,4 +1,4 @@
-# Attribution dilution in video: overview of E1, E2, E3 and the group follow-ups
+# Attribution dilution in video: overview of all experiments
 
 This report brings together everything we have tested about attribution dilution so far. It gives the question, the method and the main numbers for each experiment, and links to the detailed reports.
 
@@ -8,6 +8,7 @@ This report brings together everything we have tested about attribution dilution
 | `results/design_choice_report.md` | which models can be used, and why |
 | `results/e23/E23_summary.md` | E2 (redundancy in real clips) and E3 (the dilution test in real clips) |
 | `results/group_attribution_summary.md` | group values on the E1 clips, and the frame-rate test |
+| `results/practical_grouping_summary.md` | groupings chosen without knowing which frames are redundant: DINOv2 against fixed windows |
 
 ## In short
 
@@ -16,6 +17,8 @@ This report brings together everything we have tested about attribution dilution
 3. **Dilution misleads users in real videos** (E3). When the more important part of a clip is spread over many frames, Shapley's frame scores rank it below a less important, shorter part significantly more often. On V-JEPA2: 42% of the time, against 25% for parts of the same size.
 4. **It happens with denser real frames too** (frame-rate test). On V-JEPA2, sampling the most important quarter of a clip twice as densely leaves the model's reliance on it unchanged (0.96). But each of its frames gets 0.67 of its earlier Shapley credit.
 5. **Giving credit to groups removes it** (group follow-up). Shapley with all copies of a frame as one player keeps the group's credit at 0.94–1.12 of its earlier value on all five models. DINOv2 clustering finds those groups in 86–100% of clips.
+6. **It works without knowing which frames are redundant** (practical groupings). DINOv2 similarity with a fixed average-linkage threshold, calibrated once per model on other videos, keeps repeated content's credit at 0.96–1.07 of its earlier value in all 7 tests (E1 on five models, the frame-rate test on two). Frame-level Shapley gives 0.16–0.62.
+7. **Fixed windows are not a remedy.** They split repeated content across windows. With the same number of groups as DINOv2, they give it 0.35–0.66 of its earlier credit (0.83–0.90 on MC3-18). Windows of a fixed width give 0.26–0.65 on the models whose clips get longer. Both are about as diluted as frame-level Shapley.
 
 ## 1. What we mean by attribution dilution
 
@@ -33,11 +36,11 @@ Dilution doesn't need the credits to add up wrongly. Shapley's credits always ad
 
 | model | data | design in E1 | how methods remove a frame | used in |
 |---|---|---|---|---|
-| R3D-50 | UCF101 | reallocation | fill with a neighbouring frame (freeze) | E1, E2/E3, group |
-| R3D-18 | UCF101 | reallocation | freeze | E1, E2/E3, group |
-| MC3-18 | UCF101 | insertion | delete | E1, E2/E3, group, frame-rate |
-| V-JEPA2 | SSv2 | insertion | delete | E1, E2/E3, group, frame-rate |
-| TRN | SSv2 | reallocation (8 frames) | freeze | E1, group |
+| R3D-50 | UCF101 | reallocation | fill with a neighbouring frame (freeze) | E1, E2/E3, group, practical |
+| R3D-18 | UCF101 | reallocation | freeze | E1, E2/E3, group, practical |
+| MC3-18 | UCF101 | insertion | delete | E1, E2/E3, group, frame-rate, practical |
+| V-JEPA2 | SSv2 | insertion | delete | E1, E2/E3, group, frame-rate, practical |
+| TRN | SSv2 | reallocation (8 frames) | freeze | E1, group, practical |
 
 - **Reallocation** is for models that need a fixed clip length. Copies of the target take slots from other frames.
 - **Insertion** is for models that accept other lengths. Copies are added, and the clip gets longer.
@@ -196,26 +199,66 @@ The I_t ratios differ a little from section 3, because this run uses a subset of
 - **On V-JEPA2, the exact group values follow the model.** Their rank correlation with the I_t ratio is 0.72, against 0.53 for frame credit per copy.
 - **Limitation:** group values stay flat even when the model gives repeated frames more weight. On MC3-18, the model relies on the target 2.9 times as much, but the group value stays at 1.0.
 
-## 8. Overall conclusions
+## 8. Practical groupings: no knowledge of the copies
+
+**Question.** Section 7 used the true copies, or DINOv2 cut to the true number of groups. Neither is known for a new video. Does a grouping chosen in advance still remove dilution, and do similarity-based groups do better than simple fixed windows?
+
+**How** (`results/practical_grouping_summary.md`).
+- **Groupings, all fixed per model before the test:**
+  - DINOv2 cut into a fixed number of groups K (`dino_k4`, `dino_k8`);
+  - DINOv2 cut at a fixed similarity threshold τ, with Ward linkage (`dino_thr`) or average linkage (`dinoavg_thr`);
+  - fixed windows: K equal windows (`win_k4`, `win_k8`), or windows of a fixed width (`win_w4`).
+- **τ** is calibrated once per model on other videos, so that the median clip has half as many groups as frames. The threshold groupings keep between 2 and 8 groups.
+- **Readout:** group Shapley, with every frame showing its group's value, not divided ("broadcast scores"). This is scored exactly like a frame-level method, against the model's own reliance, on the E1 clips (all five models) and the frame-rate test (MC3-18, V-JEPA2).
+
+**Main numbers** (credit per copy, or per frame, at the highest level, relative to the reference; β in brackets):
+
+| | TRN, E1 | R3D-18, E1 | R3D-50, E1 | MC3-18, E1 | V-JEPA2, E1 | MC3-18, frame-rate | V-JEPA2, frame-rate |
+|---|---|---|---|---|---|---|---|
+| frame Shapley | 0.50 (−0.94) | 0.54 (−0.45) | 0.62 (−0.36) | 0.49 (−0.30) | 0.16 (−0.71) | 0.62 (−0.44) | 0.49 (−0.50) |
+| **`dinoavg_thr`** | **1.07 (+0.12)** | **1.04 (+0.05)** | **1.05 (+0.04)** | **1.05 (+0.03)** | **0.97 (−0.01)** | **0.98 (−0.02)** | **1.04 (+0.04)** |
+| `dino_thr` (Ward) | 1.13 | 1.23 | 1.19 | 0.96 | 0.73 | 0.77 | 0.63 |
+| DINOv2, fixed K | 1.12 | 1.07 | 1.09 | 0.97 | 0.72 | 0.94–0.98 | 0.79–0.89 |
+| windows, same K as DINOv2 | 0.58 | 0.58 | 0.66 | 0.83 | 0.35 | 0.90 | 0.59 |
+| windows, fixed width | 0.58 | = same K | = same K | 0.65 | 0.26 | 0.61 | 0.37 |
+
+TRN, R3D-18 and R3D-50 keep a fixed clip length, so their fixed-width windows are the same as `win_k4`.
+
+**Ranking.** With `dinoavg_thr`, inversions in the E1 target clips fall to 1–8%, against 2–36% for frame Shapley and 6–33% for windows. In the V-JEPA2 frame-rate test, its inversions don't change when the segment gets denser (0.21 → 0.23), while every other method's roughly double (to 0.38–0.42).
+
+**What it shows:**
+- **DINOv2 groups at a fixed average-linkage threshold remove dilution in all 7 tests,** without knowing which frames are redundant. Every DINOv2 grouping puts all copies of the target in one group.
+- **Fixed windows don't.** They spread repeated content over 1.5–4.5 windows, and dilute almost as much as frame-level Shapley. On R3D-18, 8 DINOv2 groups give 1.07 per copy and 8 windows give 0.58. This answers "why not just use windows?"
+- **The grouping must adapt to the sampling density.** A fixed number of groups works with copies, but not fully when a segment is sampled more densely (V-JEPA2: 0.79–0.89).
+- **Ward linkage fails with a threshold** (V-JEPA2 frame-rate: 0.63). Its merge height grows with cluster size, so a longer run of similar frames is split into more groups. Average linkage doesn't have this problem.
+
+## 9. Overall conclusions
 
 1. **Frame-level attribution dilutes the credit of evidence shown in several frames.** Shapley (and so Play Fair) and leave-one-out do this on every model, and Integrated Gradients and occlusion on most. Duplication causes it, as the control clips show.
 2. **Dilution matters in real videos.** Real clips are highly redundant (E2). When the more important part of a clip is spread over more frames, frame scores rank it wrongly more often (E3). Sampling a part more densely reduces each frame's credit, without changing the model's reliance on it (frame-rate test).
 3. **Removal-based methods have a stronger form of the problem.** Leave-one-out and occlusion can make redundant evidence nearly invisible (E1, E2, frame-rate test).
 4. **A second failure is separate from dilution.** Grad-CAM, and Shapley on most models, give repeated evidence too much credit in total.
-5. **Giving credit to groups of frames removes dilution.** Group values stay close to their earlier values when evidence is repeated, and DINOv2 can supply the groups.
+5. **Giving credit to groups of frames removes dilution.** Group values stay close to their earlier values when evidence is repeated.
+6. **The groups can be found without knowing which frames are redundant.** DINOv2 similarity with a fixed average-linkage threshold works in all 7 tests, with copies and with denser real frames.
+7. **Fixed windows, a fixed number of groups, and Ward linkage don't fully work.** The grouping has to merge similar frames whatever their number.
 
-## 9. Main limitations
+## 10. Main limitations
 
 - **Selection.** Only videos the model classifies correctly are used, and in E1 only those with an important frame.
 - **Small samples on V-JEPA2:** 34 videos in E1, 68 in E2/E3 and 29 in the frame-rate test. Play Fair was run on only 2 models.
 - **The yardsticks are model-based.** The I_t ratio and group Shapley values describe how the model behaves. They aren't value-free ground truth. E3 uses group Shapley as its yardstick, which is also the proposed remedy.
-- **The grouping is still open.** In the group follow-up, DINOv2 used the true number of groups, which isn't known for real videos. At 16 frames, DINOv2 groups are no more redundant than fixed windows (E2/E3), so we haven't yet shown that similarity-based groups beat simple windows.
+- **Group values don't follow a model that counts copies.** On MC3-18 the model relies on the duplicated frame 2.9 times as much, but its group value stays at about 1.
+- **The practical groupings depend on τ,** one value per model, calibrated for a median of n/2 groups. We haven't tested how sensitive the results are to it. The threshold groupings also hit the 8-group cap in 41–73% of the longer MC3-18 and V-JEPA2 E1 clips.
+- **The per-copy readout for adaptive groupings depends on group membership.** The target's group can contain different neighbouring frames in the reference and in the target clip. This explains part of the drop of `dino_k4` and `dino_thr` on V-JEPA2.
+- **Top-1 loss rests on few cases** on R3D-50, MC3-18 and V-JEPA2.
 - **One dataset per model:** UCF101, where appearance matters most, or SSv2, where motion matters most.
 
-## 10. What remains for the paper
+## 11. What remains for the paper
 
-These are not further E1–E3 experiments; they belong to the method part:
-- evaluate the grouping method against frame-level methods and fixed windows, using the E3 dilution test and standard deletion and insertion curves;
-- decide how to choose the number of groups, or use a model-based grouping (an idea we've deferred);
-- a short theory section: Shapley's symmetry rule forces interchangeable frames to share credit, and a group is unchanged by adding copies;
-- qualitative figures of frame scores against group scores on real videos.
+The comparison with fixed windows, and a way to choose the groups (the average-linkage threshold), are now done. What's left:
+- **robustness checks:** how sensitive the results are to τ; E3 with a yardstick other than group Shapley (the circularity concern); and R3D with a removal that doesn't use neighbouring frames;
+- **standard faithfulness measures,** such as deletion and insertion curves, for the grouping method;
+- **a short theory section:** Shapley's symmetry rule forces interchangeable frames to share credit, and a group's value doesn't change when copies are added;
+- **related work:** Play Fair, Shapley values with correlated features, Owen values, PartitionSHAP;
+- **qualitative figures** of frame scores against group scores on real videos;
+- optionally, the model-based grouping we deferred.
