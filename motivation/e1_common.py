@@ -988,8 +988,9 @@ def run_method(method: str, model: ClipModel, bank: FrameBank, ev: Evaluator, la
     # insert and replace remove frames by deletion by design (the model accepts shorter inputs)
     variable = model.spec["design"] in ("insert", "replace")
     # r3d is realloc only because it breaks ABOVE 16 frames; dropping frames makes clips shorter,
-    # which it accepts (results/design_choice_report.md)
-    if method in ("shapley_drop", "loo_drop", "playfair") and not variable and model.name not in ("videomae", "r3d"):
+    # which it accepts (results/design_choice_report.md). r3d_18 likewise: 82.2% at 15 frames vs
+    # 84.4% at 16 (results/frame_count_tv_summary.csv), used for loo_drop
+    if method in ("shapley_drop", "loo_drop", "playfair") and not variable and model.name not in ("videomae", "r3d", "r3d_18"):
         raise ValueError(f"{method} drops frames; {model.name} needs a fixed number of frames")
     if method == "shapley_freeze":
         s = attr_shapley(ev, layout, cls, prior, "late", exact_max, n_perm, seed)

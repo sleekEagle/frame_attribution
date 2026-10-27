@@ -1,0 +1,360 @@
+% Appendix. Included from main.tex after the references.
+
+\section{Proof of Proposition~\ref{prop:split}}
+\label{app:proofs}
+
+% Checked numerically on 300 random games with 3-7 players:
+% scratchpad check_prop1.py (exact case: |phi_i - phi_j| = 0; approximate case: ratio <= 0.98).
+
+Write $w(s) = s!\,(n - s - 1)!/n!$ for the weight that the Shapley value gives to a subset of size $s$.
+Assume $n \ge 2$.
+
+\paragraph{Step 1: pair the subsets.}
+The Shapley value $\phi_i$ sums over all subsets of the other frames, $N \setminus \{i\}$.
+Each of these subsets either does not contain $j$, in which case it is some $S \subseteq N \setminus \{i, j\}$, or contains $j$, in which case it is $S \cup \{j\}$ for some $S \subseteq N \setminus \{i, j\}$.
+Grouping the two terms that share the same $S$ gives
+\begin{equation*}
+  \phi_i = \sum_{S \subseteq N \setminus \{i, j\}}
+  \Bigl( w(|S|)\,[v(S \cup \{i\}) - v(S)] + w(|S| + 1)\,[v(S \cup \{i, j\}) - v(S \cup \{j\})] \Bigr).
+\end{equation*}
+Exchanging the roles of $i$ and $j$ gives the same expression for $\phi_j$, with $v(S \cup \{j\})$ in the first bracket and $v(S \cup \{i\})$ subtracted in the second.
+
+\paragraph{Step 2: subtract.}
+The terms $v(S)$ and $v(S \cup \{i, j\})$ cancel, and
+\begin{equation*}
+  \phi_i - \phi_j = \sum_{S \subseteq N \setminus \{i, j\}} \bigl( w(|S|) + w(|S| + 1) \bigr)\,
+  \bigl[ v(S \cup \{i\}) - v(S \cup \{j\}) \bigr].
+\end{equation*}
+
+\paragraph{Step 3: the weights sum to one.}
+There are $\binom{n-2}{s}$ subsets $S$ of size $s$, and
+\begin{equation*}
+  \binom{n-2}{s} w(s) = \frac{n - s - 1}{n(n-1)}, \qquad
+  \binom{n-2}{s} w(s + 1) = \frac{s + 1}{n(n-1)} .
+\end{equation*}
+Their sum is $1/(n-1)$ for every $s$, so the total weight over $s = 0, \dots, n-2$ is $1$.
+The weights are non-negative, so $\phi_i - \phi_j$ is a weighted average of the differences $v(S \cup \{i\}) - v(S \cup \{j\})$.
+Each difference lies in $[-\varepsilon, \varepsilon]$, hence $|\phi_i - \phi_j| \le \varepsilon$.
+
+\paragraph{Step 4: the content.}
+For $i \in C$,
+\begin{equation*}
+  \phi_i - \frac{\Phi_C}{m} = \frac{1}{m} \sum_{j \in C} (\phi_i - \phi_j).
+\end{equation*}
+The term $j = i$ is zero, and each of the other $m - 1$ terms has absolute value at most $\varepsilon$ by Step 3.
+So $|\phi_i - \Phi_C / m| \le (m - 1)\,\varepsilon / m$.
+With $\varepsilon = 0$, this gives $\phi_i = \Phi_C / m$. \hfill $\square$
+
+\section{Play Fair and Shapley values with deletion}
+\label{app:playfair}
+
+% Source: results/E1_report.md section 4.4; results/e1/R3D_E1_summary.md section 6.2;
+% results/e1/MC3_18_E1_summary.md. Play Fair: official attributor (run_playfair.py),
+% 256 sampled subsets per subset size, 1 seed. Shapley-drop: 64 orderings, seeds 0 and 1.
+
+We ran the authors' Play Fair code on the E1 clips of two models, with the same value function as our Shapley values with deletion (Shapley-drop).
+As a measure of sampling noise alone, we compare two runs of Shapley-drop with different random seeds.
+
+\begin{table}[h]
+\centering
+\caption{Play Fair against Shapley values with deletion (Shapley-drop) on the E1 clips. Correlations are between the frame scores of each clip (median over clips). The last row is the share of clips.}
+\label{tab:playfair}
+\begin{tabular}{lcc}
+\toprule
+ & R3D-50 (27 targets) & MC3-18 (32 targets) \\
+\midrule
+correlation, Play Fair vs.\ Shapley-drop seed 0 & 0.79 & 0.84 \\
+correlation, Shapley-drop seed 1 vs.\ seed 0 & 0.65 & 0.78 \\
+Play Fair closer to seed 0 than seed 1 is & 91\% & 88\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Play Fair is closer to Shapley-drop than Shapley-drop is to itself, because this run of Play Fair used more model evaluations per clip than one run of Shapley-drop.
+For every target, we also compared the per-copy ratio and the dilution slope $\beta$ between Play Fair and Shapley-drop.
+All 95\% intervals of the differences include zero, and the differences are about as large as those between the two seeds of Shapley-drop.
+MC3-18 is the more informative of the two models, because its output hardly depends on clip length, so deleting frames is valid there (Appendix~\ref{app:length}).
+On R3D-50, both methods mix the effect of content with the effect of length, but they still agree with each other.
+\todo{Check the number of model evaluations per clip on MC3-18 (about 2,650 for Play Fair against 1,000 for one Shapley-drop seed on R3D-50).}
+
+\section{A reference that averages over subsets}
+\label{app:reference}
+
+% Source: results/e1/<model>_group_rows.csv (motivation/e1_group.py, e1_group_metrics.py).
+% Exact copies, target clips, largest number of copies. Columns I_t, group_oracle (group_pairs
+% on V-JEPA2), frame_per_copy, frame_total. Script: scratchpad cmp2.py.
+
+Importance $I(C)$ measures the drop in output when the content is removed from the full clip only (Section~\ref{sec:problem}).
+To check that our conclusions do not depend on this choice, we repeat the comparison with a reference that averages over all subsets of the other frames: the group Shapley value $\Psi_C$ of the content, computed with all frames of the content as one player (Section~\ref{sec:groups}).
+Its change is $r_\Psi = \Psi'_{C'} / \Psi_C$.
+We use the E1 clips on which group values were computed, with the same removal operator as in the rest of E1.
+On V-JEPA2, the other contents are joined into neighbouring pairs so that the group values can be computed exactly.
+
+\begin{table}[h]
+\centering
+\caption{The model's change measured by importance ($r_I$) and by the group Shapley value ($r_\Psi$), and the frame-level Shapley values of the target compared with each. Exact copies, largest number of copies. Medians over targets, with the interquartile range for $r_I$ and $r_\Psi$. $\rho$: Spearman rank correlation between $r_I$ and $r_\Psi$ across targets. Score per copy: $r_\phi$ divided by the reference named in the column (targets with both references positive).}
+\label{tab:reference}
+\begin{tabular}{lcccccc}
+\toprule
+ & & & & & \multicolumn{2}{c}{score per copy} \\
+\cmidrule(lr){6-7}
+model & targets & $r_I$ & $r_\Psi$ & $\rho$ & $/\,r_I$ & $/\,r_\Psi$ \\
+\midrule
+R3D-50  & 74  & 0.98 $[0.24, 3.24]$ & 1.09 $[0.88, 1.24]$ & 0.78 & 0.29 & 0.51 \\
+R3D-18  & 90  & 1.30 $[0.41, 2.26]$ & 1.06 $[0.94, 1.21]$ & 0.81 & 0.29 & 0.46 \\
+MC3-18  & 86  & 2.88 $[1.17, 4.34]$ & 1.02 $[0.11, 1.79]$ & 0.75 & 0.16 & 0.40 \\
+V-JEPA2 & 45  & 0.85 $[0.23, 1.11]$ & 0.91 $[0.30, 1.16]$ & 0.72 & 0.22 & 0.24 \\
+TRN     & 200 & 1.32 $[0.92, 2.32]$ & 1.12 $[0.97, 1.27]$ & 0.68 & 0.30 & 0.40 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:reference} shows three things.
+\begin{itemize}
+  \item \textbf{The two references agree in their median on four models.} On R3D-50, R3D-18, V-JEPA2 and TRN, the median changes are within 0.25 of each other, and across targets the two are rank-correlated ($\rho$ between 0.68 and 0.81). On R3D-50, R3D-18 and TRN, the group Shapley value varies much less between targets than importance does.
+  \item \textbf{They disagree on MC3-18.} Importance says that the model depends on a target shown nine times about 2.9 times as much as before; the group Shapley value stays at about 1.0. Removing all copies from the full clip costs more than before, but averaged over subsets of the other frames the content adds about as much as before.
+  \item \textbf{The conclusion holds under both references.} With either reference, the frame-level Shapley score of one copy falls well below the model's change on every model (0.16--0.51), so Shapley values dilute.
+\end{itemize}
+
+\section{Every frame shown several times}
+\label{app:whole-repeat}
+
+% Source: results/e1/mc3_18_whole_repeat.jsonl and _summary.txt (motivation/whole_clip_repeat.py).
+% Shapley run stopped after 20 of 30 videos (GPU memory); its result is exact on all 20.
+
+Proposition~\ref{prop:conflict} gives an exact prediction when the content is the whole clip: an efficient method gives $r_\phi = r_I / m$.
+Section~\ref{sec:why} argues that Integrated Gradients does the same on the logit scale, and that Grad-CAM falls by about the factor $m$ through the model's pooling.
+We test these predictions on MC3-18, whose output hardly depends on the number of frames (Appendix~\ref{app:length}), so longer clips can be given to it directly.
+We take the 16-frame clips of the first 100 E1 videos and show every frame $m = 2$ or $3$ times in a row, which gives clips of 32 and 48 frames, with the predicted class of the original clip.
+Shapley values (64 random orderings, deletion) were computed on the first 20 of these videos, because they are costly on 48 frames.
+We report $r_\phi / (r_I / m)$, which is 1 when the method dilutes by exactly $m$, and the same ratio with the change in the logit difference $r_F$ in place of $r_I$.
+
+\begin{table}[h]
+\centering
+\caption{Every frame shown $m$ times, MC3-18. Medians over videos, with the interquartile range. $r_I$: the model's own change, $(v(N') - v(\emptyset)) / (v(N) - v(\emptyset))$. $r_F$: the change in the logit of the class minus its logit on the flat-frame baseline of Integrated Gradients. Videos whose prediction changed, or whose mean score on the original clip is not positive, are left out.}
+\label{tab:whole-repeat}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lcccccc}
+\toprule
+ & & & \multicolumn{2}{c}{$r_\phi / (r_I / m)$} & \multicolumn{2}{c}{$r_\phi / (r_F / m)$} \\
+\cmidrule(lr){4-5} \cmidrule(lr){6-7}
+method & videos & $r_I$, $m = 3$ & $m = 2$ & $m = 3$ & $m = 2$ & $m = 3$ \\
+\midrule
+Shapley values        & 20 & 0.96 & 1.00 $[1.00, 1.00]$ & 1.00 $[1.00, 1.00]$ & 1.01 $[0.99, 1.03]$ & 1.00 $[0.97, 1.03]$ \\
+Integrated Gradients  & 97 & 0.94 & 1.01 $[0.97, 1.07]$ & 1.03 $[0.96, 1.10]$ & 1.00 $[0.98, 1.03]$ & 1.01 $[0.97, 1.04]$ \\
+Grad-CAM              & 97 & 0.94 & 0.94 $[0.88, 1.00]$ & 0.91 $[0.84, 0.99]$ & 0.92 $[0.88, 0.98]$ & 0.89 $[0.82, 0.96]$ \\
+Occlusion             & 95 & 0.94 & 1.03 $[0.91, 1.13]$ & 1.02 $[0.89, 1.16]$ & 1.03 $[0.88, 1.13]$ & 1.01 $[0.84, 1.18]$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item \textbf{The model barely changes.} Its own change $r_I$ is 0.94--0.97, so an attribution that follows the model would keep almost all of its score per frame.
+  \item \textbf{Shapley values dilute by exactly $m$}, as Proposition~\ref{prop:conflict} states: the ratio is 1.00 on every video.
+  \item \textbf{Integrated Gradients dilutes by $m$ on the logit scale} (1.00--1.01), and within a few percent of $m$ on the probability scale.
+  \item \textbf{Grad-CAM dilutes by slightly more than $m$} (0.91--0.94), so the division by the model's pooling is close to the factor $m$ even with the ReLU and an intermediate layer.
+  \item \textbf{Occlusion also dilutes by about $m$} (1.02--1.03), although no property of its definition forces it to.
+  \item \textbf{Leave-one-out is close to zero throughout.} Its mean absolute score per frame is only 0.022 of the output change $v(N) - v(\emptyset)$ on the original clip, because neighbouring frames of a 16-frame clip already stand in for each other, and it falls to 0.011 and 0.008 at $m = 2$ and $3$. Its mean score on the original clip is positive in only 15 videos, too few for a ratio.
+\end{itemize}
+In all four methods with a usable ratio, sampling every frame $m$ times lowers the score of every frame to about $1/m$ of its value, while the model's dependence on the clip stays almost the same.
+
+\section{Leave-one-out under freezing}
+\label{app:loo-freeze}
+
+% Source: results/e1/<model>_attributions.jsonl, method loo_freeze, exact copies, all conditions.
+
+On R3D-50, R3D-18 and TRN, frames are removed by freezing: a removed slot is filled with a kept neighbouring frame, and the output is averaged over a fill from the preceding and from the following kept frame.
+Leave-one-out with this operator scores slot $i$ by
+\begin{equation}
+  \phi_i = v(N) - \tfrac{1}{2}\bigl[ f_c(x^{\leftarrow i}) + f_c(x^{\rightarrow i}) \bigr],
+\end{equation}
+where $x^{\leftarrow i}$ and $x^{\rightarrow i}$ are the clips in which slot $i$ is replaced by its preceding and following kept frame.
+If the neighbour on one side shows the same content as slot $i$, the corresponding filled clip is identical to $x$.
+This gives three cases for a slot $i$:
+\begin{itemize}
+  \item \textbf{interior copy:} both neighbours are copies of the same content. Both filled clips equal $x$, so $\phi_i = 0$ exactly.
+  \item \textbf{edge copy:} one neighbour is a copy. One filled clip equals $x$, so $\phi_i$ is half the effect of filling the slot with the other neighbour.
+  \item \textbf{single frame:} neither neighbour shows the same content.
+\end{itemize}
+A \emph{slot} is one position in the clip: R3D-50 and R3D-18 clips have 16 slots, and TRN clips have 8.
+Leave-one-out gives one score per slot.
+To build Table~\ref{tab:loo-freeze}, we took every E1 clip with exact copies (reference, target and control clips, from all videos), sorted each slot into one of the three cases above, and pooled the slots of each case across all clips.
+Each cell gives the median absolute leave-one-out score of the slots in that case, and, in brackets, the number of slots the median is taken over.
+For example, R3D-50 has 8{,}560 edge copies across all its clips, and the median of their scores is 0.008.
+Every interior copy has a score of exactly zero.
+In the reference clips of these models, each content is shown in two adjacent slots (the reallocation design, Section~\ref{sec:adding}), so every copy is an edge copy.
+In a target clip with $m$ adjacent copies, at least $m - 2$ of them are interior copies, so the mean score per copy is at most $2/m$ of the edge score.
+This accounts for the steep fall of the leave-one-out score per copy as the target is repeated more often on these models (dilution slope $\beta$ between $-2.60$ and $-1.38$, below the value $-1$ of an even split).
+
+\begin{table}[h]
+\centering
+\caption{Leave-one-out scores with freezing, for slots whose neighbours are copies of the same content on both sides (interior copy), on one side (edge copy), or on neither side (single frame). All E1 clips with exact copies. First row: the share of slots whose score is exactly zero. Other rows: the median absolute score, with the number of slots in brackets. The first and last slot of each clip are left out (see text).}
+\label{tab:loo-freeze}
+\begin{tabular}{lccc}
+\toprule
+ & interior copy & edge copy & single frame \\
+\midrule
+share of scores exactly 0, all models & 1.00 & 0.00--0.01 & 0.00 \\
+R3D-50 & 0 (3{,}716) & 0.008 (8{,}560) & 0.019 (3{,}716) \\
+R3D-18 & 0 (4{,}508) & 0.008 (9{,}678) & 0.018 (4{,}508) \\
+TRN & 0 (808) & 0.018 (2{,}724) & 0.061 (808) \\
+\bottomrule
+\end{tabular}
+\end{table}
+A copy in the first or last slot of the clip has only one neighbour, so freezing fills it from that side alone.
+If that neighbour is a copy, the filled clip again equals the input.
+These slots are left out of the table (1{,}160 on R3D-50, 1{,}306 on R3D-18 and 852 on TRN); 48--53\% of their scores are exactly zero, and the rest are below 0.0015.
+% Counts: scratchpad loo_freeze_cells.py on results/e1/<model>_attributions.jsonl (loo_freeze, exact).
+
+The result is not specific to exact copies in principle.
+In a natural video, a slot whose neighbours are near-identical frames is filled with a near-identical frame, and its leave-one-out score is close to zero for the same reason.
+But in E1, where the copies are exact, the score of an interior copy is zero regardless of the model.
+Under deletion, removing a copy shortens the clip, so the input always changes and the score depends on the model.
+R3D-50 accepts clips shorter than 16 frames, and E1 also computed leave-one-out with deletion on it.
+At four times the reference number of copies, the median score per copy is 0.006 of its reference value with deletion, against 0.64 in the control clips.
+With freezing, the same values are $-0.05$ and $0.39$.
+So on R3D-50, leave-one-out gives copies almost no credit with either operator; the result does not come from the operator alone.
+On MC3-18 and V-JEPA2, which use deletion throughout, the score per copy is 0.13 and 0.30 of its reference value.
+On R3D-18 the operator matters much more.
+We ran leave-one-out with deletion on the same 120 videos as the E1 run with freezing (R3D-18's accuracy is 82.2\% with 15 frames and 84.4\% with 16).
+At four times the reference number of copies, the median score per copy is 0.36 of its reference value with deletion, against $-0.02$ with freezing; in the control clips it is 0.56 and 0.62.
+The dilution slope is $0.00$ $[-0.26, 0.17]$ for the target and $+0.13$ $[-0.09, 0.38]$ for the control, against $-1.55$ for the target with freezing.
+On all 345 videos with E1 conditions, the slope is $-0.19$ $[-0.31, -0.08]$ for the target and $+0.08$ $[0.02, 0.18]$ for the control.
+The model's own dependence on the target rises to 1.30 times its reference value, so a score of 0.36 per copy still falls short of it, but the near-zero score obtained with freezing comes mostly from the operator.
+TRN accepts only 8 frames, so deletion is not possible there.
+\todo{Rewrite the E1 leave-one-out claim in the results section with these numbers. Source: results/e1/r3d\_18\_attributions.jsonl, method loo\_drop; metrics from e1\_metrics.py on the first 120 videos.}
+
+\section{Occlusion and the response to the flat frame}
+\label{app:flat-frame}
+
+% Sources: motivation/occlusion_check.py (single frames, deletion models)
+%          motivation/occlusion_all_copies.py (all copies, freeze models)
+%          results/e1/<model>_occ_all_copies.jsonl
+
+Occlusion replaces a slot with a flat frame: a frame in which every pixel has the same colour, the average colour that the model's input normalisation subtracts.
+For R3D-50, R3D-18 and MC3-18 this is the average colour of Kinetics, the dataset they were pre-trained on; for TRN and V-JEPA2 it is the average colour of ImageNet.
+% V-JEPA2: AutoVideoProcessor of facebook/vjepa2-vitl-fpc16-256-ssv2, image_mean (0.485, 0.456, 0.406).
+The change in output then has two sources: the loss of the slot's content, and the presence of a frame that does not occur in natural videos.
+Only the first is related to redundancy.
+
+\paragraph{Measurement.}
+For each content $C$ in an E1 reference clip, we compare two clips that remove the same slots, every slot that shows $C$, in two ways:
+\begin{equation}
+  \mathrm{occ}(C) = v(N) - f_c(x \text{ with every slot of } C \text{ flat}), \qquad
+  I(C) = v(N) - v(N \setminus C).
+\end{equation}
+$I(C)$ uses the model's removal operator (deletion or freezing), so $D(C) = \mathrm{occ}(C) - I(C)$ is the effect of the flat frame relative to that operator.
+On MC3-18 and V-JEPA2 each content is shown in one slot; on R3D-50, R3D-18 and TRN it is shown in two slots, and both are made flat.
+The importance $I(C)$ of every content in these clips was already computed when the E1 clips were built.
+We compute it again in the same run as $\mathrm{occ}(C)$, from the rebuilt clips, as a check that the clips are rebuilt exactly.
+The two agree to within $8 \times 10^{-4}$, except on V-JEPA2, where the first computation used half-precision arithmetic and this one full precision (median difference 0.001).
+We focus on contents in the lowest third of $|I(C)|$: removing them barely changes the output, so a large occlusion score must come from the flat frame.
+
+\begin{table}[h]
+\centering
+\caption{Occlusion of every slot of a content, $\mathrm{occ}(C)$, against the content's importance, $I(C)$. All contents of all E1 reference clips of each model, pooled. Rows 3--4: medians over the contents in the lowest third of $|I(C)|$, which the model barely depends on. Rows 5--6: medians over all contents.}
+\label{tab:flat-frame}
+\begin{tabular}{lccccc}
+\toprule
+ & MC3-18 & TRN & R3D-50 & R3D-18 & V-JEPA2 \\
+\midrule
+removal operator & deletion & freezing & freezing & freezing & deletion \\
+videos (contents) & 265 (4{,}240) & 245 (980) & 220 (1{,}760) & 345 (2{,}760) & 34 (544) \\
+$|I(C)|$, lowest third & 0.003 & 0.012 & 0.005 & 0.006 & 0.006 \\
+$\mathrm{occ}(C)$, lowest third & \textbf{0.020} & \textbf{0.154} & 0.005 & 0.004 & 0.001 \\
+$|D(C)|$, all & 0.025 & 0.206 & 0.041 & 0.026 & 0.037 \\
+$|I(C)|$, all & 0.010 & 0.112 & 0.025 & 0.024 & 0.031 \\
+\bottomrule
+\end{tabular}
+\end{table}
+% All five columns: motivation/occlusion_all_copies.py.
+
+\paragraph{Results.}
+On MC3-18 and TRN, the response to the flat frame dominates the occlusion score of unimportant content: occluding it lowers the output by about 7 and 13 times as much as removing it.
+On these two models the flat frame also pushes the output in a consistent direction: $D(C) > 0$, meaning that occlusion lowers the output more than removal does, for 93\% of the contents on MC3-18 and 71\% on TRN.
+
+On R3D-50, R3D-18 and V-JEPA2, occlusion and importance have similar medians for unimportant content, but this does not mean that the flat frame has no effect.
+It has no consistent direction: $D(C) > 0$ for 63\% of the contents on R3D-50, 57\% on R3D-18 and 49\% on V-JEPA2, and $D(C) < 0$ for the rest.
+Positive and negative differences cancel in the median of $D(C)$, but not in the median of $|D(C)|$, which is as large as the median $|I(C)|$ or larger (0.041 against 0.025 on R3D-50, and 0.037 against 0.031 on V-JEPA2).
+So occlusion often gives a content a score far from its importance, upwards for some contents and downwards for others.
+A consequence is that occlusion and importance put the contents in different orders.
+We measure this with the Spearman rank correlation between $\mathrm{occ}(C)$ and $I(C)$ over all contents of a model: each content is ranked once by its occlusion score and once by its importance, and the correlation of the two rankings is computed.
+A value of 1 means the two orders are identical, and 0 means they are unrelated.
+The rank correlation is 0.31 on R3D-50, 0.57 on R3D-18 and 0.26 on V-JEPA2 (0.57 on MC3-18 and 0.32 on TRN).
+% Signs and rank correlations: scratchpad flat_sign.py on results/e1/<model>_occ_all_copies.jsonl.
+
+\paragraph{Consequence for dilution.}
+On every model, the occlusion score of a frame contains a part that comes from the flat frame, not from the loss of the frame's content, and this part is unrelated to redundancy.
+Occlusion is therefore a less direct test of dilution than leave-one-out with deletion.
+The response to the flat frame does not explain the behaviour of occlusion on R3D-50, where the score of the target does not change differently from the score in the control clips when the target is repeated (dilution slope $-0.04$ for the target, $+0.24$ for the control).
+We leave that case unexplained.
+
+\section{Clip length and the choice of removal operator}
+\label{app:length}
+
+% Sources: results/frame_count_*_summary.csv (T2), results/length_fixed_content_*_summary.csv (T3),
+% results/design_choice_report.md. 500 test videos per model.
+
+We ran two checks per model on 500 test videos.
+The first samples $T$ frames evenly across each video, for $T$ between 1 and 24 (every value from 1 to 24 on R3D-50; 1 to 18, 20 and 24 on R3D-18 and MC3-18; 1, 2, 4, \dots, 16, 18, 20 and 24 on V-JEPA2; and even values up to 16 on VideoMAE, which accepts at most 16 frames).
+Every extra frame is new content, so accuracy should rise smoothly; a sudden jump points to the architecture.
+The second takes the $k$ frames that the first check uses for $T = k$, and shows them in two ways: as a clip of $k$ frames, and as a clip of 16 frames in which each frame is repeated several times in a row, in its original order. When 16 is not a multiple of $k$, some frames are repeated once more than others; for example, with $k = 3$ the frames are repeated 6, 5 and 5 times.
+We use every $k$ from 1 to 16 on R3D-50; $k = 1, 2, 4, 6, \dots, 16$ on R3D-18, MC3-18 and V-JEPA2; and even $k$ from 2 to 16 on VideoMAE, which processes frames in pairs.
+At $k = 16$ the two clips are identical, so this value is the reference.
+The two clips differ in length and in whether frames are repeated, so we read them together with the original clip ($k = 16$), as described in Section~\ref{sec:removal}.
+For example, on R3D-50 with $k = 4$, the clip with repeated frames reaches 78.4\%, close to the original's 79.4\%, while the short clip reaches 25.6\%: the loss comes from the length.
+On VideoMAE with $k = 8$, the clip with repeated frames reaches 45.6\% and the short clip 66.4\%: the loss comes from the repetition.
+On V-JEPA2, both clips lose accuracy together as $k$ falls (47.2\% and 50.4\% at $k = 4$, against 68.2\% for the original): the loss comes from having fewer distinct frames.
+
+\begin{table}[h]
+\centering
+\caption{Accuracy (\%) with $T$ frames sampled evenly from the video. -- : not tested.}
+\label{tab:length-t2}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lcccccccccccc}
+\toprule
+$T$ & 3 & 4 & 5 & 8 & 9 & 10 & 14 & 15 & 16 & 17 & 18 & 24 \\
+\midrule
+R3D-50  & 24.8 & 25.6 & 31.8 & 36.4 & 64.8 & 66.8 & 74.4 & 77.0 & 79.4 & 69.2 & 68.4 & 66.4 \\
+R3D-18  & 58.8 & 63.0 & 75.8 & 74.6 & 80.8 & 82.4 & 83.6 & 82.2 & 84.4 & 79.8 & 81.8 & 82.0 \\
+MC3-18  & 86.6 & 86.8 & 87.0 & 87.2 & 87.6 & 87.2 & 87.8 & 87.8 & 88.0 & 87.8 & 88.6 & 88.2 \\
+V-JEPA2 & --   & 47.2 & --   & 64.6 & --   & 66.8 & 69.0 & 67.2 & 68.2 & --   & 68.4 & 67.8 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{Accuracy (\%) with the same $k$ distinct frames, shown as a clip of $k$ frames (short) and as a clip of 16 frames in which each frame is repeated several times in a row (repeated). At $k = 16$ both are the original clip. -- : not tested.}
+\label{tab:length-t3}
+\begin{tabular}{llccccccc}
+\toprule
+ & $k$ & 1 & 2 & 4 & 6 & 8 & 12 & 16 \\
+\midrule
+R3D-50   & short    & 15.6 & 17.4 & 25.6 & 35.0 & 36.4 & 71.8 & 79.4 \\
+         & repeated & 63.8 & 72.8 & 78.4 & 77.6 & 77.6 & 79.8 & 79.4 \\
+\midrule
+R3D-18   & short    & 37.8 & 52.0 & 63.0 & 76.2 & 74.6 & 81.6 & 84.4 \\
+         & repeated & 67.8 & 75.4 & 81.4 & 82.4 & 81.8 & 83.4 & 84.4 \\
+\midrule
+MC3-18   & short    & 78.2 & 85.4 & 86.8 & 87.0 & 87.2 & 87.6 & 88.0 \\
+         & repeated & 78.6 & 85.0 & 86.4 & 87.2 & 87.2 & 87.2 & 88.0 \\
+\midrule
+V-JEPA2  & short    & 12.2 & 26.0 & 47.2 & 57.0 & 64.6 & 67.6 & 68.2 \\
+         & repeated & 14.4 & 24.4 & 50.4 & 60.8 & 62.4 & 68.6 & 68.2 \\
+\midrule
+VideoMAE & short    & --   & 42.4 & 56.2 & 63.2 & 66.4 & 73.6 & 76.0 \\
+         & repeated & --   & 40.4 & 43.0 & 53.4 & 45.6 & 66.8 & 76.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{What the checks show.}
+\begin{itemize}
+  \item \textbf{R3D-50 and R3D-18} depend strongly on length. With the same frames, short clips are much less accurate than the same frames repeated to 16 slots: by 41--55 points on R3D-50 for 8 or fewer frames, and by up to 30 points on R3D-18. Accuracy also falls when the clip is longer than 16 frames. Deletion would mix the effect of length with the effect of content, so these models use freezing. Between 15 and 16 frames the difference is 2.4 points on R3D-50 and 2.2 points on R3D-18, small enough for leave-one-out with deletion, which only ever removes one frame.
+  \item \textbf{MC3-18} hardly depends on length: the two ways of showing the same frames differ by at most 0.4 points. It uses deletion.
+  \item \textbf{V-JEPA2} also hardly depends on length: the two differ by at most 3.8 points, in both directions. It uses deletion.
+  \item \textbf{TRN} accepts exactly 8 frames, so it uses freezing.
+  \item \textbf{VideoMAE} is less accurate when frames are repeated, by up to 20.8 points (8 frames repeated to 16). It processes frames in pairs, and a pair of identical frames changes its output whatever the frames show. Repeating a frame therefore changes the model's behaviour, so we do not use VideoMAE.
+\end{itemize}

@@ -1,0 +1,40 @@
+\section{Group attribution}
+\label{sec:groups}
+
+% DRAFT 1 (2026-10-20). Only the first subsection is written.
+
+\todo{Opening paragraph: the idea of the fix. Give credit to groups of frames, chosen so that frames that show the same content fall in the same group, instead of to single frames.}
+
+\subsection{Which attribution methods can be applied to groups}
+\label{sec:which-groups}
+
+Each of the methods in Section~\ref{sec:why} can assign a score to a group of frames $G \subseteq N$, but grouping means something different for each of them, and it removes dilution only for Shapley values.
+
+\paragraph{Shapley values.}
+The groups of a partition $\mathcal{G}$ become the players of a new game, with value $u(\mathcal{T}) = v\bigl(\bigcup_{G \in \mathcal{T}} G\bigr)$ for a set of groups $\mathcal{T} \subseteq \mathcal{G}$.
+A group is then always kept or removed as a whole, and its Shapley value $\Psi_G$ is not divided among its frames.
+This value is in general not the sum of the frame-level Shapley values of its frames: grouping changes how the credit is shared between the group and the other frames, not only within the group.
+For example, with two identical frames $a_1, a_2$ and one frame $b$, and $v = 1$ only when $b$ and at least one of $a_1, a_2$ are present (and $0$ otherwise), the group $\{a_1, a_2\}$ receives $1/2$, while $\phi_{a_1} + \phi_{a_2} = 1/3$.
+Play Fair computes the same quantity, so it can be grouped in the same way.
+\todo{State and prove the second proposition here: if the model's output is the same whether the content is shown once or $m$ times, for every set of the other groups, then every group's Shapley value is unchanged; if the outputs differ by at most $\delta$, the values differ by at most $2\delta$. Proof in the appendix.}
+
+\paragraph{Leave-one-out.}
+Removing a whole group from the full clip gives the score $v(N) - v(N \setminus G)$, which is the importance $I(G)$ (Equation~\ref{eq:importance}).
+If all frames that show a content lie in the same group, this score is not diluted.
+But it is the quantity we use as the reference for the model's own dependence, so it cannot be evaluated against that reference.
+It also does not decompose the output: the scores of the groups need not add up to $v(N) - v(\emptyset)$.
+If frames that show the same content are split across two groups, removing one group leaves the other, and both scores are again close to zero.
+
+\paragraph{Occlusion.}
+Replacing every frame of a group with a flat frame is possible.
+It differs from $I(G)$ only by the model's response to the inserted flat frames, which on our models is often as large as the importance itself (Appendix~\ref{app:flat-frame}).
+
+\paragraph{Integrated Gradients and Grad-CAM.}
+For these methods, the natural score of a group is the sum of the scores of its frames.
+For Integrated Gradients this is exact, because the scores of all input elements add up by completeness.
+So grouping adds nothing to the frame-level scores: the score of a group of copies is the sum of the scores of the copies.
+This sum grows with the number of copies whenever each copy keeps its score, so it does not follow the model's dependence on the content either.
+
+When each frame displays the score of its group, the score of a part of the video is the score of its group, not the sum of the scores displayed on its frames: adding up the displayed scores would multiply the group's score by its number of frames.
+
+\todo{Remaining subsections: how the groups are found (DINOv2 similarity, average-linkage threshold), and how group scores are shown per frame (broadcast scores).}

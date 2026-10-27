@@ -10,7 +10,7 @@ We duplicated an important frame in a video clip and checked how attribution met
 
 **Main result: dilution happens on every model.** Duplicating a frame barely changes how much the model relies on it (0.87–1.32 times as much, on four models). But every method gives each copy less credit than the frame had before:
 - **Shapley:** each copy keeps only 0.16–0.62 of the frame's credit at the highest level of duplication. Play Fair gives the same values.
-- **Leave-one-out:** each copy keeps 0.13 or less of the frame's credit on four of the five models (0.30 on V-JEPA2).
+- **Leave-one-out:** each copy keeps 0.01–0.36 of the frame's credit when frames are removed by deletion (R3D-50, R3D-18, MC3-18, V-JEPA2). With freeze, it keeps about 0 on R3D-50, R3D-18 and TRN, but much of that comes from the freeze operator itself, not from the model (section 4.6).
 - **Integrated Gradients and occlusion:** less credit per copy on most models.
 
 **Dilution changes which frame looks most important.** With Shapley, the duplicated frame loses its top rank in 75% of cases on R3D-18 and 61% on TRN (noise alone: 38% and 0%), and frames the model relies on less overtake it 23% and 36% of the time (8–9% in the control clips). Leave-one-out changes the ranking on every model.
@@ -121,10 +121,11 @@ The same numbers at the highest m. Exact copies, medians over targets:
 
 ### 4.2 What each method does, across models
 
-**Leave-one-out gives each copy almost no credit.**
-- Each copy keeps −0.05 to 0.13 of its credit on R3D-50, R3D-18, MC3-18 and TRN.
+**Leave-one-out gives each copy much less credit.**
+- In the table, each copy keeps −0.05 to 0.13 of its credit on R3D-50, R3D-18, MC3-18 and TRN.
 - The reason: removing one copy leaves the other copies in the clip, so the output barely changes. A frame the model needs is reported as unimportant.
 - V-JEPA2 is the exception (0.2–0.3 per copy). There, deleting one frame changes how all later frames are paired into tokens, so removing a copy changes more than the copy.
+- **On R3D-50, R3D-18 and TRN, the near-zero values partly come from the freeze operator.** Freezing fills a removed copy with its neighbour, which is often another copy, so the clip doesn't change at all. With deletion instead, each copy keeps 0.01 on R3D-50 but 0.36 on R3D-18. See section 4.6.
 
 **Shapley gives each copy less credit, and usually too much in total.**
 - **R3D-50, R3D-18, MC3-18, V-JEPA2:** the copies' total is 1.3 to 1.9 times the model's reliance (for example 2.47 against 1.28 on R3D-50, and 1.45 against 0.87 on V-JEPA2). Each copy still looks less important than the frame did before.
@@ -162,6 +163,7 @@ The same numbers at the highest m. Exact copies, medians over targets:
 
 What this shows:
 - **Shapley and leave-one-out: caused by duplication on all five models.** The target's β is clearly negative, and the control's is near 0. (On MC3-18, the control is −0.12 to −0.18 for every method, because the control clip is longer and the model relies on the target a little less. That matches the model's own change of −0.14.)
+- **Leave-one-out's β on R3D-50, R3D-18 and TRN (−1.38 to −2.60) is steep partly because of freezing**, not only because of the model. With deletion, β is −0.27 on R3D-50 and 0.00 to −0.19 on R3D-18 (section 4.6).
 - **Integrated Gradients and occlusion: caused by duplication on most models**, but not occlusion on R3D-50. On V-JEPA2, Integrated Gradients also falls in the control.
 - **Grad-CAM: little per-copy change**, and on three models the control changes as much. So its main problem is the growing total, not the per-copy credit.
 - **Noisy copies give the same results.** β changes by at most 0.06 on the UCF101 models and TRN, apart from leave-one-out on R3D-50 (0.13), and by at most 0.27 on V-JEPA2. So the effect isn't caused by pixel-identical frames.
@@ -191,13 +193,51 @@ These numbers rest on fewer cases, so we treat them as extra evidence. Exact cop
 | V-JEPA2 | 19% vs 18% | too few cases | 21% vs 14% |
 | TRN | 36% vs 8% | 0.61 vs 0 (exact Shapley) | 39% vs 17% |
 
-- **Leave-one-out changes the ranking on every model.** A duplicated frame drops below frames the model relies on less.
+- **Leave-one-out changes the ranking on every model.** A duplicated frame drops below frames the model relies on less. On R3D-18 this also holds with deletion (50% vs 37% inversions, 120 videos), so it isn't only caused by freezing.
 - **Shapley changes the ranking on R3D-18 and TRN**, and a little on R3D-50. On TRN, the duplicated target loses Shapley's top rank in 61% of cases.
 - **Not on MC3-18**, because there the model relies on the target 3 times as much, and Shapley follows. **Not on V-JEPA2**, where target and control are alike.
 
+### 4.6 Leave-one-out with freeze: part of the result comes from the operator
+
+**The problem.** With freeze, a removed slot is filled from its neighbours. Our freeze averages two filled clips: one filled from the kept frame before the slot, one from the kept frame after it. When a neighbour is another copy of the same frame, that filled clip is identical to the original clip. So:
+- **a copy with copies on both sides** gets a leave-one-out score of exactly 0, whatever the model computes;
+- **a copy at the edge of a run** gets half the effect of filling it with the other, different neighbour;
+- **a frame shown once** gets a normal score.
+
+In the reference clip, every frame is shown twice, so every copy is at an edge. In a target clip with 8 adjacent copies, 6 of them have copies on both sides and get exactly 0. So the mean credit per copy falls towards 0 as m grows, on R3D-50, R3D-18 and TRN, for a reason that has nothing to do with the model.
+
+Leave-one-out with freeze, all E1 clips with exact copies:
+
+| | copy with copies on both sides | copy at the edge of a run | frame shown once |
+|---|---|---|---|
+| share of scores exactly 0 | 100% | 0–1% | 0% |
+| median \|score\|, R3D-50 | 0 | 0.008 | 0.019 |
+| median \|score\|, R3D-18 | 0 | 0.008 | 0.018 |
+| median \|score\|, TRN | 0 | 0.018 | 0.061 |
+
+**The check: leave-one-out with deletion.** Deleting a copy always makes the clip shorter, so the input always changes, and the score depends on the model. For leave-one-out, deletion only shortens the clip from 16 to 15 frames. At that length, the length effect of section 6.1 in `results/e1/R3D_E1_summary.md` is small: accuracy is 77.0% vs 79.4% on R3D-50, and 82.2% vs 84.4% on R3D-18. TRN accepts only 8 frames, so deletion isn't possible there.
+
+| | R3D-50, freeze | R3D-50, deletion | R3D-18, freeze | R3D-18, deletion |
+|---|---|---|---|---|
+| model's reliance at ×4 (I_t ratio) | 1.28 | 1.28 | 1.30 | 1.30 |
+| credit per copy at ×2 / ×3 / ×4, target | 0.05 / −0.02 / −0.05 | 0.33 / 0.16 / 0.01 | 0.07 / 0.09 / −0.02 | 0.66 / 0.61 / 0.36 |
+| credit per copy at ×4, control | 0.39 | 0.64 | 0.62 | 0.56 |
+| β, target [95% range] | −1.38 [−1.91, −1.07] | −0.27 [−0.72, −0.15] | −1.55 [−1.69, −1.38] | 0.00 [−0.26, 0.17] |
+| β, control | −0.11 | +0.17 | −0.09 | +0.13 |
+
+All on the same 120 videos per model. On all 345 R3D-18 videos with E1 clips, deletion gives β = −0.19 [−0.31, −0.08] for the target and +0.08 [+0.02, +0.18] for the control, and 0.44 per copy at ×4.
+
+**What this shows:**
+- **On R3D-50, the result doesn't depend on the operator.** With deletion, each copy still keeps only 0.01 of its credit at ×4.
+- **On R3D-18, freezing creates most of it.** With deletion, each copy keeps 0.36 at ×4, not about 0. That's still below the model's reliance (1.30), and close to an even split of it among 4 times as many copies (0.32). But β on the 120 videos doesn't differ from the control. On the 345 videos it does, by a small amount.
+- **On TRN, it can't be checked.** Its leave-one-out result should be read with this caveat.
+- **On MC3-18 and V-JEPA2, the problem doesn't arise,** because they use deletion throughout.
+
+Commands: `python motivation/e1_attribute.py --model r3d_18 --methods loo_drop` (all 345 videos; `e1_common.py` now allows deletion on R3D-18). The 120-video numbers come from `e1_metrics.py attr` run on a copy of the conditions file limited to its first 120 videos. `results/e1/r3d_18_summary.csv` was not regenerated, so it doesn't contain these rows yet.
+
 ## 5. Conclusions
 
-1. **Attribution dilution happens on every model.** On R3D-50, R3D-18, V-JEPA2 and TRN, the model relies on the duplicated frame 0.87 to 1.32 times as much as before. Yet each copy gets clearly less credit than the frame had: 0.16–0.62 of it for Shapley, about 0 for leave-one-out. In the control clips, the target's credit stays the same for Shapley and leave-one-out on every model, so duplication causes the drop.
+1. **Attribution dilution happens on every model.** On R3D-50, R3D-18, V-JEPA2 and TRN, the model relies on the duplicated frame 0.87 to 1.32 times as much as before. Yet each copy gets clearly less credit than the frame had: 0.16–0.62 of it for Shapley, and 0.01–0.36 for leave-one-out with deletion. In the control clips, the target's credit stays the same for Shapley and leave-one-out on every model, so duplication causes the drop. Leave-one-out with freeze gives about 0 per copy, but on R3D-18 most of that comes from the freeze operator (section 4.6).
 
 2. **Dilution changes which frame looks most important.** With Shapley, the duplicated frame loses its top rank in 75% of cases on R3D-18 and 61% on TRN, well above what noise alone gives, and less important frames overtake it 23% and 36% of the time (8–9% in the controls). Leave-one-out changes the ranking on every model.
 
@@ -209,7 +249,7 @@ These numbers rest on fewer cases, so we treat them as extra evidence. Exact cop
 
 5. **The effect doesn't need identical frames.** Copies with a little noise give the same results.
 
-**For the paper.** In a video with repeated or near-identical frames, a frame's credit depends on how many similar frames surround it. Shapley-type methods, including Play Fair, divide the content's credit among its copies, so each copy looks less important and, on some models, the content loses its rank. Leave-one-out and occlusion can make repeated evidence invisible. E1 shows this with frames we duplicated ourselves. E2/E3 (`results/e23/E23_summary.md`) show the same dilution in real videos: when the more important part of a clip is spread over many frames, Shapley's frame scores rank it below a less important, shorter part significantly more often on V-JEPA2, R3D-50 and R3D-18.
+**For the paper.** In a video with repeated or near-identical frames, a frame's credit depends on how many similar frames surround it. Shapley-type methods, including Play Fair, divide the content's credit among its copies, so each copy looks less important and, on some models, the content loses its rank. Leave-one-out can make repeated evidence almost invisible (R3D-50, with either removal). With freeze, part of that is caused by the operator, so the paper must say which removal each number uses. E1 shows this with frames we duplicated ourselves. E2/E3 (`results/e23/E23_summary.md`) show the same dilution in real videos: when the more important part of a clip is spread over many frames, Shapley's frame scores rank it below a less important, shorter part significantly more often on V-JEPA2, R3D-50 and R3D-18.
 
 ## 6. Limitations
 
@@ -217,6 +257,7 @@ These numbers rest on fewer cases, so we treat them as extra evidence. Exact cop
 - **Small samples on some models.** V-JEPA2 has 34 videos (57 targets), and Play Fair 20 videos per model. Their 95% ranges are wider.
 - **TRN allows only one level** (m = 4). Its reference and control clips also change its prediction more often than on the other models.
 - **The reallocation reference isn't the original clip.** It shows each content twice. It gives the same prediction as the original for 88% (TRN) to 96% (R3D-18) of videos.
+- **Leave-one-out with freeze is partly decided by the operator.** A copy with copies on both sides scores exactly 0 whatever the model does (section 4.6). TRN can't be checked with deletion.
 - **On MC3-18, duplication changes the model.** Its results must be read against the rising I_t ratio, not against "no change".
 - **The same random seed for every video.** Shapley's random orderings are the same for every clip of the same length. This doesn't bias the ratios (a target clip and its reference have different lengths), but the noise is shared across videos, so the 95% ranges may be somewhat too narrow. On MC3-18, Shapley-drop's two seeds agree at only 0.78 per frame.
 - **One dataset per model**, and only appearance-heavy UCF101 or motion-heavy SSv2.

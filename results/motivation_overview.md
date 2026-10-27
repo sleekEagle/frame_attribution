@@ -12,7 +12,7 @@ This report brings together everything we have tested about attribution dilution
 
 ## In short
 
-1. **Dilution is real, and duplication causes it** (E1). When an important frame is shown several times, the model relies on it about as much as before (0.87–1.32 times, on four of five models). But Shapley gives each copy only 0.16–0.62 of the frame's earlier credit, and leave-one-out about 0, on all five models. Integrated Gradients and occlusion do the same on most models.
+1. **Dilution is real, and duplication causes it** (E1). When an important frame is shown several times, the model relies on it about as much as before (0.87–1.32 times, on four of five models). But Shapley gives each copy only 0.16–0.62 of the frame's earlier credit on all five models, and leave-one-out with deletion 0.01–0.36 on the four models where deletion can be used. Integrated Gradients and occlusion do the same on most models.
 2. **Real clips are highly redundant** (E2). Removing frames one at a time reveals almost nothing: the single-frame importances add up to about 0% of what the clip contributes. Removing the 4 top-ranked frames still leaves 75–95% of it.
 3. **Dilution misleads users in real videos** (E3). When the more important part of a clip is spread over many frames, Shapley's frame scores rank it below a less important, shorter part significantly more often. On V-JEPA2: 42% of the time, against 25% for parts of the same size.
 4. **It happens with denser real frames too** (frame-rate test). On V-JEPA2, sampling the most important quarter of a clip twice as densely leaves the model's reliance on it unchanged (0.96). But each of its frames gets 0.67 of its earlier Shapley credit.
@@ -77,16 +77,19 @@ Dilution doesn't need the credits to add up wrongly. Shapley's credits always ad
 | Shapley, credit of one copy | 0.62 | 0.52 | 0.48 | 0.16 | 0.50 |
 | Shapley, all copies added up | 2.47 | 2.07 | 4.33 | 1.45 | 0.99 |
 | Shapley, β, target (control) | −0.37 (−0.01) | −0.47 (+0.03) | −0.31 (−0.12) | −0.71 (−0.02) | −0.94 (−0.03) |
-| LOO, credit of one copy | −0.05 | −0.02 | 0.13 | 0.30 | 0.02 |
-| LOO, β, target (control) | −1.38 (−0.11) | −1.55 (−0.09) | −0.77 (−0.14) | −0.48 (−0.05) | −2.60 (+0.25) |
+| LOO, credit of one copy (freeze on R3D-50, R3D-18, TRN) | −0.05 | −0.02 | 0.13 | 0.30 | 0.02 |
+| LOO, β, target (control) (freeze on R3D-50, R3D-18, TRN) | −1.38 (−0.11) | −1.55 (−0.09) | −0.77 (−0.14) | −0.48 (−0.05) | −2.60 (+0.25) |
+| LOO with deletion, credit of one copy | 0.01 | 0.36 | 0.13 | 0.30 | not possible |
+| LOO with deletion, β, target (control) | −0.27 (+0.17) | 0.00 (+0.13) | −0.77 (−0.14) | −0.48 (−0.05) | not possible |
 | Shapley, top-1 loss, target vs noise alone | 0.71 vs 0.47 | 0.75 vs 0.38 | 0.24 vs 0.62 | too few cases | 0.61 vs 0 |
 
 **What it shows:**
 - **Shapley and leave-one-out dilute on all five models, and duplication causes it.** The target's β is clearly negative, and far below the control's. The controls are near 0, except on MC3-18 (−0.12 to −0.14, following the model's own change of −0.14 in the longer control clip) and LOO on TRN (+0.25).
 - **Integrated Gradients and occlusion dilute on most models.** The exceptions are occlusion on R3D-50, which shows no effect specific to duplication, and Integrated Gradients on V-JEPA2, whose credit also falls in the control.
 - **Grad-CAM barely dilutes.** Its credit per copy changes little, and on three models the control changes as much. Its problem is too much credit in total (below).
-- β below −1 means the credit fell to almost 0. LOO does this on three models.
-- **Leave-one-out gives copies almost no credit** (0.13 or less per copy on four models). Removing one copy leaves the others, so the output barely changes.
+- β below −1 means the credit fell to almost 0. LOO with freeze does this on three models.
+- **Leave-one-out gives copies much less credit.** Removing one copy leaves the others, so the output barely changes. With deletion, each copy keeps 0.01 (R3D-50), 0.13 (MC3-18), 0.30 (V-JEPA2) and 0.36 (R3D-18) of its credit.
+- **Leave-one-out with freeze is partly decided by the operator.** Freeze fills a removed copy from its neighbours. When both neighbours are copies, the filled clip is identical to the original, so the score is exactly 0 whatever the model does. On R3D-18, this is most of the freeze result: with deletion, each copy keeps 0.36 instead of about 0, and β is 0.00 [−0.26, 0.17] instead of −1.55 (on 345 videos: −0.19, control +0.08). On R3D-50, deletion gives about 0 too (0.01). TRN can't be checked, because it needs exactly 8 frames (`results/E1_report.md`, section 4.6).
 - **Dilution changes rankings.** With Shapley, the duplicated target loses its top rank in 75% of cases on R3D-18 and 61% on TRN.
 - **A second, separate failure: too much credit in total.** Grad-CAM on every model, and Shapley on four models, give the copies together more credit than the model's reliance supports.
 - **Play Fair gives the same values as Shapley-drop,** within random noise, on two models. So the Shapley-drop results apply to Play Fair.
@@ -238,7 +241,7 @@ TRN, R3D-18 and R3D-50 keep a fixed clip length, so their fixed-width windows ar
 
 1. **Frame-level attribution dilutes the credit of evidence shown in several frames.** Shapley (and so Play Fair) and leave-one-out do this on every model, and Integrated Gradients and occlusion on most. Duplication causes it, as the control clips show.
 2. **Dilution matters in real videos.** Real clips are highly redundant (E2). When the more important part of a clip is spread over more frames, frame scores rank it wrongly more often (E3). Sampling a part more densely reduces each frame's credit, without changing the model's reliance on it (frame-rate test).
-3. **Removal-based methods have a stronger form of the problem.** Leave-one-out and occlusion can make redundant evidence nearly invisible (E1, E2, frame-rate test).
+3. **Removal-based methods have a stronger form of the problem.** Leave-one-out and occlusion can make redundant evidence nearly invisible (E1, E2, frame-rate test). For leave-one-out with freeze, part of this is caused by the freeze operator, not by the model (E1, section 4.6 of the E1 report).
 4. **A second failure is separate from dilution.** Grad-CAM, and Shapley on most models, give repeated evidence too much credit in total.
 5. **Giving credit to groups of frames removes dilution.** Group values stay close to their earlier values when evidence is repeated.
 6. **The groups can be found without knowing which frames are redundant.** DINOv2 similarity with a fixed average-linkage threshold works in all 7 tests, with copies and with denser real frames.
@@ -253,6 +256,7 @@ TRN, R3D-18 and R3D-50 keep a fixed clip length, so their fixed-width windows ar
 - **The practical groupings depend on τ,** one value per model, calibrated for a median of n/2 groups. We haven't tested how sensitive the results are to it. The threshold groupings also hit the 8-group cap in 41–73% of the longer MC3-18 and V-JEPA2 E1 clips.
 - **The per-copy readout for adaptive groupings depends on group membership.** The target's group can contain different neighbouring frames in the reference and in the target clip. This explains part of the drop of `dino_k4` and `dino_thr` on V-JEPA2.
 - **Top-1 loss rests on few cases** on R3D-50, MC3-18 and V-JEPA2.
+- **Leave-one-out with freeze is partly decided by the operator.** A copy whose neighbours are both copies scores exactly 0, whatever the model does. Deletion avoids this on R3D-50 and R3D-18, but not on TRN.
 - **One dataset per model:** UCF101, where appearance matters most, or SSv2, where motion matters most.
 
 ## 11. What remains for the paper

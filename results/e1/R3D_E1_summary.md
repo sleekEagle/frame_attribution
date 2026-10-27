@@ -7,7 +7,7 @@ We tested what attribution methods do when an important frame appears several ti
 The model (R3D-50) barely changes its behaviour when a frame is duplicated. It keeps its prediction, and it relies on the duplicated frame about as much as before.
 
 The attribution methods do change:
-- **Leave-one-out** gives each copy almost no credit.
+- **Leave-one-out** gives each copy almost no credit, with freeze and also with deletion (0.01 per copy at m = 8, section 6.3).
 - **Integrated Gradients** splits the credit evenly between the copies.
 - **Shapley** gives each copy less credit, but gives the copies more credit in total.
 - **Grad-CAM** gives the copies more credit in total.
@@ -112,7 +112,7 @@ The I_t row here uses only the pairs that were attributed, so it differs a littl
 
 ### 5.2 What each method does
 
-- **Leave-one-out gives each copy almost no credit.** Each copy gets 5% of its reference credit at m = 4, and about 0 at m = 6 and 8. This happens because removing one copy leaves the other copies in the clip, so the model's output hardly changes. The model needs this content, but the method reports it as unimportant.
+- **Leave-one-out gives each copy almost no credit.** Each copy gets 5% of its reference credit at m = 4, and about 0 at m = 6 and 8. This happens because removing one copy leaves the other copies in the clip, so the model's output hardly changes. The model needs this content, but the method reports it as unimportant. Part of this is caused by freeze: a copy whose neighbours are both copies is filled with an identical frame, so its score is exactly 0 whatever the model does. Leave-one-out with deletion (section 6.3) doesn't have this problem, and still falls to 0.01 per copy at m = 8. So on R3D-50 the result holds either way (`results/E1_report.md`, section 4.6).
 - **Integrated Gradients splits the credit evenly.** Each copy gets about 2/m, and the total stays near 1. This follows from how the method works: its scores always add up to the same fixed total. So each copy looks m/2 times less important than in the reference.
 - **Shapley lowers each copy's credit, but raises the total.** Each copy drops to 0.62 at m = 8. That's lower than in the reference, but much higher than an even split (0.25). Added up, the copies get 2.47 times the reference credit. The model relies on the target only 1.28 times as much. So each copy looks less important, and the content as a whole looks more important, than the model's behaviour supports.
 - **Grad-CAM raises the total.** Each copy keeps most of its credit (0.74 at m = 8), so the total grows to 2.94. Its small drop per copy also appears in the control, so that drop isn't caused by duplication.

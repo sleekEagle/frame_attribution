@@ -1,0 +1,162 @@
+\section{How we test for frame-count bias}
+\label{sec:setup}
+
+% DRAFT 1 (2026-10-19). Sources: results/design_choice_report.md, results/E1_report.md
+% (sections 2-3 and 4.6), results/e23/E23_summary.md (section 2).
+
+This section describes the models, how frames are removed and added, and the quantities we use to decide whether a method dilutes.
+The same choices are used in all experiments, unless an experiment states otherwise.
+
+\subsection{What a model must satisfy}
+\label{sec:requirements}
+
+We run four experiments.
+\begin{itemize}
+  \item \textbf{E1, controlled repetition.} We take a clip and choose one frame that the model depends on. We then build a \emph{target clip} in which this frame appears several times in a row. For example, from the clip $(A, B, C, D)$ with chosen frame $B$, the target clip is $(A, B, B, B, C, D)$. In both clips we measure two things:
+  \begin{enumerate}
+    \item how much the model depends on $B$, measured by its importance $I$: the drop in the predicted class's probability when every copy of $B$ is removed (Section~\ref{sec:problem}). This uses the model alone, not an attribution method;
+    \item the attribution score of one copy of $B$: each attribution method gives every frame its own score, and we take the mean of the scores it gives to the copies of $B$.
+  \end{enumerate}
+  We measure the second quantity for every attribution method we study: Shapley values, Play Fair, leave-one-out, occlusion, Integrated Gradients and Grad-CAM (Section~\ref{sec:why}). We compare both quantities in the target clip with their values in the original clip, where $B$ appears once. An attribution that follows the model changes the score of one copy by the same factor as the model's dependence (Equation~\ref{eq:requirement}); a method whose score of one copy changes by less dilutes the content.
+
+  Repeating $B$ also makes the clip longer, and this alone could change the scores. To separate the two, we also build a \emph{control clip} of the same length, in which other frames get the extra copies and $B$ appears only once, for example $(A, A, B, C, D, D)$. A change in $B$'s score that appears in the target clip but not in the control clip is caused by repeating $B$. Section~\ref{sec:adding} gives the details, including the version for models that need a fixed clip length.
+  \item \textbf{E2, redundancy in natural clips.} Using the model alone, we measure how much natural clips already contain frames that can stand in for each other.
+  \item \textbf{E3, rankings in natural clips.} We test whether dilution changes which part of a natural clip a user would judge to matter more.
+  \item \textbf{The frame-rate test.} We sample one part of a natural clip more densely, so that it is shown in more real, distinct frames, and ask the same questions as in E1.
+\end{itemize}
+\todo{Add section references for E2, E3 and the frame-rate test once their sections exist.}
+These comparisons are fair only if the model meets four conditions.
+\begin{enumerate}
+  \item \textbf{We run the model correctly.} With our frame sampling, preprocessing and class labels, the model reaches its expected accuracy. Otherwise we would be explaining a model that does not work as intended.
+  \item \textbf{The model handles every clip we show it normally.} This includes the clips with repeated frames that our experiments build, and the clips with removed frames that the attribution methods and the importance $I$ evaluate. In particular, the model must not react to the clip's length if frames are removed by deletion, and must not react to repeated frames as such, whatever they show. Otherwise a change in the scores could come from the shape of the clip rather than from its content (Section~\ref{sec:removal}).
+  \item \textbf{The model keeps its prediction when a frame is repeated.} We compare scores for the same predicted class before and after repetition, so a clip whose prediction changes cannot be compared. We check this for every clip (the gate, Section~\ref{sec:adding}).
+  \item \textbf{We know how much the model depends on the repeated frame, and this depends on what the frame shows.} The model may depend on a frame more or less after it is repeated; this is allowed, because we measure it ($r_I$, Section~\ref{sec:readouts}) and judge each method against it. But if the model reacted in the same way to any repeated frame, whatever it shows, the test could not tell a correct method from a wrong one. The control clips (Section~\ref{sec:adding}) check this.
+\end{enumerate}
+Conditions 1 and 2 are properties of the model, which we check before the experiments; they decide which models we use (Section~\ref{sec:models}) and which removal operator each one uses (Section~\ref{sec:removal}). Conditions 3 and 4 are checked for every clip during the experiments.
+
+\subsection{Models and data}
+\label{sec:models}
+
+We use five video classifiers on two datasets (Table~\ref{tab:models}).
+On UCF101~\citep{soomro2012ucf101}, appearance is often enough to recognise the action.
+On Something-Something v2 (SSv2)~\citep{raghav_goyal_0d4c7f22}, the order of the frames matters more.
+R3D-50~\citep{kensho_hara_bb74ffbe}, R3D-18 and MC3-18~\todo{cite Tran et al.\ 2018 (not in main.bib)} are 3D convolutional networks fine-tuned on UCF101.
+V-JEPA2~\citep{mido_assran_c74ff668} is a video transformer, and TRN~\todo{cite Zhou et al.\ 2018 (not in main.bib)} combines per-frame features with relations between frames; both are trained on SSv2.
+We use only videos that the model classifies correctly, and explain the predicted class.
+
+\begin{table}[h]
+\centering
+\caption{Models. Accuracy is measured with our frame sampling and preprocessing. The removal operator and the duplication design are explained in Sections~\ref{sec:removal} and~\ref{sec:adding}.}
+\label{tab:models}
+\begin{tabular}{llcccl}
+\toprule
+model & data & frames & accuracy & removal & design in E1 \\
+\midrule
+R3D-50  & UCF101 & 16 & 79.4\%   & freezing & reallocation \\
+R3D-18  & UCF101 & 16 & 82.95\%  & freezing & reallocation \\
+MC3-18  & UCF101 & 16 & 86.83\%  & deletion & insertion \\
+V-JEPA2 & SSv2   & 16 & 68.2\%   & deletion & insertion \\
+TRN     & SSv2   & 8  & 30--34\% & freezing & reallocation \\
+\bottomrule
+\end{tabular}
+\end{table}
+\todo{Check the TRN accuracy figure and the subsets on which each accuracy was measured (R3D-50 and V-JEPA2: 500 test videos; MC3-18 and R3D-18: full UCF101 test split; SSv2: our sampled subset).}
+
+Two further models were considered and not used.
+VideoMAE~\todo{cite Tong et al.\ 2022 (not in main.bib)} reacts to repeated frames whatever they show, so adding copies would change its behaviour for reasons unrelated to the copied content (Section~\ref{sec:removal}).
+The TRN checkpoints released with Play Fair~\citep{will_price_ec92d5a0} are no longer available, so we use the official TRN release instead.
+
+\subsection{Removing frames}
+\label{sec:removal}
+
+Shapley values, leave-one-out and the importance $I$ (Section~\ref{sec:problem}) all evaluate the model on clips with some frames removed.
+A removal operator should take away the content of the removed frames and change nothing else.
+We use two operators.
+\begin{itemize}
+  \item \textbf{Deletion} takes the frames out. The clip becomes shorter.
+  \item \textbf{Freezing} keeps the clip's length. It builds two filled clips: in one, each removed frame is replaced by the nearest kept frame before it; in the other, by the nearest kept frame after it. The model's output is averaged over the two.
+\end{itemize}
+
+\paragraph{How we chose the operator.}
+Each operator places a requirement on the model.
+Deletion changes the clip's length, so it requires a model whose output does not depend on length.
+Freezing keeps the length but fills the removed slots with repeated frames, so it requires a model whose output is not affected by repeated frames.
+We use deletion where the first requirement holds, and freezing where only the second holds.
+To test both requirements, we ran two checks on 500 test videos per model (Appendix~\ref{app:length}).
+\begin{itemize}
+  \item \textbf{Varying length and content together.} We sample $T$ frames spread evenly over the whole video, for $T$ between 1 and 24, and measure accuracy for each $T$. A larger $T$ gives a longer clip and also more distinct frames. If accuracy depends only on the content, it should change smoothly with $T$, because each added frame adds a little information. A sudden jump between two neighbouring values of $T$ is unlikely to come from one added frame, and points to a reaction to the length itself, through the model's architecture. A smooth curve is not sufficient to use deletion, because length and content change together here, and a model could also react to length gradually; the second check separates the two.
+  \item \textbf{Varying length only.} For $k$ between 1 and 15, we take the $k$ frames that the first check uses for $T = k$, and show the model these same $k$ frames in two clips: a clip of $k$ frames, and a clip of 16 frames in which each frame is repeated several times in a row. For example, with $k = 3$ frames $A, B, C$, the first clip is $(A, B, C)$ and the second is $(A, A, A, A, A, A, B, B, B, B, B, C, C, C, C, C)$; since 16 is not a multiple of 3, one frame is repeated once more than the others. At $k = 16$ the two clips are identical: this is the original clip of 16 distinct frames.
+The two clips contain the same distinct frames but differ in length and in whether frames are repeated, so we read them together with the original clip:
+  \begin{itemize}
+    \item If the two clips change in accuracy in the same way as $k$ falls, the loss comes from having fewer distinct frames, a change in content, not from the length or the repetition. The model meets both requirements, and we can use deletion.
+    \item If the short clip loses much more accuracy than the clip with repeated frames, and the clip with repeated frames stays close to the original, the model reacts to the length but not to repeated frames. We cannot use deletion, but we can use freezing.
+    \item If the clip with repeated frames is less accurate than the short clip, the model reacts to the repetition itself, and we do not use it.
+  \end{itemize}
+\end{itemize}
+The results for each model are as follows. The accuracies for the first check are in Table~\ref{tab:length-t2}, and those for the second check in Table~\ref{tab:length-t3} (Appendix~\ref{app:length}).
+\begin{itemize}
+  \item \textbf{MC3-18 and V-JEPA2} change little with length. MC3-18's accuracy is flat from 3 to 24 frames (86.6--88.6\%). V-JEPA2's accuracy rises smoothly up to 10 frames and is flat from 10 to 24 frames (66.8--69.0\%). With the same frames, the short clip and the clip with repeated frames differ by at most 0.4 points on MC3-18 and 3.8 points on V-JEPA2, so the lower accuracy of V-JEPA2 below 10 frames comes from having fewer distinct frames, not from the length. Neither model is hurt by repeated frames. Both models therefore fall under the first case, and for MC3-18 and V-JEPA2 we can use deletion as the removal operator.
+  \item \textbf{R3D-50 and R3D-18} change strongly with length, because of how their layers reduce the number of time steps. R3D-50 gains 28.4 points between 8 and 9 frames and loses 10.2 points between 16 and 17. R3D-18 gains 12.8 points between 4 and 5 frames and 6.2 points between 8 and 9, and loses 4.6 points between 16 and 17. With the same frames, the short clip is much less accurate than the clip with repeated frames: by 41--55 points on R3D-50 for 8 or fewer frames, and on R3D-18 by 30 points with 1 frame, 18 points with 4 frames and 7 points with 8 frames. From 4 frames on, the clip with repeated frames is within 3 points of the original on both models, so the loss comes from the length, not from the repetition. Both models therefore fall under the second case: for R3D-50 and R3D-18 we cannot use deletion, but we can use freezing as the removal operator.
+  \item \textbf{VideoMAE} falls under the third case. With the same frames, the clip with repeated frames is less accurate than the short clip for every $k$, by up to 20.8 points (45.6\% against 66.4\% with 8 frames). VideoMAE processes frames in consecutive pairs, and the loss grows with the number of pairs that hold two identical frames: with 8 frames repeated to 16, every pair holds two identical frames. A clip in which each frame is shown twice, the reference clip of the reallocation design, keeps the prediction of the original clip for only 37.2\% of videos. Adding copies therefore changes VideoMAE's output whatever the copied frame shows, so we do not use it.
+  \item \textbf{TRN} accepts exactly 8 frames, so deletion is impossible, and neither check can be run on it. The only test of repeated frames on TRN is the reference clip of the reallocation design (Section~\ref{sec:adding}), in which each of 4 frames is shown twice: it keeps the prediction of the original clip for 87.8\% of videos, fewer than on R3D-50 (94.1\%) and R3D-18 (95.7\%). For TRN we therefore use freezing as the removal operator, but the evidence that TRN is not affected by repeated frames is weaker than for the R3D models.
+\end{itemize}
+The importance $I$ and every removal-based method use the same operator for a given model, so their values are comparable.
+Occlusion, Integrated Gradients and Grad-CAM do not use a removal operator: occlusion replaces a frame with a flat frame of one average colour, and Integrated Gradients integrates from a clip made only of such flat frames.
+
+\paragraph{Repeated frames and the operator.}
+The operator also affects how exactly Proposition~\ref{prop:split} applies to identical frames.
+Under deletion, keeping either of two identical frames that are next to each other, together with the same other frames, gives the same clip, so the two frames are exactly interchangeable ($\varepsilon = 0$).
+Under freezing, the removed frame is filled from its neighbours, which differ depending on which of the two is removed, so in general $\varepsilon > 0$.
+
+Freezing has a second consequence for leave-one-out: with exact copies, it can leave the input unchanged.
+If both neighbours of a removed copy are copies of the same content, both filled clips equal the original clip, and the leave-one-out score of that copy is exactly zero, whatever the model computes (Appendix~\ref{app:loo-freeze}).
+To check that our leave-one-out results do not come from this, we also compute leave-one-out with deletion on R3D-50 and R3D-18.
+Removing one frame only shortens the clip from 16 to 15 frames, where accuracy changes by 2.4 points on R3D-50 and 2.2 points on R3D-18, much less than the jumps above.
+This check is not possible on TRN.
+
+\subsection{Adding copies}
+\label{sec:adding}
+
+E1 repeats one frame of a clip and measures how the attribution of that frame changes.
+We call the distinct frames of a clip its \emph{contents}, and build three kinds of clip from each video.
+\begin{itemize}
+  \item The \textbf{reference clip} shows every content $m_{\mathrm{ref}}$ times.
+  \item The \textbf{target clip} shows one content, the \emph{target} $t$, $m$ times.
+  \item The \textbf{control clip} makes the same kind of change to the clip, but gives the extra copies to other contents. The target keeps its reference number of copies.
+\end{itemize}
+A change in the target's attribution that appears in the target clip but not in the control clip is caused by repeating the target, not by the other changes to the clip.
+
+How the copies are added depends on the removal operator, because both are limited by what inputs the model handles correctly.
+\begin{itemize}
+  \item \textbf{Insertion} (MC3-18, V-JEPA2). The reference clip is the model's own 16 frames, each shown once ($m_{\mathrm{ref}} = 1$). The target clip inserts $m - 1$ copies of $t$ next to it, so the clip becomes longer. The control clip gives one extra copy to each of $m - 1$ other contents, so it has the same length as the target clip. We use $m \in \{3, 5, 9\}$.
+  \item \textbf{Reallocation} (R3D-50, R3D-18, TRN). The clip length stays fixed. The reference clip takes every other frame of the model's input and shows each twice ($m_{\mathrm{ref}} = 2$). Showing every content twice makes room for repetition without changing the length: the target can take slots from other contents, and each of those contents is still shown at least once. The target clip gives $t$ more slots by reducing some other contents to one copy. The control clip reduces the same contents to one copy, but gives the freed slots to the least important content. We use $m \in \{4, 6, 8\}$ on R3D-50 and R3D-18, and $m = 4$ on TRN, which has only 8 slots.
+\end{itemize}
+Reallocation requires that the model treats a clip in which every frame is shown twice like the original clip.
+The reference clip gets the same prediction as the original clip for 94.1\% (R3D-50), 95.7\% (R3D-18) and 87.8\% (TRN) of videos.
+
+\paragraph{Targets and copies.}
+Targets are chosen by the model's importance $I$, never by an attribution method: one target among the two most important contents, and a second from the middle ranks when available, both with $I > 0.01$.
+Copies are either exact, or have Gaussian noise added ($\sigma = 2/255$), to check that the results do not depend on pixel-identical frames.
+
+\paragraph{The gate.}
+We compare attributions for the same predicted class, so the repeated clips must keep the reference prediction.
+A target clip and its control clip are used only if both keep it.
+Between 79\% and 99\% of pairs pass on four models, and 54\% on TRN.
+
+\subsection{What we measure}
+\label{sec:readouts}
+
+\paragraph{The model's own change.}
+For each target, the importance ratio $r_I = I'(t)/I(t)$ compares the target's importance in the target clip with its importance in the reference clip (Section~\ref{sec:problem}).
+It tells us how much the model's dependence on the target changes when the target is repeated.
+An attribution method dilutes if its score per copy changes by less than this ratio (Section~\ref{sec:attr-requirements}).
+
+\paragraph{Readouts of an attribution.}
+For an attribution method with frame scores $\phi$, and the target's copies $C$ in a clip, we compare each clip with the reference clip for the same attribution method:
+\begin{itemize}
+  \item the \textbf{per-copy ratio} $r_\phi$, the mean score of one copy divided by its reference value;
+  \item the \textbf{dilution slope} $\beta$, the least-squares slope through the origin of $\log r_\phi$ against $\log(m / m_{\mathrm{ref}})$, fitted per target over the values of $m$. $\beta = 0$ means the score per copy does not change, and $\beta = -1$ means it falls as $1/m$, an even split among the copies. We report the median over targets with a bootstrap 95\% interval, for the target clips and for the control clips. TRN has a single value of $m$, so its $\beta$ is computed from one point.
+  \item \textbf{ranking changes}: an \emph{inversion} is a content that the attribution method ranked clearly below the target in the reference clip, that the model still ranks below the target, but that the attribution method now ranks above it.
+\end{itemize}
+$\beta$ uses only targets with a positive reference score, because the logarithm is undefined otherwise.
+\todo{Decide whether to keep top-1 loss. It rests on few cases on R3D-50, MC3-18 and V-JEPA2.}

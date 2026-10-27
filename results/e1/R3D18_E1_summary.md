@@ -7,7 +7,7 @@ R3D-18 is a second, smaller 3D ResNet. We ran it to check whether the R3D-50 res
 The model barely changes when a frame is duplicated. It keeps its prediction in about 95% of clips, and it relies on the duplicated frame about as much as before (1.06 to 1.30 times).
 
 The attribution methods do change:
-- **Leave-one-out** gives each copy almost no credit.
+- **Leave-one-out** (freeze) gives each copy almost no credit. Most of this comes from the freeze operator: with deletion, each copy keeps 0.36 at m = 8 (`results/E1_report.md`, section 4.6).
 - **Shapley** gives each copy less credit, but the copies more credit in total.
 - **Integrated Gradients** gives each copy less credit. Its total grows a little.
 - **Occlusion** gives each copy less credit, and its total stays close to the model's.
@@ -38,7 +38,7 @@ We test m = 4, 6 and 8, with exact copies and with slightly noisy copies (σ = 2
 
 **Targets.** Chosen by the model's own importance I(c), never by an attribution method. One "high" target from the top 2 contents, and one "mid" target from ranks 3–4 when available. Both need I > 0.01.
 
-**Methods.** Shapley (freeze; 64 orderings, 2 seeds), leave-one-out (freeze), occlusion, Integrated Gradients (32 steps), Grad-CAM (`layer2`). Methods that delete frames aren't used, because of the length effect above.
+**Methods.** Shapley (freeze; 64 orderings, 2 seeds), leave-one-out (freeze), occlusion, Integrated Gradients (32 steps), Grad-CAM (`layer2`). Methods that delete frames aren't used, because of the length effect above. The exception is leave-one-out with deletion, added later as a check on freeze (it only shortens clips from 16 to 15 frames; see `results/E1_report.md`, section 4.6).
 
 ## 3. Which videos were used
 
@@ -95,7 +95,7 @@ The I_t row uses only the attributed pairs, so it differs a little from section 
 
 ### 5.2 What each method does
 
-- **Leave-one-out gives each copy almost no credit** (0.07 at m = 4, about 0 at m = 8). Removing one copy leaves the others in the clip, so the model's output hardly changes. The same as R3D-50.
+- **Leave-one-out gives each copy almost no credit** (0.07 at m = 4, about 0 at m = 8). Removing one copy leaves the others in the clip, so the model's output hardly changes. The same as R3D-50. **But this is mostly caused by freeze:** a copy whose neighbours are both copies is filled with an identical frame, so its score is exactly 0. With deletion, each copy keeps 0.66 / 0.61 / 0.36 at m = 4 / 6 / 8 (control at m = 8: 0.56), and β is 0.00 [−0.26, 0.17] (control +0.13), on the same 120 videos.
 - **Shapley lowers each copy's credit, but raises the total.** Each copy drops to 0.52 at m = 8, and the copies together get 2.07 times the reference credit. The model relies on the target only 1.30 times as much. The same pattern as R3D-50 (0.62 per copy, 2.47 in total).
 - **Integrated Gradients lowers each copy's credit**, to 0.45 at m = 8. Unlike R3D-50, where the total stayed at 1, the total grows to 1.80. That's still closer to the model (1.30) than Shapley's total.
 - **Occlusion lowers each copy's credit** to 0.32, and its total (0.91 to 1.28) stays close to the model's. On R3D-50, occlusion showed no clear effect.

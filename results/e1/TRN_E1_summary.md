@@ -8,7 +8,7 @@ TRN takes exactly 8 frames, so the only test possible is the target appearing 4 
 
 The model relies on the duplicated frame at least as much as before (1.32 times, in the pairs we used). But the attribution methods change:
 - **Shapley** splits the credit exactly evenly between the copies. Each copy looks half as important as before.
-- **Leave-one-out** gives each copy almost no credit (2% of before).
+- **Leave-one-out** gives each copy almost no credit (2% of before). Part of this is caused by the freeze operator, and TRN can't be checked with deletion (`results/E1_report.md`, section 4.6).
 - **Occlusion** roughly splits the credit evenly.
 - **Integrated Gradients** barely lowers the credit per copy, so the total grows to 1.68 times.
 - **Grad-CAM** keeps the credit per copy, so the total nearly doubles.
@@ -110,7 +110,7 @@ Notes:
 ### 5.2 What each method does
 
 - **Shapley splits the credit exactly evenly.** Each copy gets 0.50 of its reference credit, and the total stays at 0.99. So each copy looks half as important as before, while the model relies on the target slightly more (1.32).
-- **Leave-one-out gives each copy almost no credit** (2% of the reference). Removing one copy leaves the others in the clip, so the output barely changes. A content the model needs is reported as unimportant.
+- **Leave-one-out gives each copy almost no credit** (2% of the reference). Removing one copy leaves the others in the clip, so the output barely changes. A content the model needs is reported as unimportant. **Caveat:** with freeze, a copy whose neighbours are both copies is filled with an identical frame, so its score is exactly 0 whatever the model does. TRN needs exactly 8 frames, so this can't be checked with deletion. On R3D-18, deletion showed that most of the freeze result came from the operator.
 - **Occlusion roughly splits the credit evenly** (0.55 per copy, total 1.11). The control doesn't change in the same way.
 - **Integrated Gradients barely lowers the credit per copy** (0.84). So the total grows to 1.68 times the reference, more than the model's 1.32.
 - **Grad-CAM keeps the credit per copy** (0.96), so the total nearly doubles (1.92).

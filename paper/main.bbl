@@ -1,0 +1,129 @@
+\begin{thebibliography}{14}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Assran et~al.(2025)Assran, Bardes, Fan, Garrido, Howes, Komeili,
+  Muckley, Rizvi, Roberts, Sinha, Zholus, Arnaud, Gejji, Martin, Hogan, Dugas,
+  Bojanowski, Khalidov, Labatut, Massa, Szafraniec, Krishnakumar, Li, Ma,
+  Chandar, Meier, LeCun, Rabbat, and Ballas]{mido_assran_c74ff668}
+Mido Assran, Adrien Bardes, David Fan, Quentin Garrido, Russell Howes, Mojtaba
+  Komeili, Matthew Muckley, Ammar Rizvi, Claire Roberts, Koustuv Sinha, Artem
+  Zholus, Sergio Arnaud, Abha Gejji, Ada Martin, Francois~Robert Hogan, Daniel
+  Dugas, Piotr Bojanowski, Vasil Khalidov, Patrick Labatut, Francisco Massa,
+  Marc Szafraniec, Kapil Krishnakumar, Yong Li, Xiaodong Ma, Sarath Chandar,
+  Franziska Meier, Yann LeCun, Michael Rabbat, and Nicolas Ballas.
+\newblock {V-JEPA 2}: Self-supervised video models enable understanding,
+  prediction and planning.
+\newblock \emph{arXiv preprint arXiv:2506.09985}, 2025.
+\newblock \doi{10.48550/arXiv.2506.09985}.
+
+\bibitem[Castro et~al.(2009)Castro, G{\'o}mez, and
+  Tejada]{javier_castro_28f89a07}
+Javier Castro, Daniel G{\'o}mez, and Juan Tejada.
+\newblock Polynomial calculation of the {Shapley} value based on sampling.
+\newblock \emph{Computers \& Operations Research}, 36\penalty0 (5):\penalty0
+  1726--1730, 2009.
+\newblock \doi{10.1016/j.cor.2008.04.004}.
+
+\bibitem[Fong \& Vedaldi(2017)Fong and Vedaldi]{ruth_c__fong_7e902699}
+Ruth~C. Fong and Andrea Vedaldi.
+\newblock Interpretable explanations of black boxes by meaningful perturbation.
+\newblock In \emph{Proceedings of the IEEE International Conference on Computer
+  Vision (ICCV)}, pp.\  3449--3457, 2017.
+\newblock \doi{10.1109/ICCV.2017.371}.
+
+\bibitem[Goyal et~al.(2017)Goyal, Kahou, Michalski, Materzy{\'n}ska, Westphal,
+  Kim, Haenel, Fruend, Yianilos, Mueller-Freitag, Hoppe, Thurau, Bax, and
+  Memisevic]{raghav_goyal_0d4c7f22}
+Raghav Goyal, Samira~Ebrahimi Kahou, Vincent Michalski, Joanna Materzy{\'n}ska,
+  Susanne Westphal, Heuna Kim, Valentin Haenel, Ingo Fruend, Peter Yianilos,
+  Moritz Mueller-Freitag, Florian Hoppe, Christian Thurau, Ingo Bax, and Roland
+  Memisevic.
+\newblock The ``something something'' video database for learning and
+  evaluating visual common sense.
+\newblock In \emph{Proceedings of the IEEE International Conference on Computer
+  Vision (ICCV)}, pp.\  5843--5851, 2017.
+\newblock \doi{10.1109/ICCV.2017.622}.
+
+\bibitem[Hara et~al.(2018)Hara, Kataoka, and Satoh]{kensho_hara_bb74ffbe}
+Kensho Hara, Hirokatsu Kataoka, and Yutaka Satoh.
+\newblock Can spatiotemporal {3D} {CNNs} retrace the history of {2D} {CNNs} and
+  {ImageNet}?
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision
+  and Pattern Recognition (CVPR)}, pp.\  6546--6555, 2018.
+\newblock \doi{10.1109/CVPR.2018.00685}.
+
+\bibitem[Li et~al.(2021)Li, Wang, Li, Huang, and Sato]{zhenqiang_li_45594fd6}
+Zhenqiang Li, Weimin Wang, Zuoyue Li, Yifei Huang, and Yoichi Sato.
+\newblock Towards visually explaining video understanding networks with
+  perturbation.
+\newblock In \emph{Proceedings of the IEEE/CVF Winter Conference on
+  Applications of Computer Vision (WACV)}, pp.\  1119--1128, 2021.
+\newblock \doi{10.1109/WACV48630.2021.00116}.
+
+\bibitem[Price \& Damen(2020)Price and Damen]{will_price_ec92d5a0}
+Will Price and Dima Damen.
+\newblock {Play Fair}: Frame attributions in video models.
+\newblock In \emph{Proceedings of the Asian Conference on Computer Vision
+  (ACCV)}, pp.\  480--497. Springer, 2020.
+\newblock \doi{10.1007/978-3-030-69541-5_29}.
+
+\bibitem[Selvaraju et~al.(2017)Selvaraju, Cogswell, Das, Vedantam, Parikh, and
+  Batra]{ramprasaath_r__selvaraju_bb3d7670}
+Ramprasaath~R. Selvaraju, Michael Cogswell, Abhishek Das, Ramakrishna Vedantam,
+  Devi Parikh, and Dhruv Batra.
+\newblock {Grad-CAM}: Visual explanations from deep networks via gradient-based
+  localization.
+\newblock In \emph{Proceedings of the IEEE International Conference on Computer
+  Vision (ICCV)}, pp.\  618--626, 2017.
+\newblock \doi{10.1109/ICCV.2017.74}.
+
+\bibitem[Shapley(1953)]{lloyd_s__shapley_005c222c}
+Lloyd~S. Shapley.
+\newblock A value for $n$-person games.
+\newblock In Harold~W. Kuhn and Albert~W. Tucker (eds.), \emph{Contributions to
+  the Theory of Games {II}}, volume~28 of \emph{Annals of Mathematics Studies},
+  pp.\  307--317. Princeton University Press, 1953.
+\newblock \doi{10.1515/9781400881970-018}.
+
+\bibitem[Soomro et~al.(2012)Soomro, Zamir, and Shah]{soomro2012ucf101}
+Khurram Soomro, Amir~Roshan Zamir, and Mubarak Shah.
+\newblock {UCF101}: A dataset of 101 human actions classes from videos in the
+  wild.
+\newblock \emph{arXiv preprint arXiv:1212.0402}, 2012.
+
+\bibitem[{\v{S}}trumbelj \& Kononenko(2010){\v{S}}trumbelj and
+  Kononenko]{strumbeljerik_42cc2316}
+Erik {\v{S}}trumbelj and Igor Kononenko.
+\newblock An efficient explanation of individual classifications using game
+  theory.
+\newblock \emph{Journal of Machine Learning Research}, 11:\penalty0 1--18,
+  2010.
+
+\bibitem[Sundararajan et~al.(2017)Sundararajan, Taly, and
+  Yan]{mukund_sundararajan_62086538}
+Mukund Sundararajan, Ankur Taly, and Qiqi Yan.
+\newblock Axiomatic attribution for deep networks.
+\newblock In \emph{Proceedings of the 34th International Conference on Machine
+  Learning (ICML)}, volume~70 of \emph{Proceedings of Machine Learning
+  Research}, pp.\  3319--3328. PMLR, 2017.
+
+\bibitem[Zeiler \& Fergus(2014)Zeiler and Fergus]{matthew_d__zeiler_d7ae7e07}
+Matthew~D. Zeiler and Rob Fergus.
+\newblock Visualizing and understanding convolutional networks.
+\newblock In \emph{Proceedings of the European Conference on Computer Vision
+  (ECCV)}, volume 8689 of \emph{Lecture Notes in Computer Science}, pp.\
+  818--833. Springer, 2014.
+\newblock \doi{10.1007/978-3-319-10590-1_53}.
+
+\bibitem[Zhou et~al.(2016)Zhou, Khosla, Lapedriza, Oliva, and
+  Torralba]{bolei_zhou_cam}
+Bolei Zhou, Aditya Khosla, Agata Lapedriza, Aude Oliva, and Antonio Torralba.
+\newblock Learning deep features for discriminative localization.
+\newblock In \emph{Proceedings of the IEEE Conference on Computer Vision and
+  Pattern Recognition (CVPR)}, pp.\  2921--2929, 2016.
+
+\end{thebibliography}

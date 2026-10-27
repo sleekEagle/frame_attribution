@@ -1,0 +1,75 @@
+\section{Introduction}
+\label{sec:intro}
+
+% DRAFT 3 (2026-10-26). Framing: frame-count bias, measured by one requirement (r_phi = r_I);
+% its observed form is dilution. Frame scores are not meant to be summed.
+% Numbers come from results/motivation_overview.md. Each one must be checked against
+% the detailed report before submission.
+
+A frame-level attribution method explains a video classifier's prediction by assigning one score to each input frame.
+The score is meant to answer the question: how much does the prediction depend on this frame?
+Several kinds of method are used for this purpose.
+Shapley values over frames~\citep{lloyd_s__shapley_005c222c, strumbeljerik_42cc2316}, including the Element Shapley Value of Play Fair~\citep{will_price_ec92d5a0}, average a frame's marginal contribution over subsets of the other frames.
+Leave-one-out and occlusion~\citep{matthew_d__zeiler_d7ae7e07} measure the change in output when a single frame is removed.
+Gradient-based methods such as Integrated Gradients~\citep{mukund_sundararajan_62086538} and Grad-CAM~\citep{ramprasaath_r__selvaraju_bb3d7670} aggregate gradients over the pixels of each frame.
+
+\paragraph{The challenge: the same evidence is shown in many frames.}
+Video is temporally redundant.
+A static shot, a slow movement or a fixed background shows the same visual evidence in many consecutive frames.
+For the model, such frames can be interchangeable: removing one of them changes the output very little, because the remaining frames still show the same evidence.
+A frame-level method must still assign a separate score to each of these frames.
+As a result, its scores depend on two quantities:
+(i) how much the model's output depends on the evidence, and
+(ii) how many frames show that evidence.
+Only the first quantity describes the model.
+The second describes the video: its frame rate, the sampling of the clip, and how long the evidence stays on screen.
+We call the dependence of an attribution on the second quantity \emph{frame-count bias}.
+Its common form is \emph{dilution}: the score of each frame falls when the evidence is shown in more frames, because the credit is divided among them, even though the model depends on the evidence as much as before.
+We take the view that the score of a frame should be the score of the evidence it shows, so that evidence shown in many frames is not spread thin and overlooked.
+Methods whose scores must add up to a fixed total cannot meet this view: when the evidence is shown in $m$ times as many frames, their frames must share the total, and in the simplest case each frame's score falls by exactly the factor $m$ (Proposition~\ref{prop:conflict}).
+
+\paragraph{Why it happens.}
+How a method dilutes depends on how it computes a frame's score (Section~\ref{sec:why}).
+\begin{enumerate}
+  \item \textbf{The score is a share of a fixed total.}
+  Shapley values satisfy efficiency: the scores of all frames sum to $v(N) - v(\emptyset)$, the difference between the output on the full clip and on the empty clip.
+  They also satisfy symmetry: two frames with identical marginal contributions to every subset of the other frames receive equal scores.
+  If $m$ interchangeable frames show the same evidence, each receives $1/m$ of the value assigned to the group (Proposition~\ref{prop:split}).
+  Unless that group value grows in proportion to $m$, each frame's score falls as $m$ grows: the method dilutes.
+  Integrated Gradients satisfies a similar completeness property, but completeness fixes only the total, not how it is split, so how much it dilutes depends on the model's gradients.
+  \item \textbf{The score is the effect of removing one frame while the others remain.}
+  Leave-one-out and occlusion remove or blank a single frame and measure the change in output.
+  When other frames still show the same evidence, the output changes little, so each of these frames receives a small score.
+On some models the score is close to zero, so the evidence becomes almost invisible, not only smaller.
+  \item \textbf{The score is read from the frame's own activations.}
+  Grad-CAM weights the activations at a frame's temporal position by gradients averaged over the clip.
+  It neither removes frames nor constrains the sum of the scores, so nothing in its definition divides the credit.
+  Each copy receives roughly the score that the original frame received, but this does not follow the model when the model's dependence on the evidence changes.
+\end{enumerate}
+In our controlled experiments, every method dilutes on every model: one copy of a repeated frame keeps between 0.006 and 0.96 of the model's change in dependence on that frame, and Shapley values keep 0.14--0.31.
+
+\paragraph{Why it matters.}
+Dilution misleads a user in two ways.
+\begin{enumerate}
+  \item \textbf{Long evidence looks unimportant.} Evidence shown in many frames receives small per-frame scores, so each of its frames appears unimportant, and it can be ranked below evidence shown in fewer frames even when the model depends on it more. The ranking then reflects the duration of the evidence, not the model.
+  \item \textbf{Resampling changes the explanation.} Sampling the same video more densely lowers every frame's score, while the model's dependence on the evidence stays the same.
+\end{enumerate}
+\todo{One sentence with the headline numbers, e.g.\ E1: one copy keeps 0.14--0.31 of the model's change under Shapley values; E3: on V-JEPA2 the more important segment is ranked lower in 42\% of pairs when it is at least twice as long, against 25\% for segments of equal length.}
+
+\paragraph{Why the challenge is not easy to address.}
+Three difficulties make frame-count bias hard to detect and to remove.
+\begin{enumerate}
+  \item \textbf{There is no ground-truth attribution.} To show that a score is wrong, we need a reference that comes from the model itself. We use the change in the model's output when every frame that shows a given evidence is removed together.
+  \item \textbf{It cannot be corrected after the fact without knowing which frames show the same evidence.} Rescaling a frame's score by the size of its group requires the groups, and the groups are not given for a new video.
+  \item \textbf{Simple fixed groupings do not solve it.} Fixed-length temporal windows split a run of similar frames across several windows, so the run's credit is again divided. A remedy must form groups that follow the content of the video and adapt to its sampling density.
+\end{enumerate}
+
+\paragraph{This work.}
+We study three questions.
+\textbf{(Q1)} Do current video models and attribution methods show frame-count bias, how strongly, and is it caused by the repetition of evidence rather than by other changes to the clip?
+\textbf{(Q2)} Does it occur in natural videos, and does it change which parts of a video a user would judge to be more important?
+\textbf{(Q3)} Can it be removed when the frames that show the same evidence are not known in advance?
+We answer Q3 with group attribution: frames that show the same evidence form one group, which receives a single score.
+Each frame of a group displays the group's score, so the score of a frame is the score of the evidence it shows.
+Group Shapley values still divide the output, but among groups instead of frames, so the number of frames in a group does not reduce its score.
+\todo{Contributions list, scoped to the evidence: the definition of dilution against the model's own change, and the result that efficient frame-level methods dilute (Proposition~\ref{prop:conflict}); controlled repetition with control clips (Q1); redundancy measurement, ranking test and frame-rate test on natural videos (Q2); group Shapley values over DINOv2 similarity groups with a fixed average-linkage threshold, compared with fixed windows (Q3). State the limitations (model-based yardsticks, one dataset per model) in the paper body.}

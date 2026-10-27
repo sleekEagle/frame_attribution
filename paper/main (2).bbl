@@ -1,0 +1,351 @@
+\begin{thebibliography}{48}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Arnab et~al.(2021)Arnab, Dehghani, Heigold, Sun, Lu{\v{c}}i{\'c}, and
+  Schmid]{arnab2021vivit}
+Anurag Arnab, Mostafa Dehghani, Georg Heigold, Chen Sun, Mario Lu{\v{c}}i{\'c},
+  and Cordelia Schmid.
+\newblock Vivit: A video vision transformer.
+\newblock In \emph{Proceedings of the IEEE/CVF international conference on
+  computer vision}, pages 6836--6846, 2021.
+
+\bibitem[Assran et~al.(2025)Assran, Bardes, Fan, Garrido, Howes, Muckley,
+  Rizvi, Roberts, Sinha, Zholus, et~al.]{assran2025v}
+Mido Assran, Adrien Bardes, David Fan, Quentin Garrido, Russell Howes, Matthew
+  Muckley, Ammar Rizvi, Claire Roberts, Koustuv Sinha, Artem Zholus, et~al.
+\newblock V-jepa 2: Self-supervised video models enable understanding,
+  prediction and planning.
+\newblock \emph{arXiv preprint arXiv:2506.09985}, 2025.
+
+\bibitem[Bin et~al.(2018)Bin, Yang, Shen, Xie, Shen, and Li]{bin2018describing}
+Yi Bin, Yang Yang, Fumin Shen, Ning Xie, Heng~Tao Shen, and Xuelong Li.
+\newblock Describing video with attention-based bidirectional lstm.
+\newblock \emph{IEEE transactions on cybernetics}, 49\penalty0 (7):\penalty0
+  2631--2641, 2018.
+
+\bibitem[Chattopadhay et~al.(2018)Chattopadhay, Sarkar, Howlader, and
+  Balasubramanian]{Chattopadhay2018}
+Aditya Chattopadhay, Anirban Sarkar, Prantik Howlader, and Vineeth~N
+  Balasubramanian.
+\newblock Grad-cam++: Generalized gradient-based visual explanations for deep
+  convolutional networks.
+\newblock In \emph{2018 IEEE winter conference on applications of computer
+  vision (WACV)}, pages 839--847. IEEE, 2018.
+
+\bibitem[Ciubotariu et~al.(2026)Ciubotariu, Zhou, Jin, Wu, Timofte, Chen, Chen,
+  Chen, Zhang, Bai, Shu, Ma, Yang, Li, Sun, Tu, Xu, Jiang, Liu, Shi, Xu, Luo,
+  Gao, Zeng, Akalwadi, Nadgir, A~B, Khot, Tabib, Mudenagudi, I~Pattanshetty,
+  I~Pattanshetty, Desai, C, Zhang, Yin, Wang, Zhang, Shi, Kang, Yang, and
+  Qiang]{Ciubotariu_2026_CVPR}
+George Ciubotariu, Zhuyun Zhou, Yeying Jin, Zongwei Wu, Radu Timofte, Zhenzhong
+  Chen, Jiaxin Chen, Xinxin Chen, Yuantong Zhang, Fuqiang Bai, Tian Shu,
+  Wenzhuo Ma, Daiqin Yang, Qipei Li, Lei Sun, Jiachen Tu, Guoyi Xu, Yaoxin
+  Jiang, Jiajia Liu, Yaokun Shi, Mila Xu, Xiaotong Luo, Yuan Gao, Wenjun Zeng,
+  Nikhil Akalwadi, Praneel Nadgir, Yashas A~B, Rashmi Khot, Ramesh~Ashok Tabib,
+  Uma Mudenagudi, Varda I~Pattanshetty, Varsha I~Pattanshetty, Padmashree
+  Desai, Sujatha C, Lize Zhang, Hao Yin, Luyang Wang, Boqi Zhang, Jiawei Shi,
+  Hao Kang, Zhe Yang, and Yixiang Qiang.
+\newblock High fps video frame interpolation challenge at ntire 2026.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision
+  and Pattern Recognition (CVPR) Workshops}, pages 1728--1740, 2026.
+
+\bibitem[Ding et~al.(2023)Ding, Sener, and Yao]{ding2023temporal}
+Guodong Ding, Fadime Sener, and Angela Yao.
+\newblock Temporal action segmentation: An analysis of modern techniques.
+\newblock \emph{IEEE Transactions on Pattern Analysis and Machine
+  Intelligence}, 46\penalty0 (2):\penalty0 1011--1030, 2023.
+
+\bibitem[Dong et~al.(2022)Dong, Zhang, Song, and Tan]{dong2022identifying}
+Wenkai Dong, Zhaoxiang Zhang, Chunfeng Song, and Tieniu Tan.
+\newblock Identifying the key frames: An attention-aware sampling method for
+  action recognition.
+\newblock \emph{Pattern Recognition}, 130:\penalty0 108797, 2022.
+
+\bibitem[Fong et~al.(2019)Fong, Patrick, and Vedaldi]{Fong2019}
+Ruth Fong, Mandela Patrick, and Andrea Vedaldi.
+\newblock Understanding deep networks via extremal perturbations and smooth
+  masks.
+\newblock In \emph{Proceedings of the IEEE/CVF international conference on
+  computer vision}, pages 2950--2958, 2019.
+
+\bibitem[Fong and Vedaldi(2017)]{Fong2017}
+Ruth~C Fong and Andrea Vedaldi.
+\newblock Interpretable explanations of black boxes by meaningful perturbation.
+\newblock In \emph{Proceedings of the IEEE international conference on computer
+  vision}, pages 3429--3437, 2017.
+
+\bibitem[Ghodrati et~al.(2021)Ghodrati, Bejnordi, and Habibian]{Ghodrati2021}
+Amir Ghodrati, Babak~Ehteshami Bejnordi, and Amirhossein Habibian.
+\newblock Frameexit: Conditional early exiting for efficient video recognition.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision
+  and Pattern Recognition}, pages 15608--15618, 2021.
+
+\bibitem[Goran et~al.(2020)Goran, Begovi{\'c}, and
+  {\v{S}}kaljo]{goran2020adjacent}
+Nermin Goran, Alen Begovi{\'c}, and Namir {\v{S}}kaljo.
+\newblock Adjacent image correlation for video quality assessment.
+\newblock In \emph{2020 International Symposium ELMAR}, pages 45--48. IEEE,
+  2020.
+
+\bibitem[Goyal et~al.(2017)Goyal, Ebrahimi~Kahou, Michalski, Materzynska,
+  Westphal, Kim, Haenel, Fruend, Yianilos, Mueller-Freitag,
+  et~al.]{goyal2017something}
+Raghav Goyal, Samira Ebrahimi~Kahou, Vincent Michalski, Joanna Materzynska,
+  Susanne Westphal, Heuna Kim, Valentin Haenel, Ingo Fruend, Peter Yianilos,
+  Moritz Mueller-Freitag, et~al.
+\newblock The" something something" video database for learning and evaluating
+  visual common sense.
+\newblock In \emph{Proceedings of the IEEE international conference on computer
+  vision}, pages 5842--5850, 2017.
+
+\bibitem[Hartley et~al.(2021)Hartley, Sidorov, Willis, and
+  Marshall]{Hartley2021}
+Thomas Hartley, Kirill Sidorov, Christopher Willis, and David Marshall.
+\newblock Swag: Superpixels weighted by average gradients for explanations of
+  cnns.
+\newblock In \emph{Proceedings of the IEEE/CVF Winter Conference on
+  Applications of Computer Vision}, pages 423--432, 2021.
+
+\bibitem[Hartley et~al.(2022)Hartley, Sidorov, Willis, and
+  Marshall]{Hartley2022}
+Thomas Hartley, Kirill Sidorov, Christopher Willis, and David Marshall.
+\newblock Swag-v: explanations for video using superpixels weighted by average
+  gradients.
+\newblock In \emph{Proceedings of the IEEE/CVF Winter Conference on
+  Applications of Computer Vision}, pages 604--613, 2022.
+
+\bibitem[Huang et~al.(2018)Huang, Ramanathan, Mahajan, Torresani, Paluri,
+  Fei-Fei, and Niebles]{Huang2018}
+De-An Huang, Vignesh Ramanathan, Dhruv Mahajan, Lorenzo Torresani, Manohar
+  Paluri, Li Fei-Fei, and Juan~Carlos Niebles.
+\newblock What makes a video a video: Analyzing temporal information in video
+  understanding models and datasets.
+\newblock In \emph{Proceedings of the IEEE Conference on Computer Vision and
+  Pattern Recognition}, pages 7366--7375, 2018.
+
+\bibitem[Kataoka et~al.(2020)Kataoka, Wakamiya, Hara, and
+  Satoh]{kataoka2020would}
+Hirokatsu Kataoka, Tenga Wakamiya, Kensho Hara, and Yutaka Satoh.
+\newblock Would mega-scale datasets further enhance spatiotemporal 3d cnns?
+\newblock \emph{arXiv preprint arXiv:2004.04968}, 2020.
+
+\bibitem[Li et~al.(2021)Li, Wang, Li, Huang, and Sato]{Li2021}
+Zhenqiang Li, Weimin Wang, Zuoyue Li, Yifei Huang, and Yoichi Sato.
+\newblock Towards visually explaining video understanding networks with
+  perturbation.
+\newblock In \emph{Proceedings of the IEEE/CVF Winter Conference on
+  Applications of Computer Vision}, pages 1120--1129, 2021.
+
+\bibitem[Lundberg and Lee(2017{\natexlab{a}})]{Lundberg2017}
+Scott~M Lundberg and Su-In Lee.
+\newblock A unified approach to interpreting model predictions.
+\newblock \emph{Advances in neural information processing systems}, 30,
+  2017{\natexlab{a}}.
+
+\bibitem[Lundberg and Lee(2017{\natexlab{b}})]{NIPS2017_7062}
+Scott~M Lundberg and Su-In Lee.
+\newblock A unified approach to interpreting model predictions.
+\newblock Curran Associates, Inc., 2017{\natexlab{b}}.
+
+\bibitem[Mahdisoltani et~al.(2018)Mahdisoltani, Berger, Gharbieh, Fleet, and
+  Memisevic]{mahdisoltani2018effectiveness}
+Farzaneh Mahdisoltani, Guillaume Berger, Waseem Gharbieh, David Fleet, and
+  Roland Memisevic.
+\newblock On the effectiveness of task granularity for transfer learning.
+\newblock \emph{arXiv preprint arXiv:1804.09235}, 2018.
+
+\bibitem[Manttari et~al.(2020)Manttari, Broomé, Folkesson, and
+  Kjellstrom]{Manttari2020}
+Joonatan Manttari, Sofia Broomé, John Folkesson, and Hedvig Kjellstrom.
+\newblock Interpreting video features: A comparison of 3d convolutional
+  networks and convolutional lstm networks.
+\newblock In \emph{Proceedings of the Asian conference on computer vision},
+  2020.
+
+\bibitem[Matthews and Hartman(2021)]{matthews2021mshap}
+Spencer Matthews and Brian Hartman.
+\newblock mshap: Shap values for two-part models.
+\newblock \emph{Risks}, 10\penalty0 (1):\penalty0 3, 2021.
+
+\bibitem[Meng et~al.(2019)Meng, Zhao, Chang, Huang, Sun, Tung, and
+  Sigal]{meng2019interpretable}
+Lili Meng, Bo Zhao, Bo Chang, Gao Huang, Wei Sun, Frederick Tung, and Leonid
+  Sigal.
+\newblock Interpretable spatio-temporal attention for video action recognition.
+\newblock In \emph{Proceedings of the IEEE/CVF international conference on
+  computer vision workshops}, pages 0--0, 2019.
+
+\bibitem[Mitchell et~al.(2022)Mitchell, Cooper, Frank, and
+  Holmes]{mitchell2022sampling}
+Rory Mitchell, Joshua Cooper, Eibe Frank, and Geoffrey Holmes.
+\newblock Sampling permutations for shapley value estimation.
+\newblock \emph{Journal of Machine Learning Research}, 23\penalty0
+  (43):\penalty0 1--46, 2022.
+
+\bibitem[Nayebi et~al.(2023)Nayebi, Tipirneni, Reddy, Foreman, and
+  Subbian]{nayebi2023windowshap}
+Amin Nayebi, Sindhu Tipirneni, Chandan~K Reddy, Brandon Foreman, and Vignesh
+  Subbian.
+\newblock Windowshap: An efficient framework for explaining time-series
+  classifiers based on shapley values.
+\newblock \emph{Journal of biomedical informatics}, 144:\penalty0 104438, 2023.
+
+\bibitem[Pan et~al.(2016)Pan, Li, Yao, Mei, Li, and Rui]{pan2016learning}
+Yingwei Pan, Yehao Li, Ting Yao, Tao Mei, Houqiang Li, and Yong Rui.
+\newblock Learning deep intrinsic video representation by exploring temporal
+  coherence and graph structure.
+\newblock In \emph{IJCAI}, pages 3832--3838, 2016.
+
+\bibitem[Price and Damen(2020)]{Price2020}
+Will Price and Dima Damen.
+\newblock Play fair: Frame attributions in video models.
+\newblock In \emph{Asian Conference on Computer Vision}, pages 480--497.
+  Springer, 2020.
+
+\bibitem[Ribeiro et~al.(2016)Ribeiro, Singh, and Guestrin]{Ribeiro2016}
+Marco~Tulio Ribeiro, Sameer Singh, and Carlos Guestrin.
+\newblock " why should i trust you?" explaining the predictions of any
+  classifier.
+\newblock In \emph{Proceedings of the 22nd ACM SIGKDD international conference
+  on knowledge discovery and data mining}, pages 1135--1144, 2016.
+
+\bibitem[Selvaraju et~al.(2017)Selvaraju, Cogswell, Das, Vedantam, Parikh, and
+  Batra]{Selvaraju2017}
+Ramprasaath~R Selvaraju, Michael Cogswell, Abhishek Das, Ramakrishna Vedantam,
+  Devi Parikh, and Dhruv Batra.
+\newblock Grad-cam: Visual explanations from deep networks via gradient-based
+  localization.
+\newblock In \emph{Proceedings of the IEEE international conference on computer
+  vision}, pages 618--626, 2017.
+
+\bibitem[Shapley(1953)]{Shapley1953}
+Lloyd~S Shapley.
+\newblock A value for n-person games.
+\newblock 1953.
+
+\bibitem[Shrikumar et~al.(2016)Shrikumar, Greenside, Shcherbina, and
+  Kundaje]{Shrikumar2016}
+Avanti Shrikumar, Peyton Greenside, Anna Shcherbina, and Anshul Kundaje.
+\newblock Not just a black box: Learning important features through propagating
+  activation differences.
+\newblock \emph{arXiv preprint arXiv:1605.01713}, 2016.
+
+\bibitem[Shrikumar et~al.(2017)Shrikumar, Greenside, and
+  Kundaje]{Shrikumar2017}
+Avanti Shrikumar, Peyton Greenside, and Anshul Kundaje.
+\newblock Learning important features through propagating activation
+  differences.
+\newblock In \emph{International conference on machine learning}, pages
+  3145--3153. PMlR, 2017.
+
+\bibitem[Sidorov et~al.(2020)Sidorov, Pedersen, Shekhar, and Kim]{Sidorov2020}
+Oleksii Sidorov, Marius Pedersen, Sumit Shekhar, and Nam~Wook Kim.
+\newblock Are all the frames equally important?
+\newblock In \emph{Extended Abstracts of the 2020 CHI Conference on Human
+  Factors in Computing Systems}, pages 1--7, 2020.
+
+\bibitem[Soomro et~al.(2012)Soomro, Zamir, and Shah]{soomro2012ucf101}
+Khurram Soomro, Amir~Roshan Zamir, and Mubarak Shah.
+\newblock Ucf101: A dataset of 101 human actions classes from videos in the
+  wild.
+\newblock \emph{arXiv preprint arXiv:1212.0402}, 2012.
+
+\bibitem[Stergiou et~al.(2019)Stergiou, Kapidis, Kalliatakis, Chrysoulas,
+  Veltkamp, and Poppe]{Stergiou2019}
+Alexandros Stergiou, Georgios Kapidis, Grigorios Kalliatakis, Christos
+  Chrysoulas, Remco Veltkamp, and Ronald Poppe.
+\newblock Saliency tubes: Visual explanations for spatio-temporal convolutions.
+\newblock In \emph{2019 IEEE international conference on image processing
+  (ICIP)}, pages 1830--1834. IEEE, 2019.
+
+\bibitem[Strumbelj and Kononenko(2010)]{Strumbelj2010}
+Erik Strumbelj and Igor Kononenko.
+\newblock An efficient explanation of individual classifications using game
+  theory.
+\newblock \emph{The Journal of Machine Learning Research}, 11:\penalty0 1--18,
+  2010.
+
+\bibitem[Sturmfels et~al.(2020)Sturmfels, Lundberg, and Lee]{Sturmfels2020}
+Pascal Sturmfels, Scott Lundberg, and Su-In Lee.
+\newblock Visualizing the impact of feature attribution baselines.
+\newblock \emph{Distill}, 5:\penalty0 e22, 2020.
+
+\bibitem[Sundararajan and Najmi(2020)]{Sundararajan2020}
+Mukund Sundararajan and Amir Najmi.
+\newblock The many shapley values for model explanation.
+\newblock In \emph{International conference on machine learning}, pages
+  9269--9278. PMLR, 2020.
+
+\bibitem[Sundararajan et~al.(2017)Sundararajan, Taly, and
+  Yan]{Sundararajan2017}
+Mukund Sundararajan, Ankur Taly, and Qiqi Yan.
+\newblock Axiomatic attribution for deep networks.
+\newblock In \emph{International conference on machine learning}, pages
+  3319--3328. PMLR, 2017.
+
+\bibitem[Uchiyama et~al.(2023)Uchiyama, Sogi, Niinuma, and Fukui]{Uchiyama2023}
+Tomoki Uchiyama, Naoya Sogi, Koichiro Niinuma, and Kazuhiro Fukui.
+\newblock Visually explaining 3d-cnn predictions for video classification with
+  an adaptive occlusion sensitivity analysis.
+\newblock In \emph{Proceedings of the IEEE/CVF Winter Conference on
+  Applications of Computer Vision}, pages 1513--1522, 2023.
+
+\bibitem[Wu et~al.(2023)Wu, Chen, Liu, Zhuge, Li, Qiao, Shu, Gan, Xu, Ren,
+  et~al.]{wu2023newsnet}
+Haoqian Wu, Keyu Chen, Haozhe Liu, Mingchen Zhuge, Bing Li, Ruizhi Qiao, Xiujun
+  Shu, Bei Gan, Liangsheng Xu, Bo Ren, et~al.
+\newblock Newsnet: A novel dataset for hierarchical temporal segmentation.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision
+  and Pattern Recognition}, pages 10669--10680, 2023.
+
+\bibitem[Wu et~al.(2019)Wu, Xiong, Ma, Socher, and Davis]{Wu2019}
+Zuxuan Wu, Caiming Xiong, Chih-Yao Ma, Richard Socher, and Larry~S Davis.
+\newblock Adaframe: Adaptive frame selection for fast video recognition.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision
+  and Pattern Recognition}, pages 1278--1287, 2019.
+
+\bibitem[Xia et~al.(2022)Xia, Wang, Wu, Wang, and Han]{Xia2022}
+Boyang Xia, Zhihao Wang, Wenhao Wu, Haoran Wang, and Jungong Han.
+\newblock Temporal saliency query network for efficient video recognition.
+\newblock In \emph{European conference on computer vision}, pages 741--759.
+  Springer, 2022.
+
+\bibitem[Xu et~al.(2025)Xu, C{\"u}ppers, and Vreeken]{xu2025succinct}
+Sascha Xu, Joscha C{\"u}ppers, and Jilles Vreeken.
+\newblock Succinct interaction-aware explanations.
+\newblock In \emph{Proceedings of the 31st ACM SIGKDD Conference on Knowledge
+  Discovery and Data Mining V. 1}, pages 1715--1726, 2025.
+
+\bibitem[Young(1985)]{young1985monotonic}
+H~Peyton Young.
+\newblock Monotonic solutions of cooperative games.
+\newblock \emph{International Journal of Game Theory}, 14\penalty0
+  (2):\penalty0 65--72, 1985.
+
+\bibitem[Zeiler and Fergus(2014)]{Zeiler2014}
+Matthew~D Zeiler and Rob Fergus.
+\newblock Visualizing and understanding convolutional networks.
+\newblock In \emph{European conference on computer vision}, pages 818--833.
+  Springer, 2014.
+
+\bibitem[Zhou et~al.(2016)Zhou, Khosla, Lapedriza, Oliva, and
+  Torralba]{Zhou2016}
+Bolei Zhou, Aditya Khosla, Agata Lapedriza, Aude Oliva, and Antonio Torralba.
+\newblock Learning deep features for discriminative localization.
+\newblock In \emph{Proceedings of the IEEE conference on computer vision and
+  pattern recognition}, pages 2921--2929, 2016.
+
+\bibitem[Zhu et~al.(2023)Zhu, Huang, Xie, Liu, Deng, Zhang, Wang, and
+  Liu]{zhu2023autoshot}
+Wentao Zhu, Yufang Huang, Xiufeng Xie, Wenxian Liu, Jincan Deng, Debing Zhang,
+  Zhangyang Wang, and Ji Liu.
+\newblock Autoshot: A short video dataset and state-of-the-art shot boundary
+  detection.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision
+  and Pattern Recognition}, pages 2238--2247, 2023.
+
+\end{thebibliography}

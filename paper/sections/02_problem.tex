@@ -1,0 +1,203 @@
+\section{Problem formulation}
+\label{sec:problem}
+
+% DRAFT 1 (2026-10-19). Proof of Proposition 1 in the appendix; the group proposition goes in Section 4.
+
+\paragraph{Clips and value function.}
+Let $f$ be a video classifier and $x = (x_1, \dots, x_n)$ a clip of $n$ frames, with frame indices $N = \{1, \dots, n\}$.
+Let $c$ be the class predicted for $x$, and $f_c(x)$ its probability.
+For a subset $S \subseteq N$, let $x_S$ be the clip in which the frames outside $S$ are removed.
+How the removed frames are handled depends on the model; Section~\ref{sec:removal} describes the two ways we use.
+The value function is $v(S) = f_c(x_S)$.
+When no frame is kept, there is no clip to show the model.
+Following Play Fair~\citep{will_price_ec92d5a0}, we then set $v(\emptyset)$ to the prior probability of class $c$, which we take to be uniform: $v(\emptyset) = 1/K$ for a classifier with $K$ classes ($K = 101$ on UCF101 and $K = 174$ on SSv2).
+
+\paragraph{Contents and importance.}
+A \emph{content} is a set of frames $C \subseteq N$ that show the same evidence.
+A typical example is a run of consecutive frames in which nothing changes in a way that matters for the prediction: a static shot, a pause in a movement, or a person holding the same pose.
+In our controlled experiments (Section~\ref{sec:adding}), a content is also a frame that we repeat $m$ times, so that its $m$ copies are identical.
+The \emph{importance} of a set of frames $A \subseteq N$ is the drop in the predicted probability when all frames in $A$ are removed together:
+\begin{equation}
+  I(A) = v(N) - v(N \setminus A).
+  \label{eq:importance}
+\end{equation}
+Importance is computed from the model alone, and it is the reference against which we compare attribution scores: throughout the paper, \emph{the model's dependence} on a content $C$ means its importance $I(C)$.
+
+Importance looks at one situation only: the content is removed while every other frame is present.
+It therefore has two limits.
+First, it under-reports content that other content backs up: if two different parts of a clip each show enough evidence for the prediction, removing one leaves the other, and both have low importance.
+Second, the importances of different contents need not add up to the change in output between the full clip and the empty clip, so importance is not a division of the output.
+Neither limit affects our use of it.
+We use importance only to ask whether the model's dependence on a content changes when the content is shown in more frames, and for this we need a quantity that is computed from the model alone and that does not change only because the content is split into more frames.
+Importance has both properties.
+We also repeated our main comparison for Shapley values with a reference that instead averages over all subsets of the other frames, and it leads to the same conclusions (Appendix~\ref{app:reference}).
+
+\subsection{Dilution}
+\label{sec:attr-requirements}
+
+Suppose a static shot lasts twice as long, and the model depends on it as much as before.
+A frame-level attribution method may spread the shot's score over the extra frames, so that each frame receives about half its earlier score.
+Each frame then looks less important, although the model depends on what it shows as much as before.
+We call this \emph{dilution}.
+
+Formally, let $x$ be a reference clip in which content $C$ is shown in $|C|$ frames, and $x'$ a clip in which the same content is shown in $|C'| = m\,|C|$ frames, either as copies or by denser sampling of the same part of the video.
+The model's change in dependence on the content is $r_I = I'(C') / I(C)$, where $I'$ is the importance computed on $x'$.
+Let $\phi_i$ and $\phi'_i$ be the scores that a frame-level attribution method assigns to the frames of $x$ and $x'$ for the class $c$, its estimates of how much the prediction depends on each frame.
+Let $\bar\phi_C = \frac{1}{|C|}\sum_{i \in C} \phi_i$ be the mean score of one frame of the content in $x$, and $\bar\phi'_{C'}$ the same in $x'$.
+The change in the mean score is $r_\phi = \bar\phi'_{C'} / \bar\phi_C$.
+
+\begin{definition}[Dilution]
+\label{def:dilution}
+A frame-level attribution method \emph{dilutes} the content $C$ when $r_\phi < r_I$.
+More generally, it shows \emph{frame-count bias} when $r_\phi \ne r_I$; we call the opposite case, $r_\phi > r_I$, \emph{inflation}.
+\end{definition}
+
+The score is compared with $r_I$, not with a fixed value of~1, because a model may legitimately depend more or less on evidence that is shown more often.
+An attribution that follows the model therefore meets
+\begin{equation}
+  r_\phi = r_I .
+  \label{eq:requirement}
+\end{equation}
+This requirement treats the score of a frame as the score of the evidence the frame shows: a user who reads the score of one frame wants to know how much the model depends on what that frame shows.
+It follows that frame scores should not be added up over a part of the video, because each frame of a content already carries the score of the whole content.
+If the score of a frame were meant instead as the frame's own, separate share of the output, an even split among the copies would be correct, and per-frame scores could not be compared across parts of different length.
+We adopt the first reading, because frame scores are used to compare frames and parts of a video.
+Section~\ref{sec:e1} and our experiments on natural videos show that dilution changes which part appears more important.
+\todo{Replace ``our experiments on natural videos'' with the section reference for E3 once it exists.}
+
+Some frame-level methods cannot meet Equation~\ref{eq:requirement}, because their scores must add up to a fixed total.
+We call a frame-level method \emph{efficient} if its scores add up to the change in output between the full clip and the empty clip, $\sum_{i \in N} \phi_i = v(N) - v(\emptyset)$.
+Shapley values and Play Fair are efficient, and Integrated Gradients satisfies the same property for the logit (Section~\ref{sec:why}).
+
+\begin{proposition}[Efficient frame-level methods dilute]
+\label{prop:conflict}
+Let a frame-level method be efficient, and let $R = \sum_{i \in N \setminus C} \phi_i$ and $R' = \sum_{i \in N' \setminus C'} \phi'_i$ be the summed scores of the frames outside the content in $x$ and $x'$.
+Then $r_\phi = r_I$ holds only if
+\begin{equation}
+  v(N') - v(\emptyset) - R' = m\, r_I \bigl( v(N) - v(\emptyset) - R \bigr).
+\end{equation}
+In particular, if the content is the whole clip ($C = N$), as when every frame is shown $m$ times or the same part of the video is sampled $m$ times as densely, then $r_\phi = r_I / m$: the method dilutes by exactly the factor $m$.
+\end{proposition}
+
+\begin{proof}
+The summed score of the content is the mean score times the number of frames, so $\sum_{i \in C'} \phi'_i = m\,|C|\,\bar\phi'_{C'}$ and $\sum_{i \in C} \phi_i = |C|\,\bar\phi_C$.
+Hence $r_\phi = r_I$ if and only if $\sum_{i \in C'} \phi'_i = m\, r_I \sum_{i \in C} \phi_i$.
+By efficiency, $\sum_{i \in C} \phi_i = v(N) - v(\emptyset) - R$, and likewise in $x'$, which gives the condition.
+If $C = N$, then $R = R' = 0$, and $I(N) = v(N) - v(\emptyset)$, so $r_I = (v(N') - v(\emptyset)) / (v(N) - v(\emptyset))$.
+The mean score is the total divided by the number of frames, so $r_\phi = (v(N') - v(\emptyset)) / (m\,(v(N) - v(\emptyset))) = r_I / m$.
+\end{proof}
+
+In words: for an efficient method to give each copy the score the model's change calls for, the part of the output not credited to the other frames must grow $m$ times as fast as the model's dependence on the content.
+Nothing in the definition of the method makes it grow that way, and when the content is the whole clip it cannot, unless $m = 1$ or $r_I = 0$.
+On MC3-18, with every frame shown two or three times, the score of every frame falls to $1/m$ of its value for Shapley values and Integrated Gradients, and to about $1/m$ for Grad-CAM and occlusion, while the model's output barely changes (Appendix~\ref{app:whole-repeat}).
+
+A group attribution avoids this.
+A group attribution method takes a partition of the frames into groups and returns one score $\Psi_G$ for each group $G$, for example the Shapley value of the game whose players are the groups.
+If all frames of the content form one group $G$, each frame of the group displays the score $\Psi_G$, and Equation~\ref{eq:requirement} becomes $\Psi'_{G'} / \Psi_G = r_I$.
+Group Shapley values are efficient over the groups, but the content is one player however many frames it spans, so efficiency no longer forces its score to fall.
+In the case $C = N$, the single group receives $v(N') - v(\emptyset)$, and its change is exactly $r_I$.
+Section~\ref{sec:groups} shows when group Shapley values meet the requirement in general.
+The remaining difficulty is that the content $C$ is not known for a new video, so the groups must be estimated from the video itself.
+
+\subsection{How frame-level methods depend on the number of frames}
+\label{sec:why}
+
+% For each method: what the definition implies (certain), and what E1 shows (empirical).
+% E1 numbers: results/E1_report.md, sections 4.1-4.3.
+
+We study the six frame-level attribution methods named in the introduction.
+They cover three ways of computing a frame's score: sharing a total (Shapley values and Play Fair), removing one frame (leave-one-out and occlusion), and gradients (Integrated Gradients and Grad-CAM).
+Our claims refer to these methods.
+Other methods, such as mask optimisation~\citep{ruth_c__fong_7e902699, zhenqiang_li_45594fd6} or linear surrogate models, are not tested here.
+
+\paragraph{Shapley values.}
+The Shapley value of frame $i$ is
+\begin{equation}
+  \phi_i = \sum_{S \subseteq N \setminus \{i\}} \frac{|S|!\,(n - |S| - 1)!}{n!} \bigl[ v(S \cup \{i\}) - v(S) \bigr].
+\end{equation}
+Shapley values are efficient, $\sum_{i \in N} \phi_i = v(N) - v(\emptyset)$, so Proposition~\ref{prop:conflict} applies to them.
+They also satisfy \emph{symmetry}: two frames $i$ and $j$ receive equal values if they are \emph{interchangeable}, that is, if $v(S \cup \{i\}) = v(S \cup \{j\})$ for every $S \subseteq N \setminus \{i, j\}$.
+The frames of a perfectly still shot are an example: whichever of them is kept, together with the same other frames, the clip looks the same to the model.
+The following proposition states the consequence for a content, and extends it to frames that are only nearly interchangeable, such as those of a slow movement.
+
+\begin{proposition}[Interchangeable frames share the credit equally]
+\label{prop:split}
+Let $\varepsilon \ge 0$, and let $i, j \in N$ be two frames with
+$|v(S \cup \{i\}) - v(S \cup \{j\})| \le \varepsilon$ for every $S \subseteq N \setminus \{i, j\}$.
+Then $|\phi_i - \phi_j| \le \varepsilon$.
+Consequently, if every pair of frames in a content $C$ of $m$ frames satisfies this condition, then every frame $i \in C$ satisfies
+\begin{equation}
+  \Bigl| \phi_i - \frac{\Phi_C}{m} \Bigr| \le \frac{m - 1}{m}\, \varepsilon,
+  \qquad \text{where } \Phi_C = \sum_{j \in C} \phi_j .
+\end{equation}
+In particular, if the frames of $C$ are interchangeable ($\varepsilon = 0$), then $\phi_i = \Phi_C / m$ for every $i \in C$.
+\end{proposition}
+
+The proof is in Appendix~\ref{app:proofs}.
+The score of one frame therefore stays constant only if the summed score $\Phi_C$ grows in proportion to $m$.
+Nothing in the definition requires that, and in our experiments the summed score grows more slowly than $m$ on all five models.
+% TODO: add the section reference once the results section exists.
+The proposition uses only the value function, so it holds whichever way frames are removed.
+How frames are removed affects only the size of $\varepsilon$ (Section~\ref{sec:removal}).
+Section~\ref{sec:groups} shows how giving credit to groups of frames removes this division.
+
+\paragraph{Play Fair.}
+Play Fair~\citep{will_price_ec92d5a0} attributes a video model's prediction to its frames with \emph{Element Shapley Values}.
+These are the Shapley values of the frames for the value function $v$ of this section, with removed frames simply taken out of the clip: the model is run on the kept frames in their temporal order, and the empty clip receives the class prior.
+Play Fair differs from our Shapley values computed in the same way only in how the sum over subsets is estimated: it draws a fixed number of subsets of each size, building the subsets of one size from those of the size below, while we either compute the sum exactly, for clips of up to 12 frames, or average over random orderings of the frames~\citep{javier_castro_28f89a07}.
+Proposition~\ref{prop:split} and everything that follows from it therefore apply to Play Fair.
+We confirm this empirically by running the authors' code on two models: Play Fair's frame scores agree with our Shapley values as closely as two runs of our estimator with different random seeds agree with each other (Appendix~\ref{app:playfair}).
+In the original work, Play Fair is paired with models that can be evaluated on any subset of frames, such as TSN and TRN models trained for each number of frames; we apply it to models that accept clips of different lengths (Section~\ref{sec:removal}).
+\todo{Check this description of the original models against \citet{will_price_ec92d5a0}.}
+
+\paragraph{Leave-one-out and occlusion.}
+Leave-one-out scores a frame by $\phi_i = v(N) - v(N \setminus \{i\})$.
+If $m \ge 2$, removing one frame of $C$ leaves $m - 1$ frames that show the same content.
+Then $v(N \setminus \{i\}) \approx v(N)$ and $\phi_i \approx 0$ for every $i \in C$, even when $I(C)$ is large.
+The sum of the single-frame scores can be far smaller than the importance of the content, $\sum_{i \in C} \phi_i \ll I(C)$.
+In our experiments on natural videos, we measure this gap as the redundancy of a group of frames.
+
+For some ways of handling removed frames, part of this result holds by construction, independently of the model; Section~\ref{sec:removal} explains when, and how we check that our leave-one-out results do not come from it.
+
+Occlusion~\citep{matthew_d__zeiler_d7ae7e07} uses the same single-frame removal, but replaces frame $i$ with a flat frame, in which every pixel has the average colour used by the model's input normalisation, instead of removing it.
+The same argument applies to the part of the score caused by losing the frame's content.
+But the occlusion score also contains the model's response to the inserted flat frame, which does not depend on redundancy.
+On MC3-18 and TRN, this response consistently lowers the output, and it dominates the occlusion score of content the model barely depends on. On R3D-50, R3D-18 and V-JEPA2, it has no consistent direction, but it is often as large as the content's importance itself (Appendix~\ref{app:flat-frame}).
+It makes occlusion a less direct test of dilution than leave-one-out.
+
+\paragraph{Integrated Gradients.}
+Integrated Gradients scores each input element by the gradient integrated along the straight line from a baseline $\bar{x}$ to $x$:
+\begin{equation}
+  \mathrm{IG}_p(x) = (x_p - \bar{x}_p) \int_0^1 \frac{\partial F(\bar{x} + \alpha (x - \bar{x}))}{\partial x_p}\, d\alpha ,
+\end{equation}
+where $F$ is the logit of class $c$ and $p$ indexes pixels.
+As the baseline $\bar{x}$ we use a clip of flat frames, the same frame that occlusion inserts, and obtain a frame score $\phi_i$ by summing $\mathrm{IG}_p$ over the pixels of frame $i$.
+Integrated Gradients satisfies \emph{completeness}: $\sum_{i \in N} \phi_i = F(x) - F(\bar{x})$.
+This is efficiency for the logit instead of the probability, so Proposition~\ref{prop:conflict} applies on that scale: when every frame is shown $m$ times, the mean score changes by only $1/m$ of the factor by which $F(x) - F(\bar{x})$ changes.
+This equals $r_I / m$ only if the logit difference changes by the same factor as the probability difference, which holds approximately when the model's output barely changes with the number of frames.
+When the content is only part of the clip, completeness fixes only the total, not how it is split.
+Along the straight-line path, all frames are scaled together, so the path never reaches a clip in which one copy is present and the others are absent.
+The split among the copies is set by the model's gradients along that path.
+This is consistent with our experiments, where Integrated Gradients dilutes on every model but by very different amounts: one copy keeps 0.006 of the model's change on V-JEPA2 and 0.58 on TRN.
+
+\paragraph{Grad-CAM.}
+For a layer with activation maps $A^k$, Grad-CAM computes weights $\alpha_k$ by averaging the gradient $\partial F / \partial A^k$ over all positions, and scores temporal position $t$ by
+\begin{equation}
+  L_t = \mathrm{ReLU}\Bigl( \sum_k \alpha_k\, \overline{A^k_t} \Bigr),
+\end{equation}
+where $\overline{A^k_t}$ is the activation at time $t$, averaged over space.
+The score of a frame depends on the activations at its own position, weighted by gradients pooled over the whole clip.
+Grad-CAM removes no frames and satisfies no completeness property, so nothing in its definition couples the scores of different frames.
+A copy produces activations similar to those of the original frame, and so receives a similar score.
+The model's architecture can still divide the credit.
+Our 3D convolutional networks average their features over time before the classifier, and V-JEPA2 pools its tokens with attention weights that sum to one.
+In both cases, the gradient at each position shrinks as the number of positions grows, so if every frame is shown $m$ times, every Grad-CAM score falls by about the factor $m$.
+When Grad-CAM is taken directly before average pooling and a linear classifier, and without the ReLU, it reduces to class activation mapping~\citep{bolei_zhou_cam}, and its scores add up to a fixed multiple of the logit minus the classifier's bias, so it is efficient for the logit up to that constant and Proposition~\ref{prop:conflict} applies exactly.
+With a ReLU, an intermediate layer, or convolutions that mix neighbouring frames, the effect is only approximate; on MC3-18 the Grad-CAM score of every frame still falls by slightly more than $m$ (Appendix~\ref{app:whole-repeat}).
+When only part of the clip is repeated, the number of positions grows less, so this division is weaker.
+In our experiments, Grad-CAM comes closest to the requirement, but it still dilutes: one copy keeps 0.15--0.96 of the model's change.
+It keeps least on MC3-18, whose dependence on the target triples while the Grad-CAM score of a copy does not follow.
+Two caveats apply.
+In 3D convolutional networks, the activation at time $t$ also depends on neighbouring frames.
+And the weights $\alpha_k$ are pooled over the whole clip, so they can change when frames are added.
+
