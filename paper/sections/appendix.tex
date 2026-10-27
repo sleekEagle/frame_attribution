@@ -121,6 +121,7 @@ Table~\ref{tab:reference} shows three things.
 
 % Source: results/e1/mc3_18_whole_repeat.jsonl and _summary.txt (motivation/whole_clip_repeat.py).
 % Shapley run stopped after 20 of 30 videos (GPU memory); its result is exact on all 20.
+% Model confidence per m (IG rows, 100 videos): median p_full 0.703 / 0.659 / 0.646, same prediction 100% / 97% / 97%.
 
 Proposition~\ref{prop:conflict} gives an exact prediction when the content is the whole clip: an efficient method gives $r_\phi = r_I / m$.
 Section~\ref{sec:why} argues that Integrated Gradients does the same on the logit scale, and that Grad-CAM falls by about the factor $m$ through the model's pooling.
@@ -150,7 +151,8 @@ Occlusion             & 95 & 0.94 & 1.03 $[0.91, 1.13]$ & 1.02 $[0.89, 1.16]$ & 
 \end{table}
 
 \begin{itemize}
-  \item \textbf{The model barely changes.} Its own change $r_I$ is 0.94--0.97, so an attribution that follows the model would keep almost all of its score per frame.
+  \item \textbf{The model barely changes.} Its own change $r_I$ is 0.94--0.97, so an attribution that follows the model would keep almost all of its score per frame. The median probability of the predicted class is 0.70 on the original clips, 0.66 with every frame shown twice and 0.65 with every frame shown three times, and the prediction stays the same in 97 of the 100 videos.
+  \item \textbf{This does not contradict E1.} In E1, MC3-18's dependence on a target shown nine times grows about threefold (Section~\ref{sec:e1}). There, only the target is repeated, so it fills a larger share of the clip. Here every frame is repeated, so the share of each frame stays the same. MC3-18 averages its features over time before its classifier, so its output follows the share of each frame rather than the number of frames, which is consistent with both results.
   \item \textbf{Shapley values dilute by exactly $m$}, as Proposition~\ref{prop:conflict} states: the ratio is 1.00 on every video.
   \item \textbf{Integrated Gradients dilutes by $m$ on the logit scale} (1.00--1.01), and within a few percent of $m$ on the probability scale.
   \item \textbf{Grad-CAM dilutes by slightly more than $m$} (0.91--0.94), so the division by the model's pooling is close to the factor $m$ even with the ReLU and an intermediate layer.

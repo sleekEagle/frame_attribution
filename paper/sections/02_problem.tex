@@ -46,10 +46,10 @@ Let $\phi_i$ and $\phi'_i$ be the scores that a frame-level attribution method a
 Let $\bar\phi_C = \frac{1}{|C|}\sum_{i \in C} \phi_i$ be the mean score of one frame of the content in $x$, and $\bar\phi'_{C'}$ the same in $x'$.
 The change in the mean score is $r_\phi = \bar\phi'_{C'} / \bar\phi_C$.
 
-\begin{definition}[Dilution]
+\begin{definition}[Frame-count bias]
 \label{def:dilution}
-A frame-level attribution method \emph{dilutes} the content $C$ when $r_\phi < r_I$.
-More generally, it shows \emph{frame-count bias} when $r_\phi \ne r_I$; we call the opposite case, $r_\phi > r_I$, \emph{inflation}.
+A frame-level attribution method shows \emph{frame-count bias} for the content $C$ when $r_\phi \ne r_I$.
+It \emph{dilutes} $C$ when $r_\phi < r_I$, and it \emph{inflates} $C$ when $r_\phi > r_I$.
 \end{definition}
 
 The score is compared with $r_I$, not with a fixed value of~1, because a model may legitimately depend more or less on evidence that is shown more often.

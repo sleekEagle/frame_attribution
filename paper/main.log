@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.8.28)  27 OCT 2026 07:54
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.8.28)  27 OCT 2026 10:07
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -526,7 +526,7 @@ File: ts1lmr.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 ) [6]
 [7{C:/Users/lahir/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-ts1.enc}]
 [8] [9] [10]) (sections/04_groups.tex [11]) (sections/05_results_e1.tex
-<figures/fig_dilution.pdf, id=310, 431.94437pt x 196.04898pt>
+<figures/fig_dilution.pdf, id=311, 431.94437pt x 196.04898pt>
 File: figures/fig_dilution.pdf Graphic file (type pdf)
 <use figures/fig_dilution.pdf>
 Package pdftex.def Info: figures/fig_dilution.pdf  used on input line 21.
@@ -535,10 +535,17 @@ Package pdftex.def Info: figures/fig_dilution.pdf  used on input line 21.
 [12] [13 <./figures/fig_dilution.pdf>]) (main.bbl [14]) (sections/appendix.tex
 [15] [16]
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <9> on input line 138.
+(Font)              <9> on input line 139.
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <6> on input line 138.
- [17] [18] [19]
+(Font)              <6> on input line 139.
+ [17] [18]
+
+LaTeX Warning: `h' float specifier changed to `ht'.
+
+[19]
+
+LaTeX Warning: `h' float specifier changed to `ht'.
+
 
 LaTeX Warning: `h' float specifier changed to `ht'.
 
@@ -553,7 +560,7 @@ Package rerunfilecheck Info: File `main.out' has not changed.
 Here is how much of TeX's memory you used:
  12220 strings out of 467871
  181363 string characters out of 5418376
- 612973 words of memory out of 5000000
+ 614981 words of memory out of 5000000
  40752 multiletter control sequences out of 15000+600000
  715183 words of font info for 98 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
@@ -575,9 +582,9 @@ ers/lahir/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmsy5.pfb><C:/Use
 rs/lahir/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmsy7.pfb><C:/User
 s/lahir/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/symbols/msam1
 0.pfb>
-Output written on main.pdf (21 pages, 436748 bytes).
+Output written on main.pdf (21 pages, 437433 bytes).
 PDF statistics:
- 575 PDF objects out of 1000 (max. 8388607)
+ 577 PDF objects out of 1000 (max. 8388607)
  127 named destinations out of 1000 (max. 500000)
  182 words of extra memory for PDF output out of 10000 (max. 10000000)
 
