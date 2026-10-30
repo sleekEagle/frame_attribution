@@ -14,7 +14,8 @@ frame-level Shapley on the same clips (negative = better for deletion, positive 
 insertion).
 
     python motivation/curves_metrics.py --model r3d_18 --source e23
-Writes <out>/<model>_curves_<source>_summary.csv.
+Reads <out>/<model>_curves_<source>.jsonl and its .shard<s>.jsonl files; writes
+<out>/<model>_curves_<source>_summary.csv.
 """
 import argparse
 import csv
@@ -44,7 +45,14 @@ def main():
     ap.add_argument("--min-gap", type=float, default=0.05)
     ap.add_argument("--boot", type=int, default=2000)
     args = ap.parse_args()
-    recs = read_jsonl(Path(args.out) / f"{args.model}_curves_{args.source}.jsonl")
+    # the unsharded file plus any shard files (Kaggle runs one shard per GPU); a clip in both counts once
+    stem = f"{args.model}_curves_{args.source}"
+    recs, seen = [], set()
+    for p in [Path(args.out) / f"{stem}.jsonl"] + sorted(Path(args.out).glob(f"{stem}.shard*.jsonl")):
+        for r in read_jsonl(p):
+            if (r["video"], r["clip"]) not in seen:
+                seen.add((r["video"], r["clip"]))
+                recs.append(r)
 
     def nest():  # clip -> readout -> method -> video -> [x]
         return defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list))))
