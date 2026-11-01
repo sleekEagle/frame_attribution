@@ -9,9 +9,12 @@ out (nothing to explain). Per clip and method:
   insertion AUC   mean of y over the n + 1 insertion steps  (higher = the first frames suffice)
   del@25%         y after removing the top quarter of the frames
   ins@25%         y with only the top quarter kept
+  deletion_auc_groups, insertion_auc_groups   group-wise curves only: the areas with one step per
+                  group (k + 1 points) instead of one per frame
 Means over clips with 95% bootstrap CIs (resampling videos), and the paired difference to
 frame-level Shapley on the same clips (negative = better for deletion, positive = better for
-insertion).
+insertion). For the group-wise curves (sources e23_gw, fr_gw), the difference is to the ranking of
+the same groups by mean frame-level Shapley value.
 
     python motivation/curves_metrics.py --model r3d_18 --source e23
 Reads <out>/<model>_curves_<source>.jsonl and its .shard<s>.jsonl files; writes
@@ -40,7 +43,7 @@ def boot(per_video, n_boot, seed=0):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
-    ap.add_argument("--source", required=True, choices=["e23", "fr"])
+    ap.add_argument("--source", required=True, choices=["e23", "fr", "e23_gw", "fr_gw"])
     ap.add_argument("--out", default="results/curves")
     ap.add_argument("--min-gap", type=float, default=0.05)
     ap.add_argument("--boot", type=int, default=2000)
@@ -71,19 +74,26 @@ def main():
             i = (np.asarray(c["ins"]) - r["prior"]) / gap
             ro[meth] = {"deletion_auc": float(d.mean()), "insertion_auc": float(i.mean()),
                         "del_at_25": float(d[q]), "ins_at_25": float(i[q])}
-        base = next((m for m in SHAPLEY if m in ro), None)
+            if "del_groups" in c:  # group-wise curves: the same areas with one step per group
+                ro[meth]["deletion_auc_groups"] = float(((np.asarray(c["del_groups"]) - r["prior"]) / gap).mean())
+                ro[meth]["insertion_auc_groups"] = float(((np.asarray(c["ins_groups"]) - r["prior"]) / gap).mean())
+        shap = next((m for m in SHAPLEY if m in ro), None)
         for meth, x in ro.items():
+            # group-wise curves (curves.py --groupwise) are compared with the mean-ranking of the
+            # same groups, frame-wise ones with frame-level Shapley
+            base = meth.rsplit("_", 1)[0] + "_mean" if meth.startswith("gw_") else shap
             for k, v in x.items():
                 vals[r["clip"]][k][meth][r["video"]].append(v)
-                if base:
+                if base in ro:
                     diffs[r["clip"]][k][meth][r["video"]].append(v - ro[base][k])
 
     rows = []
     for clip in sorted(vals):
-        for k in ("deletion_auc", "insertion_auc", "del_at_25", "ins_at_25"):
+        for k in ("deletion_auc", "insertion_auc", "del_at_25", "ins_at_25",
+                  "deletion_auc_groups", "insertion_auc_groups"):
             for meth in sorted(vals[clip][k]):
                 mu, lo, hi = boot(vals[clip][k][meth], args.boot)
-                dm, dlo, dhi = boot(diffs[clip][k][meth], args.boot)
+                dm, dlo, dhi = boot(diffs[clip][k][meth], args.boot) if diffs[clip][k][meth] else (np.nan,) * 3
                 rows.append({"clip": clip, "readout": k, "method": meth, "mean": mu, "ci_lo": lo, "ci_hi": hi,
                              "diff_vs_shapley": dm, "diff_lo": dlo, "diff_hi": dhi,
                              "n_clips": sum(len(v) for v in vals[clip][k][meth].values())})
@@ -95,8 +105,10 @@ def main():
     print(f"[curves] wrote {out}")
     print(f"\n{args.model} {args.source}: clips kept (P_full - prior >= {args.min_gap}): {dict(kept)}")
     for clip in sorted(vals):
-        print(f"\n  {clip}: mean [95% CI]   difference to frame Shapley [95% CI]")
-        for k in ("deletion_auc", "insertion_auc"):
+        print(f"\n  {clip}: mean [95% CI]   difference to {'mean ranking' if args.source.endswith('_gw') else 'frame Shapley'} [95% CI]")
+        for k in ("deletion_auc", "insertion_auc", "deletion_auc_groups", "insertion_auc_groups"):
+            if not any(r["clip"] == clip and r["readout"] == k for r in rows):
+                continue
             print(f"   {k}  ({'lower' if k.startswith('del') else 'higher'} is better)")
             for r in rows:
                 if r["clip"] == clip and r["readout"] == k:

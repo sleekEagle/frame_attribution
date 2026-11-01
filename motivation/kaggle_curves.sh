@@ -16,18 +16,25 @@
 #   OUT          output folder (default /kaggle/working/curves)
 #   R3D_CKPT     R3D-50 checkpoint save_200.pth, if models/r3d/ckpt/save_200.pth is missing
 #   MODELS       models to run (default: all that the stage covers)
+#   GW_GROUPINGS groupings for the group-wise curves (default dinoavg_thr)
 #
 # Usage:  bash motivation/kaggle_curves.sh smoke     # 1 video per GPU: R3D-18 on E2/E3, V-JEPA2 on E4
 #         bash motivation/kaggle_curves.sh e23       # E2/E3 clips, all four models
 #         bash motivation/kaggle_curves.sh fr        # E4 clips, MC3-18 and V-JEPA2
+#         bash motivation/kaggle_curves.sh gw-smoke  # group-wise curves (whole groups removed, four
+#                                                      # rankings of the same groups), 1 video per GPU
+#         bash motivation/kaggle_curves.sh gw-e23    # group-wise curves, E2/E3 clips, all four models
+#         bash motivation/kaggle_curves.sh gw-fr     # group-wise curves, E4 clips
 #         bash motivation/kaggle_curves.sh summary   # the summaries again, from the files in $OUT
 set -euo pipefail
-STAGE=${1:?usage: kaggle_curves.sh smoke|e23|fr|summary}
+STAGE=${1:?usage: kaggle_curves.sh smoke|e23|fr|gw-smoke|gw-e23|gw-fr|summary}
 REPO=${REPO:-/kaggle/working/frame_attribution}
 OUT=${OUT:-/kaggle/working/curves}
 export SSV2_PATH=${SSV2_PATH:-} UCF101_PATH=${UCF101_PATH:-}
 mkdir -p "$OUT"
 cd "$REPO"
+EXTRA=()   # extra curves.py arguments (the group-wise stages set --groupwise)
+TAG=""     # log-name suffix for those stages
 
 copy_inputs() {   # the git-ignored inputs, from $INPUTS into results/
   [ -n "${INPUTS:-}" ] || { echo "INPUTS not set"; exit 1; }
@@ -59,11 +66,11 @@ run_both() {   # run_both <model> <source> <out dir> [extra args...]: one shard 
   local bs=32; [ "$model" = vjepa2 ] && bs=16
   for g in 0 1; do
     CUDA_VISIBLE_DEVICES=$g python motivation/curves.py --model "$model" --source "$source" \
-      --out "$out" --fp16 --batch-size $bs --shard $g --num-shards 2 "$@" \
-      > "$out/curves_${model}_${source}_gpu$g.log" 2>&1 &
+      --out "$out" --fp16 --batch-size $bs --shard $g --num-shards 2 "${EXTRA[@]}" "$@" \
+      > "$out/curves_${model}_${source}${TAG}_gpu$g.log" 2>&1 &
   done
-  wait || echo "a $model $source process failed; see $out/curves_${model}_${source}_gpu*.log"
-  tail -n 2 "$out"/curves_${model}_${source}_gpu*.log
+  wait || echo "a $model $source process failed; see $out/curves_${model}_${source}${TAG}_gpu*.log"
+  tail -n 2 "$out"/curves_${model}_${source}${TAG}_gpu*.log
 }
 
 run_stage() {   # run_stage <source> <models...>
@@ -112,6 +119,26 @@ EOF
     copy_inputs
     run_stage fr ${MODELS:-mc3_18 vjepa2}
     summaries
+    ;;
+  gw-smoke|gw-e23|gw-fr)
+    copy_inputs
+    EXTRA=(--groupwise ${GW_GROUPINGS:-dinoavg_thr}); TAG=_gw
+    case $STAGE in
+      gw-smoke)
+        mkdir -p "$OUT/smoke"
+        setup_model r3d_18 && run_both r3d_18 e23 "$OUT/smoke" --limit 2
+        setup_model vjepa2 && run_both vjepa2 fr "$OUT/smoke" --limit 2
+        python - "$OUT/smoke" <<'EOF'
+import json, glob, sys
+for p in sorted(glob.glob(sys.argv[1] + "/*_curves_*_gw.shard*.jsonl")):
+    for line in open(p):
+        r = json.loads(line)
+        print(f"{p.split('/')[-1]}: {r['clip']}, n={r['n']}, {r['n_evals']} evals, curves={sorted(r['curves'])}")
+EOF
+        ;;
+      gw-e23) run_stage e23 ${MODELS:-r3d_18 mc3_18 r3d vjepa2}; summaries ;;
+      gw-fr)  run_stage fr ${MODELS:-mc3_18 vjepa2}; summaries ;;
+    esac
     ;;
   summary)
     summaries
