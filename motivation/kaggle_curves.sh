@@ -130,7 +130,7 @@ EOF
         setup_model vjepa2 && run_both vjepa2 fr "$OUT/smoke" --limit 2
         python - "$OUT/smoke" <<'EOF'
 import json, glob, sys
-for p in sorted(glob.glob(sys.argv[1] + "/*_curves_*_gw.shard*.jsonl")):
+for p in sorted(glob.glob(sys.argv[1] + "/*_curves_*_gw*.shard*.jsonl")):
     for line in open(p):
         r = json.loads(line)
         print(f"{p.split('/')[-1]}: {r['clip']}, n={r['n']}, {r['n_evals']} evals, curves={sorted(r['curves'])}")

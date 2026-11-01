@@ -14,7 +14,8 @@ out (nothing to explain). Per clip and method:
 Means over clips with 95% bootstrap CIs (resampling videos), and the paired difference to
 frame-level Shapley on the same clips (negative = better for deletion, positive = better for
 insertion). For the group-wise curves (sources e23_gw, fr_gw), the difference is to the ranking of
-the same groups by mean frame-level Shapley value.
+the same groups by mean frame-level Shapley value (sources e23_gwm, fr_gwm; e23_gw, fr_gw from the
+first group-wise run).
 
     python motivation/curves_metrics.py --model r3d_18 --source e23
 Reads <out>/<model>_curves_<source>.jsonl and its .shard<s>.jsonl files; writes
@@ -43,7 +44,7 @@ def boot(per_video, n_boot, seed=0):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
-    ap.add_argument("--source", required=True, choices=["e23", "fr", "e23_gw", "fr_gw"])
+    ap.add_argument("--source", required=True, help="e23, fr, or a group-wise run: e23_gwm, fr_gwm (fr_gw, e23_gw)")
     ap.add_argument("--out", default="results/curves")
     ap.add_argument("--min-gap", type=float, default=0.05)
     ap.add_argument("--boot", type=int, default=2000)
@@ -81,7 +82,8 @@ def main():
         for meth, x in ro.items():
             # group-wise curves (curves.py --groupwise) are compared with the mean-ranking of the
             # same groups, frame-wise ones with frame-level Shapley
-            base = meth.rsplit("_", 1)[0] + "_mean" if meth.startswith("gw_") else shap
+            base = next((b for b in ro if b.startswith("gw_") and b.endswith("_mean")
+                         and meth.startswith(b[:-len("mean")])), None) if meth.startswith("gw_") else shap
             for k, v in x.items():
                 vals[r["clip"]][k][meth][r["video"]].append(v)
                 if base in ro:
@@ -105,7 +107,7 @@ def main():
     print(f"[curves] wrote {out}")
     print(f"\n{args.model} {args.source}: clips kept (P_full - prior >= {args.min_gap}): {dict(kept)}")
     for clip in sorted(vals):
-        print(f"\n  {clip}: mean [95% CI]   difference to {'mean ranking' if args.source.endswith('_gw') else 'frame Shapley'} [95% CI]")
+        print(f"\n  {clip}: mean [95% CI]   difference to {'mean ranking' if '_gw' in args.source else 'frame Shapley'} [95% CI]")
         for k in ("deletion_auc", "insertion_auc", "deletion_auc_groups", "insertion_auc_groups"):
             if not any(r["clip"] == clip and r["readout"] == k for r in rows):
                 continue

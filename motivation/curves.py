@@ -29,12 +29,14 @@ one per step, and only the ranking of the groups differs:
   gw_<G>_mean    by the mean frame-level Shapley value of its frames (the ranking dilution affects)
   gw_<G>_sum     by the sum of its frame-level Shapley values
   gw_<G>_random  at random
+  gw_<G>_mean_<M>, gw_<G>_sum_<M>   by the mean / sum of the frame scores of every other stored
+                 frame-level method M (e23 only: the fr records store Shapley alone)
 (ties broken at random). Each curve is stored on two axes. On the frames axis ("del", "ins";
 n + 1 points), after j frames the groups completed by j are removed (kept); this axis rewards
 importance per frame, which is what a diluted mean score measures, so it favours the mean
 ranking. On the groups axis ("del_groups", "ins_groups"; k + 1 points), each step is one part of
 the clip; this axis favours ranking by total importance. Both are reported. No frame-wise curves are computed in this mode, and the
-output is <model>_curves_<source>_gw.jsonl. In fr, the groups are the runs of equal broadcast
+output is <model>_curves_<source>_gwm.jsonl (_gw.jsonl in earlier runs, with Shapley alone). In fr, the groups are the runs of equal broadcast
 scores (every grouping is contiguous); a clip whose run count differs from the stored number of
 groups (two neighbouring groups with the same value) skips that grouping.
 
@@ -150,7 +152,7 @@ def main():
     if args.shard is not None:
         recs = [r for i, r in enumerate(recs) if i % args.num_shards == args.shard]
         suffix = f".shard{args.shard}"
-    gw = "_gw" if args.groupwise else ""
+    gw = "_gwm" if args.groupwise else ""
     out_path = Path(args.out) / f"{args.model}_curves_{args.source}{gw}{suffix}.jsonl"
     done = {(r["video"], r["clip"]) for r in read_jsonl(out_path)}
     model = load_clip_model(args.model)
@@ -196,8 +198,6 @@ def main():
                 n = rec["n"]
                 layout = make_layout(pos_of[:n])
                 scores = {a["method"]: a["scores"] for a in rec["attributions"] if a["seed"] == 0}
-                if gw:
-                    scores = {m: v for m, v in scores.items() if m in SHAPLEY}
                 trees = {"ward": rec["nodes"]}
                 if any(tree_linkage(g) == "average" for g in args.groupings):
                     trees["average"] = avg_linkage_nodes(rec["sim"], n)
@@ -233,6 +233,15 @@ def main():
                         d, i, dg, ig = group_curves(ev, layout, groups, vals, removal, cls, prior,
                                                     stable_seed(path, clip_name, "gw", g, rname))
                         out[f"gw_{g}_{rname}"] = {"del": d, "ins": i, "del_groups": dg, "ins_groups": ig}
+                    for m, sc in scores.items():  # the other frame-level methods, mean and sum
+                        if m in SHAPLEY or m.startswith("grp_"):
+                            continue
+                        sc = np.asarray(sc, float)
+                        for agg in ("mean", "sum"):
+                            vals = [float(getattr(sc[grp], agg)()) for grp in groups]
+                            d, i, dg, ig = group_curves(ev, layout, groups, vals, removal, cls, prior,
+                                                        stable_seed(path, clip_name, "gw", g, agg, m))
+                            out[f"gw_{g}_{agg}_{m}"] = {"del": d, "ins": i, "del_groups": dg, "ins_groups": ig}
             else:
                 scores["random"] = list(np.random.default_rng(stable_seed(path, clip_name, "random")).random(n))
                 for meth, s in scores.items():
