@@ -18,6 +18,11 @@ between them is an effect of input length at fixed content.
 
     python eval_length_fixed_content.py --models vjepa2 --datasets vjepa2=ssv2_sampled --limit 500
     python eval_length_fixed_content.py --models r3d --datasets r3d=ucf101_test --limit 500
+    python eval_length_fixed_content.py --models trn_official --datasets trn_official=ssv2_sampled \
+        --ks 4 6 8 --target-len 8 --out results/length_fixed_content_trn
+
+TRN accepts exactly 8 frames, so only the repeated variant is run for it (with --target-len 8); it
+stands in for freezing, which also fills removed slots with kept frames.
 
 Per-video results are appended to <out>_preds.csv as they are produced (re-running resumes);
 the table is written to <out>_summary.csv:
@@ -38,7 +43,8 @@ from eval_frame_count import frame_indices, logits
 from models.registry import MODEL_DATASET, get_model
 
 DEFAULT_KS = [1, 2, 4, 6, 8, 10, 12, 14, 16]
-MODELS = ["r3d", "vjepa2", "videomae", "mc3_18", "r3d_18"]
+MODELS = ["r3d", "vjepa2", "videomae", "mc3_18", "r3d_18", "trn_official"]
+FIXED_LENGTH = {"trn_official"}  # models that cannot take the native (shorter) input
 FIELDS = ["model", "dataset", "path", "gt", "k", "variant", "pred", "p_gt"]
 
 
@@ -71,7 +77,8 @@ def run_model(model_name, dataset_name, ks, target_len, limit, seed, preds_csv):
         if new_file:
             writer.writeheader()
         for i, (cls_name, path) in enumerate(samples):
-            todo = [(k, v) for k in ks for v in ("native", "repeated")
+            variants = ("repeated",) if model_name in FIXED_LENGTH else ("native", "repeated")
+            todo = [(k, v) for k in ks for v in variants
                     if (model_name, dataset_name, str(path), k, v) not in done]
             if not todo:
                 continue
@@ -104,15 +111,20 @@ def summarize(preds_csv, models, ks):
     table = []
     for m, dataset_name in models:
         for k in ks:
+            need = {"repeated"} if m in FIXED_LENGTH else {"native", "repeated"}
             pairs = [v for (mm, dd, _, kk), v in by.items()
-                     if mm == m and dd == dataset_name and kk == k and len(v) == 2]
+                     if mm == m and dd == dataset_name and kk == k and need <= set(v)]
             if not pairs:
                 continue
             out = {"model": m, "dataset": dataset_name, "k": k, "n": len(pairs)}
             for variant in ("native", "repeated"):
+                if variant not in need:  # NaN: not run for this model
+                    out[f"acc_{variant}"] = out[f"p_gt_{variant}"] = float("nan")
+                    continue
                 out[f"acc_{variant}"] = 100 * np.mean([int(v[variant]["pred"]) == int(v[variant]["gt"]) for v in pairs])
                 out[f"p_gt_{variant}"] = float(np.mean([float(v[variant]["p_gt"]) for v in pairs]))
-            out["same_pred_pct"] = 100 * np.mean([v["native"]["pred"] == v["repeated"]["pred"] for v in pairs])
+            out["same_pred_pct"] = (float("nan") if len(need) < 2 else
+                                    100 * np.mean([v["native"]["pred"] == v["repeated"]["pred"] for v in pairs]))
             table.append(out)
     return table
 

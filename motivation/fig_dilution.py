@@ -7,7 +7,7 @@ own change. An attribution that follows the model sits at 1; below 1 it dilutes.
 
 One row per method, one point per model (median over targets, both seeds pooled). Leave-one-out
 uses deletion where the model allows it (R3D-50, R3D-18 on the same 120 videos as the freezing run,
-MC3-18, V-JEPA2) and freezing on TRN (grey marker: partly fixed by the operator).
+MC3-18, V-JEPA2) and freezing on TRN (open marker: partly fixed by the operator).
 
     python motivation/fig_dilution.py --r3d18-loo-drop <dir with r3d_18_rows.csv incl. loo_drop>
 """
@@ -20,16 +20,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-MODELS = [  # (file prefix, label, largest m, Shapley method, marker)
-    ("r3d", "R3D-50", 8, "shapley_freeze", "o"),
-    ("r3d_18", "R3D-18", 8, "shapley_freeze", "s"),
-    ("mc3_18", "MC3-18", 9, "shapley_drop", "^"),
-    ("vjepa2", "V-JEPA2", 9, "shapley_drop", "D"),
-    ("trn_official", "TRN", 4, "shapley_freeze", "v"),
+MODELS = [  # (file prefix, label, largest m, Shapley method, marker, colour: categorical slots 1-5)
+    ("r3d", "R3D-50", 8, "shapley_freeze", "o", "#2a78d6"),
+    ("r3d_18", "R3D-18", 8, "shapley_freeze", "s", "#eb6834"),
+    ("mc3_18", "MC3-18", 9, "shapley_drop", "^", "#1baf7a"),
+    ("vjepa2", "V-JEPA2", 9, "shapley_drop", "D", "#eda100"),
+    ("trn_official", "TRN", 4, "shapley_freeze", "v", "#e87ba4"),
 ]
 ROWS = ["Shapley", "Leave-one-out", "Occlusion", "Integrated Gradients", "Grad-CAM"]
 FLOOR = 0.005           # values at or below this are drawn at the floor (log axis)
-BLUE = "#2a78d6"        # categorical slot 1 (one series)
+MS = {"o": 5, "s": 4.6, "D": 4.4, "^": 6, "v": 6}   # triangles look smaller at the same size
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#d9d8d4"
 
 
@@ -55,7 +55,7 @@ def main():
     ap.add_argument("--out", default="paper/figures/fig_dilution.pdf")
     args = ap.parse_args()
 
-    rows = {p: pd.read_csv(Path(args.e1) / f"{p}_rows.csv") for p, *_ in MODELS}
+    rows = {m[0]: pd.read_csv(Path(args.e1) / f"{m[0]}_rows.csv") for m in MODELS}
     r18_drop = pd.read_csv(Path(args.r3d18_loo_drop) / "r3d_18_rows.csv")
 
     plt.rcParams.update({"font.size": 7.5, "axes.edgecolor": MUTED, "axes.labelcolor": INK,
@@ -65,15 +65,18 @@ def main():
     table = []
     for r, row in enumerate(ROWS):
         ax.axhline(r, color=GRID, lw=0.5, zorder=1)
-        for (prefix, label, m, shapley, marker), dy in zip(MODELS, offsets):
+        for (prefix, label, m, shapley, marker, colour), dy in zip(MODELS, offsets):
             method = method_for(row, prefix, shapley)
             src = r18_drop if (prefix == "r3d_18" and method == "loo_drop") else rows[prefix]
             x, n = point(src, method, m)
             table.append((row, label, method, m, n, x))
             if not np.isfinite(x):
                 continue
-            ax.plot([max(x, FLOOR)], [r + dy], marker=marker, ms=5.5, mec="white", mew=0.9,
-                    mfc=MUTED if method == "loo_freeze" else BLUE, ls="none", zorder=5)
+            if method == "loo_freeze":   # open marker: partly fixed by the operator
+                style = dict(mfc="white", mec=colour, mew=1.1)
+            else:
+                style = dict(mfc=colour, mec="white", mew=0.8)
+            ax.plot([max(x, FLOOR)], [r + dy], marker=marker, ms=MS[marker], ls="none", zorder=5, **style)
     ax.axvline(1, color=INK, lw=0.9, zorder=2)
     ax.text(0.9, -0.62, "$\\leftarrow$ dilutes", fontsize=6.5, color=MUTED, ha="right", va="bottom")
     ax.text(1.0, -0.62, "1", fontsize=6.5, color=INK, ha="center", va="bottom")
@@ -88,11 +91,11 @@ def main():
     ax.tick_params(axis="y", length=0)
     for s in ("top", "right", "left"):
         ax.spines[s].set_visible(False)
-    ax.set_xlabel("change in the score of one copy / model's change  ($r_\\phi / r_I$)")
-    handles = [plt.Line2D([], [], marker=mk, ls="none", ms=5.5, mfc=BLUE, mec="white", mew=0.9,
-                          label=lab) for _, lab, _, _, mk in MODELS]
-    handles += [plt.Line2D([], [], marker="v", ls="none", ms=5.5, mfc=MUTED, mec="white", mew=0.9,
-                           label="TRN, leave-one-out with freezing")]
+    ax.set_xlabel("change per copy / model's change  ($r_\\phi / r_I$)")
+    handles = [plt.Line2D([], [], marker=mk, ls="none", ms=MS[mk], mfc=c, mec="white", mew=0.8,
+                          label=lab) for _, lab, _, _, mk, c in MODELS]
+    handles += [plt.Line2D([], [], marker="v", ls="none", ms=MS["v"], mfc="white", mec=MODELS[-1][5],
+                           mew=1.1, label="TRN, leave-one-out with freezing")]
     fig.legend(handles=handles, loc="lower center", ncol=len(handles), frameon=False,
                fontsize=6.8, bbox_to_anchor=(0.5, -0.03), handletextpad=0.3, columnspacing=1.1)
     fig.tight_layout(rect=(0, 0.09, 1, 1))

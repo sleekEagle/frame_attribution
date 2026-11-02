@@ -91,6 +91,13 @@ def logits(model_name: str, model, frames: torch.Tensor) -> torch.Tensor:
         elif model_name == "vjepa2":
             inputs = model.processor(frames, return_tensors="pt").to(model.device)
             out = model.model(**inputs).logits
+        elif model_name == "trn_official":  # exactly 8 frames; its consensus samples relations at
+            state = np.random.get_state()   # random, so fix numpy's RNG as motivation/e1_common does
+            np.random.seed(0)
+            try:
+                out = model(model.preprocess(frames)[None])
+            finally:
+                np.random.set_state(state)
         else:
             raise ValueError(model_name)
     return out
